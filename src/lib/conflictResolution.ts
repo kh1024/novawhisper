@@ -39,6 +39,12 @@ export interface CrlInputs {
   // Optional context for live positions only
   unrealizedPnl?: number | null;       // dollars; negative = losing — used for early-exit rule
   intrinsicValue?: number | null;      // analyst / model fair-value estimate
+  // Strategic Validation Layer
+  sma200?: number | null;              // 200-day SMA — Trend Gate
+  ivPercentile?: number | null;        // 0-100 — High Premium flag
+  beforeOpeningRange?: boolean;        // true between 09:30 and 10:30 ET
+  entryPremium?: number | null;        // option premium at entry
+  currentPremium?: number | null;      // current option mid — for −30% hard stop
 }
 
 export interface CrlOutput {
@@ -55,6 +61,11 @@ export interface CrlOutput {
     premiumPct: number | null;
     message: string | null;
   };
+  // Strategic Validation Layer
+  trendGateBroken: boolean;
+  highPremium: boolean;
+  openingRange: boolean;
+  premiumStopTriggered: boolean;
 }
 
 const VALUATION_OVERSHOOT_PCT = 15;   // spot > intrinsic × 1.15 ⇒ Risk Alert
