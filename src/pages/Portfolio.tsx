@@ -330,6 +330,11 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
     return () => clearInterval(id);
   }, [autoSim, p.is_paper, p.status]);
 
+  // Bubble offset up so the parent can compute portfolio-wide sim totals.
+  useEffect(() => {
+    onSimChange?.(p.id, simOffsetPct);
+  }, [simOffsetPct, p.id, onSimChange]);
+
   const realSpot = spot ?? null;
   const effectiveSpot = realSpot != null && simOffsetPct !== 0
     ? realSpot * (1 + simOffsetPct / 100)
