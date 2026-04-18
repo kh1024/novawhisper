@@ -137,11 +137,12 @@ export default function Portfolio() {
               {fmtUsd(totals.realized)}
             </div>
           </div>
-          <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total P&amp;L</div>
+          <div className="rounded-md border border-border bg-surface/40 px-3 py-2" title={`Net of broker + regulatory fees (${BROKER_PRESETS.find(b => b.value === settings.brokerPreset)?.label ?? "Custom"} preset). Fees so far: $${totals.feesPaid.toFixed(2)}`}>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total P&amp;L (net)</div>
             <div className={cn("font-mono text-lg font-semibold", totals.total >= 0 ? "text-bullish" : "text-bearish")}>
               {fmtUsd(totals.total)}
             </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">−${totals.feesPaid.toFixed(2)} fees</div>
           </div>
           <Button size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["portfolio-verdict"] }); verdictQ.refetch(); }} disabled={verdictQ.isFetching || open.length === 0}>
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", verdictQ.isFetching && "animate-spin")} />
