@@ -59,9 +59,11 @@ Examples: "AI power demand → XLE" is 2 (XLE is oil & gas majors, not grid/util
 If score ≤ 2: VERDICT cannot be better than SPECULATIVE.
 If score = 3: VERDICT cannot be better than POSSIBLE BUT EARLY.
 
-C. CAUSAL LOGIC + JARGON PENALTY
+C. CAUSAL LOGIC + ANTI-FLUFF RULE
 Identify the direct drivers (oil, rates, earnings, sector flow, macro). Distinguish primary drivers from secondary narratives.
-JARGON PENALTY: if a phrase cannot be tied to a measurable, falsifiable driver, treat it as **weak evidence** and flag it. Examples to penalize: "Energy Wall", "hyperscaler capex thesis", "structural necessity", "intrinsic equilibrium". Quote the offending phrase in WHAT DOES NOT HOLD UP.
+ANTI-FLUFF RULE: If a claim sounds sophisticated but cannot be tied to (a) a direct driver, (b) a measurable catalyst, or (c) instrument-specific exposure, mark it as **narrative — not evidence**. Such phrases may be mentioned, but MUST NOT be treated as proof of a trade.
+Narrative phrases to flag (non-exhaustive): "structural necessity", "wall of demand", "capex backbone", "grid constraint pressure", "inevitable secular tailwind", "Energy Wall", "hyperscaler capex thesis", "intrinsic equilibrium", "supercycle".
+Quote any such phrase literally in WHAT DOES NOT HOLD UP and label it "narrative, not evidence".
 
 D. EVALUATE EACH CONTRACT — strike distance, delta, theta, DTE, required move magnitude, IV sensitivity, liquidity, spread quality, probability of underperforming even if directionally right.
 
