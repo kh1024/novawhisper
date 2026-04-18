@@ -300,7 +300,6 @@ export default function Scanner() {
                                 <div className="font-mono font-semibold">{r.symbol}</div>
                                 <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">{r.name}</div>
                               </div>
-                              <ChartLinks symbol={r.symbol} />
                             </div>
                           </td>
                           <td className="px-3 py-3 mono">${r.price.toFixed(2)}</td>
