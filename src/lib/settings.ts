@@ -31,7 +31,10 @@ function read(): AppSettings {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULTS, ...parsed };
+    const merged = { ...DEFAULTS, ...parsed };
+    // Migrate: anyone with the old 5s default gets bumped to safe 30s.
+    if (merged.refreshMs < 15_000) merged.refreshMs = 30_000;
+    return merged;
   } catch {
     return DEFAULTS;
   }
