@@ -5,31 +5,41 @@ import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-const SOURCES = [
-  { name: "Barchart Unusual Options Activity", url: "https://www.barchart.com/options/unusual-activity/stocks" },
-  { name: "MarketWatch Most Active Options", url: "https://www.marketwatch.com/tools/screener/option" },
-  { name: "MarketWatch Movers", url: "https://www.marketwatch.com/markets/movers" },
-  { name: "Yahoo Finance Trending Tickers", url: "https://finance.yahoo.com/markets/stocks/trending/" },
+// Search queries we run via Firecrawl /v2/search — each returns top results
+// with scraped markdown so Nova can read the actual articles, not just titles.
+const QUERIES = [
+  { tier: "safe", q: "best safe options trades this week covered calls cash secured puts" },
+  { tier: "safe", q: "best dividend stocks options income strategy today" },
+  { tier: "mild", q: "best options plays this week vertical spreads moderate risk" },
+  { tier: "mild", q: "best swing trade options ideas next week catalyst" },
+  { tier: "aggressive", q: "unusual options activity today whale trades aggressive" },
+  { tier: "aggressive", q: "0DTE options momentum plays today high risk high reward" },
 ];
 
-async function scrape(url: string): Promise<{ url: string; markdown: string } | null> {
+async function fcSearch(query: string): Promise<Array<{ url: string; title: string; markdown: string }>> {
   try {
-    const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+    const r = await fetch("https://api.firecrawl.dev/v2/search", {
       method: "POST",
       headers: { Authorization: `Bearer ${FIRECRAWL_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, waitFor: 2000 }),
+      body: JSON.stringify({
+        query,
+        limit: 4,
+        tbs: "qdr:d", // last 24h
+        scrapeOptions: { formats: ["markdown"] },
+      }),
     });
     if (!r.ok) {
-      console.warn(`[options-scout] firecrawl ${url} -> ${r.status}`);
-      return null;
+      console.warn(`[options-scout] firecrawl search "${query}" -> ${r.status}`);
+      return [];
     }
     const j = await r.json();
-    const md: string = j?.data?.markdown ?? j?.markdown ?? "";
-    if (!md) return null;
-    return { url, markdown: md.slice(0, 15000) };
+    const items: Array<{ url: string; title?: string; markdown?: string; description?: string }> = j?.data?.web ?? j?.data ?? [];
+    return items
+      .filter((i) => i?.url && (i.markdown || i.description))
+      .map((i) => ({ url: i.url, title: i.title ?? "", markdown: (i.markdown ?? i.description ?? "").slice(0, 4000) }));
   } catch (e) {
-    console.warn(`[options-scout] scrape failed ${url}`, e);
-    return null;
+    console.warn(`[options-scout] search failed "${query}"`, e);
+    return [];
   }
 }
 
