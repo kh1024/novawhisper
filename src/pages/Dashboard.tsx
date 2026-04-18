@@ -12,6 +12,7 @@ import { SectorBreakdown } from "@/components/SectorBreakdown";
 import { MarketHeroCards } from "@/components/MarketHeroCards";
 import { PlaybookCard } from "@/components/PlaybookCard";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { TickerPrice } from "@/components/TickerPrice";
 
 type RiskBucket = "safe" | "mild" | "aggressive";
 
@@ -144,6 +145,7 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">{p.symbol}</span>
+                    <TickerPrice symbol={p.symbol} showChange />
                     <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
                       {p.strategy.replace("-", " ")}
                     </Badge>

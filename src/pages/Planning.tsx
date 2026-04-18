@@ -15,6 +15,7 @@ import { usePlanning, type PlanningPick, type SourceTicker } from "@/lib/plannin
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { useWebPicksHistory } from "@/lib/webPicksHistory";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { TickerPrice } from "@/components/TickerPrice";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -213,7 +214,10 @@ function PickCard({ pick }: { pick: PlanningPick }) {
     <Card className="flex flex-col p-4">
       <div className="flex items-start justify-between">
         <div>
-          <div className="font-mono text-lg font-semibold">{pick.symbol}</div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-lg font-semibold">{pick.symbol}</span>
+            <TickerPrice symbol={pick.symbol} showChange />
+          </div>
           <div className="mt-0.5 flex items-center gap-1.5">
             <Badge variant="outline" className={cn("text-[10px]", biasClass(pick.bias))}>
               {biasIcon(pick.bias)} <span className="ml-1 capitalize">{pick.bias}</span>
@@ -308,6 +312,7 @@ function TickerRow({ t }: { t: SourceTicker }) {
     <div className="flex items-center justify-between rounded-md border border-border/60 bg-surface/40 px-2.5 py-1.5">
       <div className="flex items-center gap-2 min-w-0">
         <span className="font-mono text-sm font-semibold">{t.symbol}</span>
+        <TickerPrice symbol={t.symbol} />
         <span className={cn("rounded-sm border px-1.5 py-0.5 text-[10px]", biasClass(t.bias))}>{biasIcon(t.bias)}</span>
         <span className="text-[10px] text-muted-foreground">{t.mentions}× · heat {t.heat}</span>
       </div>
@@ -399,8 +404,11 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
           <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">No ideas in this bucket right now.</div>
         ) : picks.map((p, i) => (
           <div key={i} className="rounded-md border border-border/60 bg-background/40 p-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-sm font-semibold">{p.symbol}</span>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-mono text-sm font-semibold">{p.symbol}</span>
+                <TickerPrice symbol={p.symbol} showChange />
+              </div>
               <Badge variant="outline" className="text-[10px]">{p.strategy}</Badge>
             </div>
             <p className="mt-1.5 text-xs text-foreground/90">{p.thesis}</p>
@@ -474,8 +482,11 @@ function HistoryPanel() {
                 const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
                 return (
                   <div key={p.id} className={cn("rounded-md border p-2.5", tierClass)}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-sm font-semibold">{p.symbol}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono text-sm font-semibold">{p.symbol}</span>
+                        <TickerPrice symbol={p.symbol} />
+                      </div>
                       <Badge variant="outline" className="text-[10px] capitalize">{p.tier}</Badge>
                     </div>
                     <div className={cn("mt-1 font-mono text-xs font-semibold", tone)}>
