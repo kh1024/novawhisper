@@ -1,7 +1,7 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
 import { useEffect, useState } from "react";
-import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target, History } from "lucide-react";
+import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target, History, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -201,10 +201,27 @@ export default function Planning() {
 // ── Risk classification + slotted layout ─────────────────────────────────
 type RiskTier = "safe" | "mild" | "aggressive";
 
-function classifyRisk(p: PlanningPick): RiskTier {
-  // DTE
+/**
+ * Classify a pick into Safe / Mild / Aggressive using a "fund-manager" rubric:
+ *
+ *   Safe       → Deep ITM (≥3%) single-leg with ≥21 DTE, OR a high-conviction spread (defined risk).
+ *                Stock-replacement style: high delta, low decay, lots of runway.
+ *
+ *   Mild       → Near-the-money (within ±3%) single-leg with reasonable DTE (≥14),
+ *                OR a B-conviction spread.
+ *
+ *   Aggressive → ATM single-leg (|moneyness| < 1%) for max gamma without paying for deep premium,
+ *                OR any spread that didn't qualify above (defined-risk leverage),
+ *                OR a clearly OTM (≤−3%) directional bet,
+ *                OR a very short-dated (<7 DTE) play.
+ *
+ * Volatility-trap heuristic (no live IVP/RSI yet, so we proxy):
+ *   - Aggressive single-leg that is actually DEEP ITM (≥10%) → leveraged-at-the-top trap.
+ *   - Aggressive call/put with conviction C and DTE < 7 → "lotto on weak conviction" trap.
+ *   - Aggressive single-leg that is far OTM (≤−7%) on short DTE (<14) → premium-burn trap.
+ */
+function evalRisk(p: PlanningPick): { tier: RiskTier; volatilityTrap: boolean; trapReason?: string } {
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
-  // Moneyness % (positive = ITM for the trade direction)
   const isCall = p.optionType.includes("call") || p.optionType === "straddle" || p.optionType === "strangle";
   const isPut = p.optionType.includes("put");
   const playAt = Number(p.playAt) || 0;
@@ -214,15 +231,45 @@ function classifyRisk(p: PlanningPick): RiskTier {
     if (isCall) itmPct = ((playAt - strike) / strike) * 100;
     else if (isPut) itmPct = ((strike - playAt) / strike) * 100;
   }
-  // Spreads are inherently more defined-risk → bias safer.
   const isSpread = p.optionType.includes("spread");
+  const absMoney = Math.abs(itmPct);
 
-  // Safe: deep ITM (≥3%) OR conviction A spread, plenty of time (≥30 DTE).
-  if ((itmPct >= 3 && dte >= 21) || (isSpread && p.conviction === "A" && dte >= 14)) return "safe";
-  // Aggressive: clearly OTM (≥3%) OR very short dated (<7 DTE) OR low conviction OTM.
-  if (itmPct <= -3 || dte < 7 || (p.conviction === "C" && itmPct < 0)) return "aggressive";
-  return "mild";
+  let tier: RiskTier;
+  if (!isSpread && itmPct >= 3 && dte >= 21) {
+    tier = "safe"; // Deep ITM stock-replacement
+  } else if (isSpread && p.conviction === "A" && dte >= 14) {
+    tier = "safe"; // High-conviction defined-risk spread
+  } else if (!isSpread && absMoney <= 3 && dte >= 14 && p.conviction !== "C") {
+    tier = "mild"; // Near-the-money, decent DTE, decent conviction
+  } else if (isSpread && p.conviction === "B") {
+    tier = "mild";
+  } else {
+    tier = "aggressive";
+  }
+
+  // Volatility-trap detection (only meaningful for the Aggressive tier).
+  let volatilityTrap = false;
+  let trapReason: string | undefined;
+  if (tier === "aggressive" && !isSpread) {
+    if (itmPct >= 10) {
+      volatilityTrap = true;
+      trapReason = `Deep ITM (+${itmPct.toFixed(1)}%) on a single leg — paying intrinsic at the top. Prefer a vertical spread.`;
+    } else if (p.conviction === "C" && dte < 7) {
+      volatilityTrap = true;
+      trapReason = `Low conviction + <7 DTE — lotto ticket, premium will decay fast.`;
+    } else if (itmPct <= -7 && dte < 14) {
+      volatilityTrap = true;
+      trapReason = `Far OTM (${itmPct.toFixed(1)}%) with <2 weeks to expiry — high IV burn risk.`;
+    }
+  }
+
+  return { tier, volatilityTrap, trapReason };
 }
+
+function classifyRisk(p: PlanningPick): RiskTier {
+  return evalRisk(p).tier;
+}
+
 
 const TIER_META: Record<RiskTier, { label: string; icon: typeof Shield; cls: string; chipCls: string }> = {
   safe:       { label: "Safe",       icon: Shield, cls: "border-bullish/30 bg-bullish/5",   chipCls: "text-bullish border-bullish/40 bg-bullish/10" },
@@ -294,8 +341,9 @@ function EmptySlot({ tier, slotIndex }: { tier: RiskTier; slotIndex: number }) {
 function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTier; slotIndex?: number }) {
   const tierMeta = tier ? TIER_META[tier] : null;
   const TierIcon = tierMeta?.icon;
+  const { volatilityTrap, trapReason } = evalRisk(pick);
   return (
-    <Card className={cn("flex flex-col p-4", tierMeta?.cls)}>
+    <Card className={cn("flex flex-col p-4", tierMeta?.cls, volatilityTrap && "ring-1 ring-warning/50")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -312,6 +360,15 @@ function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTi
               {biasIcon(pick.bias)} <span className="ml-1 capitalize">{pick.bias}</span>
             </Badge>
             <Badge variant="secondary" className="text-[10px]">Conviction {pick.conviction}</Badge>
+            {volatilityTrap && (
+              <Badge
+                variant="outline"
+                className="text-[10px] border-warning/50 bg-warning/10 text-warning gap-1"
+                title={trapReason}
+              >
+                <AlertTriangle className="h-2.5 w-2.5" /> Volatility Trap
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-1 shrink-0">
@@ -320,6 +377,11 @@ function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTi
           ))}
         </div>
       </div>
+      {volatilityTrap && trapReason && (
+        <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning leading-snug">
+          <span className="font-semibold">⚠ Volatility Trap · </span>{trapReason}
+        </div>
+      )}
       <p className="mt-3 text-sm text-foreground/90">{pick.thesis}</p>
 
       <OptionContract
