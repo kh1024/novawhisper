@@ -10,7 +10,7 @@ import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettings, BROKER_PRESETS, type AppSettings } from "@/lib/settings";
 import { dispatchVerdictTransitions } from "@/lib/webhook";
 import { feeOneSide, feeRoundTrip } from "@/lib/fees";
