@@ -98,7 +98,7 @@ Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic
                       thesis: { type: "string" },
                       catalysts: { type: "array", items: { type: "string" } },
                       risks: { type: "array", items: { type: "string" } },
-                      sources: { type: "array", items: { type: "string", enum: ["reddit", "youtube", "quote"] } },
+                      sources: { type: "array", items: { type: "string", enum: ["youtube", "quote"] } },
                     },
                     required: ["symbol", "bias", "conviction", "thesis", "catalysts", "risks", "sources"],
                     additionalProperties: false,
