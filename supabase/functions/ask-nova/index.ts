@@ -235,25 +235,46 @@ Reminders:
               parameters: {
                 type: "object",
                 properties: {
+                  move: {
+                    type: "string",
+                    enum: ["GO", "WAIT", "NO"],
+                    description: "Final command from the Conflict Resolution step.",
+                  },
+                  logic_type: {
+                    type: "string",
+                    enum: ["Safe", "Mild", "Aggressive"],
+                    description: "Risk character of the trade structure.",
+                  },
+                  the_why: {
+                    type: "string",
+                    description: "ONE sentence explaining the conflict or confirmation. Name the specific trap if WAIT/NO.",
+                  },
+                  the_clock: {
+                    type: "string",
+                    description: "ONE sentence: what level / time / event must hit for the verdict to change.",
+                  },
+                  momentum_check: { type: "string", description: "1-2 sentences naming the trend." },
+                  math_audit: { type: "string", description: "Which flags tripped (Extreme Overextension, Time Decay Trap, IV Premium Trap, Liquidity Trap, Stale Data, Event Cliff) or 'Math: clean.'" },
                   verdict: {
                     type: "string",
                     enum: ["GOOD SETUP", "POSSIBLE BUT EARLY", "SPECULATIVE", "LOW-QUALITY IDEA", "NO TRADE"],
+                    description: "Legacy label. Map: GO→GOOD SETUP, WAIT→POSSIBLE BUT EARLY, NO→NO TRADE.",
                   },
                   action: {
                     type: "string",
                     enum: ["BUY", "WAIT", "SKIP"],
-                    description: "BUY = enter now. WAIT = thesis OK but conditions not met. SKIP = do not trade.",
+                    description: "Legacy action. Map: GO→BUY, WAIT→WAIT, NO→SKIP.",
                   },
                   one_line_reason: {
                     type: "string",
-                    description: "≤ 90 chars. The single most important reason for the action. Plain English, no jargon.",
+                    description: "≤ 90 chars. Same content as the_why, trimmed.",
                   },
                   data_quality: { type: "string", enum: ["PASS", "PARTIAL", "FAIL"] },
                   fit_score: { type: "integer", minimum: 1, maximum: 5 },
                   confidence: { type: "string", enum: ["Low", "Medium", "High"] },
                   best_contract: {
                     type: ["object", "null"],
-                    description: "The single best contract to act on. NULL if action is SKIP or no contract qualifies.",
+                    description: "The single best contract to act on. NULL if move is NO or no contract qualifies.",
                     properties: {
                       type: { type: "string", enum: ["call", "put"] },
                       strike: { type: "number" },
@@ -271,10 +292,11 @@ Reminders:
                   },
                   full_analysis_md: {
                     type: "string",
-                    description: "The full markdown analysis using the required output format from the system prompt.",
+                    description: "The full markdown analysis using the required Move/Logic/Why/Clock + Momentum/Math/Contracts format from the system prompt.",
                   },
                 },
                 required: [
+                  "move", "logic_type", "the_why", "the_clock",
                   "verdict", "action", "one_line_reason", "data_quality",
                   "fit_score", "confidence", "full_analysis_md",
                 ],
