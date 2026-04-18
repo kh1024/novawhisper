@@ -1,6 +1,6 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target, History } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { TickerPrice } from "@/components/TickerPrice";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/lib/settings";
+import { dispatchPickAlerts } from "@/lib/webhook";
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
