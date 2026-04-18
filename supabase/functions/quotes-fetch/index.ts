@@ -31,8 +31,12 @@ interface VerifiedQuote {
 }
 
 // ── In-memory caches (per isolate; resets on cold start) ──
-const QUOTE_TTL_MS = 60_000; // 60s — fresh enough for research, friendly to free-tier APIs
-const ALPHA_TTL_MS = 10 * 60_000; // 10 min — Alpha free is 25 req/DAY, conserve aggressively
+// QUOTE_TTL is the floor: even if clients poll every 5s, upstream APIs only get hit
+// when the cache expires. Free-tier Finnhub = 60 calls/min total; with 25 symbols
+// a 30s TTL gives ~50 calls/min. Alpha Vantage free = 25 calls/DAY.
+const QUOTE_TTL_MS = 30_000;
+const FINNHUB_TTL_MS = 30_000;
+const ALPHA_TTL_MS = 60 * 60_000; // 1 hour — Alpha free is 25/day
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
@@ -52,28 +56,35 @@ function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
 async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
   if (!FINNHUB_KEY) return null;
   const cached = finnhubCache.get(symbol);
-  if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.q;
+  if (cached && Date.now() - cached.at < FINNHUB_TTL_MS) return cached.q;
   try {
     const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY}`;
     const r = await fetch(url);
+    if (r.status === 429) {
+      // Rate-limited: keep the previous good value if any (don't poison the cache with null),
+      // and back off for 60s so we don't keep spamming.
+      console.warn(`[finnhub] ${symbol} 429 rate-limit — backing off 60s`);
+      const prev = cached?.q ?? null;
+      finnhubCache.set(symbol, { q: prev, at: Date.now() - FINNHUB_TTL_MS + 60_000 });
+      return prev;
+    }
     if (!r.ok) {
       console.warn(`[finnhub] ${symbol} HTTP ${r.status}`);
-      // Cache failure briefly to avoid retry storms
-      finnhubCache.set(symbol, { q: null, at: Date.now() - QUOTE_TTL_MS + 30_000 });
-      return null;
+      finnhubCache.set(symbol, { q: cached?.q ?? null, at: Date.now() - FINNHUB_TTL_MS + 30_000 });
+      return cached?.q ?? null;
     }
     const d = await r.json();
     const price = Number(d.c);
     if (!isFinite(price) || price === 0) {
-      finnhubCache.set(symbol, { q: null, at: Date.now() });
-      return null;
+      finnhubCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
+      return cached?.q ?? null;
     }
     const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0 };
     finnhubCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
     console.error(`[finnhub] ${symbol}`, e);
-    return null;
+    return cached?.q ?? null;
   }
 }
 
