@@ -15,6 +15,7 @@ import Planning from "./pages/Planning";
 import Patterns from "./pages/Patterns";
 import Market from "./pages/Market";
 import Settings from "./pages/Settings";
+import Strategy from "./pages/Strategy";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
