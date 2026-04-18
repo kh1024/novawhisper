@@ -127,13 +127,19 @@ async function fetchQuotes(symbols: string[]): Promise<VerifiedQuote[]> {
 }
 
 /** Live verified quotes for the selected symbols. Defaults to the full universe.
- *  Refresh interval is driven by the global Settings store unless overridden. */
+ *  Refresh interval is driven by the global Settings store unless overridden.
+ *  During pre-market / after-hours we throttle to 2 minutes since liquidity is
+ *  thinner and prices move less — saves API budget without missing real moves. */
 export function useLiveQuotes(symbols?: string[], opts?: { refetchMs?: number }) {
   const [settings] = useSettings();
   const list = symbols && symbols.length ? symbols : TICKER_UNIVERSE.map((u) => u.symbol);
-  const interval = opts?.refetchMs ?? settings.refreshMs;
+  const session = currentSessionET();
+  const baseInterval = opts?.refetchMs ?? settings.refreshMs;
+  const interval = (session === "pre" || session === "post")
+    ? Math.max(baseInterval, 120_000)   // 2-min floor in extended hours
+    : baseInterval;
   return useQuery({
-    queryKey: ["live-quotes", list.join(",")],
+    queryKey: ["live-quotes", list.join(","), session],
     queryFn: () => fetchQuotes(list),
     refetchInterval: interval,
     staleTime: Math.max(1_000, Math.floor(interval / 2)),
