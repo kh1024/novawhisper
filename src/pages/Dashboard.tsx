@@ -217,7 +217,7 @@ export default function Dashboard() {
 
           <PlaybookCard onPick={setOpenSymbol} />
 
-          <NewsFeed limit={6} title="Market News" />
+          <NewsFeed limit={8} title="Reuters News" sources={["reuters"]} sourceLabel="via Reuters" />
 
           <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} />
         </div>

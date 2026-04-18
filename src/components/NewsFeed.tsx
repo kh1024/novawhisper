@@ -9,11 +9,14 @@ interface Props {
   title?: string;
   limit?: number;
   className?: string;
+  sources?: string[];
+  sourceLabel?: string;
 }
 
-export function NewsFeed({ symbol = null, title, limit = 8, className = "" }: Props) {
-  const { data: items = [], isLoading, isFetching, error } = useNews({ symbol, limit });
+export function NewsFeed({ symbol = null, title, limit = 8, className = "", sources, sourceLabel }: Props) {
+  const { data: items = [], isLoading, isFetching, error } = useNews({ symbol, limit, sources });
   const heading = title ?? (symbol ? `${symbol} News` : "Market News");
+  const providerLabel = sourceLabel ?? (sources?.length ? `via ${sources.join(" · ")}` : "via Yahoo · Reuters · MarketWatch");
 
   return (
     <Card className={`glass-card p-5 ${className}`}>
@@ -23,7 +26,7 @@ export function NewsFeed({ symbol = null, title, limit = 8, className = "" }: Pr
         </h2>
         <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           {isFetching && <Loader2 className="h-3 w-3 animate-spin" />}
-          <span>via Yahoo · Reuters · MarketWatch</span>
+          <span>{providerLabel}</span>
         </div>
       </div>
 
