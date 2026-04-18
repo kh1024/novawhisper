@@ -74,9 +74,16 @@ Deno.serve(async (req) => {
 - MILD: moderate-risk directional plays (vertical spreads, 30-45 DTE single-leg on liquid names with a clear catalyst).
 - AGGRESSIVE: high-risk/high-reward (0DTE-7DTE, naked single-leg on momentum names, earnings straddles, unusual-activity follow-the-whale).
 
-For each pick: ticker, strategy, thesis (1 sentence grounded in the actual article content), entry idea (concrete strikes/expiry/direction), key risk. Pick 2-3 per bucket. ONLY use tickers that explicitly appear in the article text. Cite the source URL or domain.`;
+CRITICAL — every pick MUST include concrete, tradeable numbers:
+- exact strike price (number, USD)
+- expiry date (YYYY-MM-DD, pick a real upcoming Friday or monthly expiry)
+- option type (call / put / spread / straddle etc.) and direction (long / short)
+- "play at" underlying price — the spot level at which the trade makes sense to enter
+- a premium estimate range
 
-    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by intended risk tier):\n\n${context}\n\nReturn three buckets via the tool.`;
+Do NOT return vague entries like "buy calls if it breaks out". If you don't have enough info to pick a strike and expiry, drop the idea. Pick 2-3 per bucket. Only use tickers that explicitly appear in the article text. Today's date is ${new Date().toISOString().slice(0, 10)} — choose expiries in the future.`;
+
+    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by intended risk tier):\n\n${context}\n\nReturn three buckets via the tool with concrete strikes, expiries, and play-at prices for every pick.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -145,14 +152,20 @@ function pickSchema() {
   return {
     type: "object",
     properties: {
-      symbol: { type: "string" },
+      symbol: { type: "string", description: "Underlying ticker, e.g. AAPL" },
       strategy: { type: "string", description: "e.g. 'Covered call', 'Bull put spread', '0DTE call', 'Long straddle'" },
+      optionType: { type: "string", enum: ["call", "put", "call_spread", "put_spread", "straddle", "strangle", "iron_condor"], description: "Primary leg type" },
+      direction: { type: "string", enum: ["long", "short"], description: "Buying (long) or selling (short) the primary leg" },
+      strike: { type: "number", description: "Primary strike price in USD. For spreads, the long-leg strike." },
+      strikeShort: { type: "number", description: "Optional second strike for spreads/multi-leg (the short leg)." },
+      expiry: { type: "string", description: "Expiration date in YYYY-MM-DD format. Use the next standard monthly or weekly expiry that fits the strategy." },
+      playAt: { type: "number", description: "Underlying price at which to enter the trade (USD)." },
+      premiumEstimate: { type: "string", description: "Rough expected option premium per contract, e.g. '$1.20-$1.40' or 'collect $0.85 credit'." },
       thesis: { type: "string" },
-      entry: { type: "string", description: "Concrete entry idea — strikes/expiry/direction." },
       risk: { type: "string", description: "Main risk in one line." },
-      source: { type: "string", description: "Which scraped source flagged it." },
+      source: { type: "string", description: "Which source flagged it (URL or domain)." },
     },
-    required: ["symbol", "strategy", "thesis", "entry", "risk", "source"],
+    required: ["symbol", "strategy", "optionType", "direction", "strike", "expiry", "playAt", "thesis", "risk", "source"],
     additionalProperties: false,
   };
 }

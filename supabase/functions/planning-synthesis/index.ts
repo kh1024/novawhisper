@@ -62,12 +62,19 @@ Deno.serve(async (req) => {
     }));
 
     // 4) Call Lovable AI with structured tool output
+    const today = new Date().toISOString().slice(0, 10);
     const systemPrompt = `You are Nova, an experienced options trader analyzing tomorrow's session.
 You synthesize two things: (a) what finance YouTube creators are covering and their comment sections, (b) verified market quotes.
-Pick 5-8 tickers worth watching for the next session. For each, give a directional bias, a one-sentence thesis, key catalysts, and risks.
-Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic advice.`;
+Pick 5-8 tickers worth watching for the next session. For each, give a directional bias, a one-sentence thesis, key catalysts, risks, AND a concrete options play:
+- option type (call / put / spread / straddle) and direction (long / short)
+- exact strike price (number, USD) — pick a strike that fits the bias and current spot price from the quotes data
+- expiry date in YYYY-MM-DD (a real upcoming Friday weekly or monthly expiry — today is ${today})
+- "play at" underlying price (the spot level where the trade triggers)
+- premium estimate range
 
-    const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool.`;
+If hype is high but data is weak, set bias to "fade" and structure the play accordingly. Never return vague entries — every pick must be tradeable.`;
+
+    const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool with concrete strikes, expiries, and play-at prices for every pick.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -99,8 +106,15 @@ Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic
                       catalysts: { type: "array", items: { type: "string" } },
                       risks: { type: "array", items: { type: "string" } },
                       sources: { type: "array", items: { type: "string", enum: ["youtube", "quote"] } },
+                      optionType: { type: "string", enum: ["call", "put", "call_spread", "put_spread", "straddle", "strangle"], description: "Primary option leg type that fits the bias." },
+                      direction: { type: "string", enum: ["long", "short"] },
+                      strike: { type: "number", description: "Strike price in USD for the primary leg." },
+                      strikeShort: { type: "number", description: "Optional second strike for spreads (the short leg)." },
+                      expiry: { type: "string", description: "Expiration date YYYY-MM-DD — pick a real upcoming Friday/monthly expiry." },
+                      playAt: { type: "number", description: "Underlying spot price at which to enter the trade." },
+                      premiumEstimate: { type: "string", description: "Rough premium estimate, e.g. '$1.20-$1.40' or 'collect $0.85 credit'." },
                     },
-                    required: ["symbol", "bias", "conviction", "thesis", "catalysts", "risks", "sources"],
+                    required: ["symbol", "bias", "conviction", "thesis", "catalysts", "risks", "sources", "optionType", "direction", "strike", "expiry", "playAt"],
                     additionalProperties: false,
                   },
                 },

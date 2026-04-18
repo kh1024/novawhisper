@@ -53,6 +53,13 @@ export interface PlanningPick {
   catalysts: string[];
   risks: string[];
   sources: ("youtube" | "quote")[];
+  optionType: "call" | "put" | "call_spread" | "put_spread" | "straddle" | "strangle";
+  direction: "long" | "short";
+  strike: number;
+  strikeShort?: number;
+  expiry: string;
+  playAt: number;
+  premiumEstimate?: string;
 }
 
 export interface PlanningResult {
