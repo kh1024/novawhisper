@@ -60,13 +60,37 @@ export interface CrlOutput {
 const VALUATION_OVERSHOOT_PCT = 15; // spot > intrinsic × 1.15 ⇒ alert
 
 export function runConflictResolution(input: CrlInputs): CrlOutput {
-  const { rsi, ema8, spot, winningStreakDays, delta, theta, iv, dte, isLong, isCall } = input;
+  const { rsi, ema8, spot, winningStreakDays, delta, theta, iv, dte, isLong, isCall, intrinsicValue } = input;
 
   const emaDistancePct =
     ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
   const highMomentum = (winningStreakDays ?? 0) >= 3;
   const flags: string[] = [];
   if (highMomentum) flags.push("High momentum (3+ day streak)");
+  const riskBadge = classifyRisk({ delta, theta, iv });
+
+  // ── Risk Alert: spot is materially above intrinsic value ──
+  // Fires independently of verdict — even a "Safe" call gets flagged.
+  const valuationAlert = computeValuationAlert(spot, intrinsicValue ?? null);
+  if (valuationAlert.triggered && valuationAlert.message) {
+    flags.push(valuationAlert.message);
+  }
+
+  // Helper to build a result with the shared fields baked in.
+  const build = (
+    verdict: CrlVerdict,
+    reason: string,
+    overrides: Partial<Pick<CrlOutput, "stopLossTriggered">> = {},
+  ): CrlOutput => ({
+    verdict,
+    reason,
+    highMomentum,
+    emaDistancePct,
+    riskBadge,
+    stopLossTriggered: overrides.stopLossTriggered ?? stopLossTriggered,
+    flags,
+    valuationAlert,
+  });
 
   // ── Stop-loss check (long calls only — bearish stop is symmetric for puts) ──
   let stopLossTriggered = false;
@@ -75,85 +99,74 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     if (!isCall && spot > ema8) stopLossTriggered = true; // long put, price above 8-EMA
   }
 
-  // ── Trap filter 1: Time Decay Trap ──
-  if (theta != null && dte != null && theta < -0.5 && dte < 4) {
-    flags.push("Time decay trap");
-    return {
-      verdict: "NO",
-      reason: `Theta ${theta.toFixed(2)} with only ${dte}d to expiry — premium melts faster than any move can recover.`,
-      highMomentum,
-      emaDistancePct,
-      riskBadge: classifyRisk({ delta, theta, iv }),
-      stopLossTriggered,
-      flags,
-    };
+  // ── Trap filter 1: Mathematical Trap (Time Decay) ──
+  // Spec: DTE < 5  AND  theta < -0.50  ⇒  NO
+  if (theta != null && dte != null && theta < -0.5 && dte < 5) {
+    flags.push("Mathematical trap (time decay)");
+    return build(
+      "NO",
+      `Theta ${theta.toFixed(2)} with only ${dte}d to expiry — premium melts faster than any move can recover.`,
+    );
   }
 
   // ── Trap filter 2: Technical Overextension ──
-  if (rsi != null && rsi > 70 && emaDistancePct != null && Math.abs(emaDistancePct) > 5) {
-    flags.push("Overextended (RSI > 70, > 5% from 8-EMA)");
-    return {
-      verdict: "WAIT",
-      reason: `RSI ${rsi.toFixed(0)} and ${emaDistancePct.toFixed(1)}% above 8-EMA — pullback risk outweighs the trend. Wait for a 10:30 AM support test.`,
-      highMomentum,
-      emaDistancePct,
-      riskBadge: classifyRisk({ delta, theta, iv }),
-      stopLossTriggered,
-      flags,
-    };
+  // Spec: RSI > 70 alone ⇒ downgrade GO → WAIT (no EMA-distance gate).
+  if (rsi != null && rsi > 70) {
+    flags.push("Overextended (RSI > 70)");
+    const dist = emaDistancePct != null ? ` and ${emaDistancePct.toFixed(1)}% vs 8-EMA` : "";
+    return build(
+      "WAIT",
+      `RSI ${rsi.toFixed(0)}${dist} — technical overextension. Wait for a pullback before entering.`,
+    );
   }
 
   // ── Stop-loss EXIT (long position broke key level) ──
   if (stopLossTriggered) {
     flags.push("Broke 8-EMA — sell at loss");
-    return {
-      verdict: "EXIT",
-      reason: `Price ${spot?.toFixed(2)} broke below 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`,
-      highMomentum,
-      emaDistancePct,
-      riskBadge: classifyRisk({ delta, theta, iv }),
-      stopLossTriggered: true,
-      flags,
-    };
+    return build(
+      "EXIT",
+      `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`,
+      { stopLossTriggered: true },
+    );
   }
 
   // ── GO Signal: high momentum + fresh RSI ──
   if (highMomentum && rsi != null && rsi >= 40 && rsi <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
-    return {
-      verdict: "GO",
-      reason: `3+ day streak with RSI ${rsi.toFixed(0)} — fresh momentum, not exhausted. Clean entry.`,
-      highMomentum,
-      emaDistancePct,
-      riskBadge: classifyRisk({ delta, theta, iv }),
-      stopLossTriggered: false,
-      flags,
-    };
+    return build(
+      "GO",
+      `3+ day streak with RSI ${rsi.toFixed(0)} — fresh momentum, not exhausted. Clean entry.`,
+      { stopLossTriggered: false },
+    );
   }
 
   // ── Default: NEUTRAL with the most useful reason we can give ──
-  let reason = "No conflict — but no clean GO signal either.";
   if (highMomentum && rsi != null && rsi > 60) {
-    reason = `Momentum is up but RSI ${rsi.toFixed(0)} is hot — wait for a cooldown before chasing.`;
     flags.push("Momentum hot but RSI extended");
-    return { verdict: "WAIT", reason, highMomentum, emaDistancePct, riskBadge: classifyRisk({ delta, theta, iv }), stopLossTriggered, flags };
+    return build("WAIT", `Momentum is up but RSI ${rsi.toFixed(0)} is hot — wait for a cooldown before chasing.`);
   }
   if (!highMomentum && rsi != null && rsi < 40) {
-    reason = `Weak streak and RSI ${rsi.toFixed(0)} — no edge here, sit it out.`;
-    return { verdict: "WAIT", reason, highMomentum, emaDistancePct, riskBadge: classifyRisk({ delta, theta, iv }), stopLossTriggered, flags };
+    return build("WAIT", `Weak streak and RSI ${rsi.toFixed(0)} — no edge here, sit it out.`);
   }
 
-  return {
-    verdict: "NEUTRAL",
-    reason,
-    highMomentum,
-    emaDistancePct,
-    riskBadge: classifyRisk({ delta, theta, iv }),
-    stopLossTriggered,
-    flags,
-  };
+  return build("NEUTRAL", "No conflict — but no clean GO signal either.");
 }
 
+function computeValuationAlert(spot: number | null, intrinsic: number | null): CrlOutput["valuationAlert"] {
+  if (spot == null || intrinsic == null || intrinsic <= 0) {
+    return { triggered: false, intrinsicValue: intrinsic, premiumPct: null, message: null };
+  }
+  const premiumPct = (spot / intrinsic - 1) * 100;
+  if (premiumPct < VALUATION_OVERSHOOT_PCT) {
+    return { triggered: false, intrinsicValue: intrinsic, premiumPct, message: null };
+  }
+  return {
+    triggered: true,
+    intrinsicValue: intrinsic,
+    premiumPct,
+    message: `Risk Alert: trading ${premiumPct.toFixed(1)}% above intrinsic ($${intrinsic.toFixed(2)})`,
+  };
+}
 function classifyRisk({
   delta, theta, iv,
 }: { delta: number | null; theta: number | null; iv: number | null }): RiskBadge | null {
