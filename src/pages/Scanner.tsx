@@ -357,7 +357,7 @@ export default function Scanner() {
                         </tr>
                         {isOpen && (
                           <tr className="border-t border-border/30 bg-surface/20">
-                            <td colSpan={12} className="px-4 py-4">
+                            <td colSpan={13} className="px-4 py-4">
                               <DetailPanel row={r} onOpen={() => setOpenSymbol(r.symbol)} />
                             </td>
                           </tr>
