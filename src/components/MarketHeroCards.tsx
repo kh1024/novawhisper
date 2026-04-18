@@ -4,8 +4,9 @@
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, ShieldCheck, TrendingUp, Info } from "lucide-react";
+import { Activity, AlertTriangle, ShieldCheck, TrendingUp, Info, Cpu, Zap } from "lucide-react";
 import { MARKET_REGIME } from "@/lib/mockData";
+import { useNarrativeSignals } from "@/lib/sentimentSignals";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
