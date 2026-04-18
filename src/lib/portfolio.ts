@@ -89,7 +89,7 @@ export function useAddPosition() {
         thesis: p.thesis ?? null,
         source: p.source ?? null,
       };
-      const { error } = await supabase.from("portfolio_positions" as never).insert(row);
+      const { error } = await supabase.from("portfolio_positions" as never).insert(row as never);
       if (error) throw error;
     },
     onSuccess: (_d, p) => {
@@ -108,7 +108,7 @@ export function useClosePosition() {
         status: status ?? "closed",
         close_premium: closePremium ?? null,
         closed_at: new Date().toISOString(),
-      }).eq("id", id);
+      } as never).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["portfolio"] }),
