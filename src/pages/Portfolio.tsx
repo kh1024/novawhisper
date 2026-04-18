@@ -84,6 +84,11 @@ export default function Portfolio() {
   // Auto-cycle paper prices: random walk applied to every paper card every ~2s.
   // Paper trades only — real positions are never affected.
   const [autoSim, setAutoSim] = useState(false);
+  // Per-position sim offset reported up from each card so portfolio totals
+  // can reflect the simulated underlying.
+  const [simOffsets, setSimOffsets] = useState<Record<string, number>>({});
+  const reportSimOffset = (id: string, pct: number) =>
+    setSimOffsets((cur) => (cur[id] === pct ? cur : { ...cur, [id]: pct }));
 
   const seedSamples = () => {
     const samples = buildSamplePaperTrades();
