@@ -1,9 +1,10 @@
-import { Bookmark, Check } from "lucide-react";
+import { Bookmark, Check, FlaskConical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAddPosition, type NewPosition } from "@/lib/portfolio";
+import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 
