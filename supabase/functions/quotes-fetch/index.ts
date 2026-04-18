@@ -276,9 +276,10 @@ function verify(
   }
   if (live.length === 1) {
     const src = live[0];
+    // ONE good source is still good data — don't punish ETFs / off-hours quotes.
     return {
       symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
-      sources, consensusSource: src.source, status: "stale",
+      sources, consensusSource: src.source, status: "verified",
       diffPct: null, updatedAt: now,
     };
   }
