@@ -295,8 +295,13 @@ export default function Scanner() {
                           )}
                         >
                           <td className="px-3 py-3">
-                            <div className="font-mono font-semibold">{r.symbol}</div>
-                            <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">{r.name}</div>
+                            <div className="flex items-center gap-2">
+                              <div>
+                                <div className="font-mono font-semibold">{r.symbol}</div>
+                                <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">{r.name}</div>
+                              </div>
+                              <ChartLinks symbol={r.symbol} />
+                            </div>
                           </td>
                           <td className="px-3 py-3 mono">${r.price.toFixed(2)}</td>
                           <td className={cn("px-3 py-3 mono", r.changePct >= 0 ? "text-bullish" : "text-bearish")}>
