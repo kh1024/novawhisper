@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
 import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, Info } from "lucide-react";
-import { getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
+import { getMockPicks, MARKET_REGIME, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { NewsFeed } from "@/components/NewsFeed";
+import { SectorBreakdown } from "@/components/SectorBreakdown";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
@@ -193,28 +194,7 @@ export default function Dashboard() {
 
           <NewsFeed limit={6} title="Market News" />
 
-          <Card className="glass-card p-5">
-            <h2 className="text-sm font-semibold tracking-wide mb-3">Top Sectors</h2>
-            <div className="space-y-2">
-              {TOP_SECTORS.map((s) => {
-                const up = s.change >= 0;
-                return (
-                  <div key={s.name} className="flex items-center gap-3">
-                    <span className="text-xs flex-1">{s.name}</span>
-                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className={up ? "h-full bg-bullish" : "h-full bg-bearish"}
-                        style={{ width: `${Math.min(100, Math.abs(s.change) * 30)}%` }}
-                      />
-                    </div>
-                    <span className={`mono text-xs w-12 text-right ${up ? "text-bullish" : "text-bearish"}`}>
-                      {up ? "+" : ""}{s.change}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
+          <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} />
 
           <Card className="glass-card p-5">
             <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
