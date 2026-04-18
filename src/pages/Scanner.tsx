@@ -398,7 +398,32 @@ function EstNum({ n, est, suffix = "" }: { n: number; est?: boolean; suffix?: st
   );
 }
 
-function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
+function ChartLinks({ symbol, className }: { symbol: string; className?: string }) {
+  const links = [
+    { href: `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`, label: "Open chart on TradingView", Icon: CandlestickChart },
+    { href: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`, label: "Open quote on Yahoo Finance", Icon: ExternalLink },
+  ];
+  return (
+    <div className={cn("inline-flex items-center gap-1", className)} onClick={(e) => e.stopPropagation()}>
+      {links.map(({ href, label, Icon }) => (
+        <Tooltip key={href}>
+          <TooltipTrigger asChild>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={label}
+              className="inline-flex h-6 w-6 items-center justify-center rounded border border-border/60 bg-surface/40 text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
+            >
+              <Icon className="h-3 w-3" />
+            </a>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Score breakdown */}
