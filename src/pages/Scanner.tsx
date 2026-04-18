@@ -394,13 +394,21 @@ export default function Scanner() {
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex flex-col gap-1">
-                              <span className={cn(
-                                "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
-                                verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                              )}>{verdict}</span>
+                              <div className="flex items-center gap-1">
+                                <span
+                                  title="NOVA — Nova's verdict engine reconciling technicals, Greeks & risk"
+                                  className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border w-fit bg-primary/10 text-primary border-primary/40"
+                                >
+                                  NOVA
+                                </span>
+                                <span className={cn(
+                                  "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
+                                  verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
+                                  verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
+                                  (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
+                                  verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
+                                )}>{verdict}</span>
+                              </div>
                               {r.crl.riskBadge && (
                                 <span className={cn(
                                   "text-[9px] px-1.5 py-0 rounded border w-fit",
