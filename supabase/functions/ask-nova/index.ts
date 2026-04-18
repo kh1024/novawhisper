@@ -80,16 +80,20 @@ Deno.serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
+    const budget = typeof ctx.budget === "number" && ctx.budget > 0 ? ctx.budget : 1000;
     const userPrompt = `Ticker: ${ctx.symbol}${ctx.name ? ` (${ctx.name})` : ""}
 Sector: ${ctx.sector ?? "—"}
 Price: $${ctx.price?.toFixed(2) ?? "—"} | Change: ${ctx.changePct?.toFixed(2) ?? "—"}% | Verification: ${ctx.status ?? "—"}
+USER BUDGET: $${budget.toFixed(0)} (max spend per trade — each contract = mid × 100)
 
 Top scored option picks (live):
-${(ctx.topPicks ?? []).map((p, i) =>
-  `${i + 1}. ${p.type.toUpperCase()} $${p.strike} exp ${p.expiration} (${p.dte}d) — mid $${p.mid.toFixed(2)}, ann ${p.annualized.toFixed(1)}%, score ${p.score}${p.delta != null ? `, Δ${p.delta.toFixed(2)}` : ""}${p.iv != null ? `, IV ${(p.iv * 100).toFixed(0)}%` : ""}`
-).join("\n") || "(no live option contracts available)"}
+${(ctx.topPicks ?? []).map((p, i) => {
+  const cost = p.mid * 100;
+  const affords = Math.floor(budget / cost);
+  return `${i + 1}. ${p.type.toUpperCase()} $${p.strike} exp ${p.expiration} (${p.dte}d) — mid $${p.mid.toFixed(2)}, cost/contract $${cost.toFixed(0)}, budget affords ${affords}x, ann ${p.annualized.toFixed(1)}%, score ${p.score}${p.delta != null ? `, Δ${p.delta.toFixed(2)}` : ""}${p.iv != null ? `, IV ${(p.iv * 100).toFixed(0)}%` : ""}`;
+}).join("\n") || "(no live option contracts available)"}
 
-Write the analyst note now.`;
+Write the analyst note now — strictly enforce the budget filter.`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
