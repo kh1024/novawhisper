@@ -52,13 +52,12 @@ export interface PlanningPick {
   thesis: string;
   catalysts: string[];
   risks: string[];
-  sources: ("reddit" | "youtube" | "quote")[];
+  sources: ("youtube" | "quote")[];
 }
 
 export interface PlanningResult {
   synthesis: { marketTone: string; picks: PlanningPick[] };
   sources: {
-    reddit: { tickers: SourceTicker[]; posts: RedditPost[]; subs: string[]; fetchedAt: string };
     youtube: { tickers: SourceTicker[]; videos: YouTubeVideo[]; query: string; fetchedAt: string } | null;
     quotes: { symbol: string; price: number; changePct: number; volume: number; status: string }[];
   };
