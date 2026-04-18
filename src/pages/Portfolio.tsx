@@ -10,7 +10,7 @@ import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSettings, BROKER_PRESETS, type AppSettings } from "@/lib/settings";
 import { dispatchVerdictTransitions } from "@/lib/webhook";
 import { feeOneSide, feeRoundTrip } from "@/lib/fees";
@@ -84,6 +84,11 @@ export default function Portfolio() {
   // Auto-cycle paper prices: random walk applied to every paper card every ~2s.
   // Paper trades only — real positions are never affected.
   const [autoSim, setAutoSim] = useState(false);
+  // Per-position sim offset reported up from each card so portfolio totals
+  // can reflect the simulated underlying.
+  const [simOffsets, setSimOffsets] = useState<Record<string, number>>({});
+  const reportSimOffset = useCallback((id: string, pct: number) =>
+    setSimOffsets((cur) => (cur[id] === pct ? cur : { ...cur, [id]: pct })), []);
 
   const seedSamples = () => {
     const samples = buildSamplePaperTrades();
@@ -127,20 +132,32 @@ export default function Portfolio() {
       feesPaid += feeRoundTrip(settings, p.contracts);
     }
     let unrealized = 0;
+    let unrealizedSim = 0;
     let unrealizedKnown = false;
+    let anySim = false;
     let costBasis = 0;
     for (const p of open) {
       const spot = quoteMap.get(p.symbol)?.price ?? null;
       const u = estimateUnrealizedPnl(p, spot, settings);
       if (u != null) { unrealized += u; unrealizedKnown = true; }
+      const off = simOffsets[p.id] ?? 0;
+      const simSpot = spot != null && off !== 0 ? spot * (1 + off / 100) : spot;
+      const uSim = estimateUnrealizedPnl(p, simSpot, settings);
+      if (uSim != null) unrealizedSim += uSim;
+      if (off !== 0) anySim = true;
       if (p.entry_premium != null && p.direction === "long") {
         costBasis += Number(p.entry_premium) * p.contracts * 100;
       }
       // Entry fee already paid on open positions.
       feesPaid += feeOneSide(settings, p.contracts);
     }
-    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis, feesPaid };
-  }, [open, closed, quoteMap, settings]);
+    return {
+      openCount, realized, unrealized, unrealizedSim, unrealizedKnown, anySim,
+      total: realized + unrealized,
+      totalSim: realized + unrealizedSim,
+      costBasis, feesPaid,
+    };
+  }, [open, closed, quoteMap, settings, simOffsets]);
 
   return (
     <div className="space-y-6 p-6">
@@ -164,6 +181,11 @@ export default function Portfolio() {
             <div className={cn("font-mono text-lg font-semibold", totals.unrealized >= 0 ? "text-bullish" : "text-bearish")}>
               {totals.unrealizedKnown ? fmtUsd(totals.unrealized) : "—"}
             </div>
+            {totals.anySim && (
+              <div className={cn("text-[10px] font-mono mt-0.5", totals.unrealizedSim >= 0 ? "text-bullish" : "text-bearish")}>
+                sim: {fmtUsd(totals.unrealizedSim)}
+              </div>
+            )}
           </div>
           <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Realized</div>
@@ -176,6 +198,11 @@ export default function Portfolio() {
             <div className={cn("font-mono text-lg font-semibold", totals.total >= 0 ? "text-bullish" : "text-bearish")}>
               {fmtUsd(totals.total)}
             </div>
+            {totals.anySim && (
+              <div className={cn("text-[10px] font-mono", totals.totalSim >= 0 ? "text-bullish" : "text-bearish")}>
+                sim: {fmtUsd(totals.totalSim)}
+              </div>
+            )}
             <div className="text-[9px] text-muted-foreground mt-0.5">−${totals.feesPaid.toFixed(2)} fees</div>
           </div>
           <Button size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["portfolio-verdict"] }); verdictQ.refetch(); }} disabled={verdictQ.isFetching || open.length === 0}>
@@ -256,7 +283,7 @@ export default function Portfolio() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {open.map((p) => (
-                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={autoSim} />
+                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={autoSim} onSimChange={reportSimOffset} />
               ))}
             </div>
           )}
@@ -275,7 +302,7 @@ export default function Portfolio() {
   );
 }
 
-function PositionCard({ p, verdict, spot, settings, autoSim = false }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings; autoSim?: boolean }) {
+function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings; autoSim?: boolean; onSimChange?: (id: string, pct: number) => void }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const isCall = p.option_type.includes("call");
@@ -302,6 +329,11 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false }: { p: Port
     }, 2000);
     return () => clearInterval(id);
   }, [autoSim, p.is_paper, p.status]);
+
+  // Bubble offset up so the parent can compute portfolio-wide sim totals.
+  useEffect(() => {
+    onSimChange?.(p.id, simOffsetPct);
+  }, [simOffsetPct, p.id, onSimChange]);
 
   const realSpot = spot ?? null;
   const effectiveSpot = realSpot != null && simOffsetPct !== 0
