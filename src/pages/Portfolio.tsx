@@ -176,6 +176,11 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
     : null;
   const distance = spot != null ? ((spot - Number(p.strike)) / Number(p.strike)) * 100 : null;
 
+  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null) : null;
+  const unrealizedPct = unrealized != null && p.entry_premium != null && p.direction === "long"
+    ? (unrealized / (Number(p.entry_premium) * p.contracts * 100)) * 100
+    : null;
+
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-2">
@@ -194,6 +199,16 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
             {p.entry_premium != null && ` · entry $${Number(p.entry_premium).toFixed(2)}`}
             {dte > 0 ? ` · ${dte} DTE` : " · expired"}
           </div>
+          {unrealized != null && (
+            <div
+              className={cn("mt-1 inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-mono",
+                unrealized >= 0 ? "text-bullish border-bullish/40 bg-bullish/10" : "text-bearish border-bearish/40 bg-bearish/10")}
+              title="Estimated from intrinsic value only — real option value is usually higher because of time value."
+            >
+              Unrealized (est.): {fmtUsd(unrealized)}
+              {unrealizedPct != null && <span className="opacity-80">({unrealizedPct >= 0 ? "+" : ""}{unrealizedPct.toFixed(0)}%)</span>}
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           {spot != null && (
