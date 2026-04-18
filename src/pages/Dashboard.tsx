@@ -1,15 +1,15 @@
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { motion } from "framer-motion";
+import { motion, type Variants } from "framer-motion";
 import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles } from "lucide-react";
 import { getMockQuotes, getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 
-const fade = {
+const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
-  show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.4, ease: [0.25, 1, 0.5, 1] } }),
+  show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.4, ease: "easeOut" } }),
 };
 
 export default function Dashboard() {

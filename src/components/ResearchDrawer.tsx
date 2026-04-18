@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Sparkles, FileText, Youtube, TrendingUp, Newspaper } from "lucide-react";
+import { Sparkles, FileText, Youtube, TrendingUp, Newspaper } from "lucide-react";
 import { getMockQuotes, getMockPicks } from "@/lib/mockData";
 import { useMemo } from "react";
 import { LineChart, Line, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
