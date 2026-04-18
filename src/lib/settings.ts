@@ -18,7 +18,15 @@ export interface AppSettings {
   webhookUrl: string;         // Make.com / n8n / Slack incoming webhook
   webhookEnabled: boolean;    // master toggle
   webhookOnWait: boolean;     // also fire on new WAIT signals
+  // Trading fees applied to P&L. Defaults match Robinhood retail options:
+  // $0 commission + ~$0.03/contract regulatory pass-through (ORF + OCC + SEC + FINRA TAF, round-tripped).
+  brokerPreset: BrokerPreset;
+  feePerContract: number;     // per contract, per side (entry & exit each charged)
+  feePerTrade: number;        // flat per trade, per side
+  regulatoryFeePerContract: number; // ORF/OCC/SEC pass-through, per side
 }
+
+export type BrokerPreset = "robinhood" | "webull" | "schwab" | "ibkr" | "tastytrade" | "custom";
 
 const KEY = "nova_settings";
 const DEFAULTS: AppSettings = {
