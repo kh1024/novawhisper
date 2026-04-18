@@ -283,7 +283,7 @@ export default function Portfolio() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {open.map((p) => (
-                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={autoSim} />
+                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={autoSim} onSimChange={reportSimOffset} />
               ))}
             </div>
           )}
