@@ -2,16 +2,16 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Clock, FlaskConical } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { useLiveQuotes } from "@/lib/liveData";
+import { useLiveQuotes, currentSessionET, type Session } from "@/lib/liveData";
 import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
 
-function isMarketOpen(nyDate: Date) {
-  const day = nyDate.getDay();
-  if (day === 0 || day === 6) return false;
-  const mins = nyDate.getHours() * 60 + nyDate.getMinutes();
-  return mins >= 9 * 60 + 30 && mins < 16 * 60;
-}
+const SESSION_PILL: Record<Session, { label: string; cls: string; live: boolean; tip: string }> = {
+  pre:     { label: "Pre-Market",  cls: "pill border-primary/40 bg-primary/10 text-primary", live: true,  tip: "US pre-market session (04:00–09:30 ET). Lower liquidity; refresh throttled to 2 min." },
+  regular: { label: "Market Open", cls: "pill-live",   live: true,  tip: "Regular US session (09:30–16:00 ET)." },
+  post:    { label: "After-Hours", cls: "pill border-warning/40 bg-warning/10 text-warning",  live: true,  tip: "US after-hours session (16:00–20:00 ET). Lower liquidity; refresh throttled to 2 min." },
+  closed:  { label: "Market Closed", cls: "pill-neutral", live: false, tip: "US equity market is closed. Showing the last regular-session prices." },
+};
 
 function formatInterval(ms: number) {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
