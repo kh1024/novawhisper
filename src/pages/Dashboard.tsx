@@ -1,22 +1,32 @@
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, Info } from "lucide-react";
 import { getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { NewsFeed } from "@/components/NewsFeed";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
   show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.4, ease: "easeOut" } }),
 };
 
+type RiskBucket = "safe" | "mild" | "aggressive";
+
 export default function Dashboard() {
   const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
-  const picks = useMemo(() => getMockPicks(20), []);
+  const allPicks = useMemo(() => getMockPicks(60), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
+  const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
+
+  const picks = useMemo(
+    () => allPicks.filter((p) => p.riskBucket === riskTab).slice(0, 6),
+    [allPicks, riskTab]
+  );
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
