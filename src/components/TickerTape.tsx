@@ -1,8 +1,11 @@
 import { ArrowDown, ArrowUp, Loader2 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
+import { useSettings } from "@/lib/settings";
 
 export function TickerTape() {
-  const { data: quotes = [], isLoading } = useLiveQuotes(undefined, { refetchMs: 60_000 });
+  const [settings] = useSettings();
+  const symbols = settings.tickerSymbols.length ? settings.tickerSymbols : undefined;
+  const { data: quotes = [], isLoading } = useLiveQuotes(symbols, { refetchMs: 60_000 });
 
   if (isLoading || quotes.length === 0) {
     return (
