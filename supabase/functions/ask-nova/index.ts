@@ -9,7 +9,9 @@ interface NovaContext {
   change?: number;
   changePct?: number;
   status?: string;
-  budget?: number; // USD the user has to spend
+  budget?: number;       // USD the user has to spend
+  model?: string;        // override AI model
+  riskProfile?: "safe" | "mild" | "aggressive"; // user default risk tilt
   topPicks?: Array<{
     type: string;
     strike: number;
