@@ -80,7 +80,11 @@ interface RedditChild {
   };
 }
 
-async function fetchSub(sub: string, sort: string, limit: number) {
+// Try JSON endpoints first (rich data: score, comments, upvote ratio).
+// If all blocked (403 from server IPs), fall back to RSS which Reddit still
+// serves. RSS lacks score/comments — we synthesise defaults; ticker extraction
+// still works because it only needs title + body text.
+async function fetchJson(sub: string, sort: string, limit: number) {
   for (const host of HOSTS) {
     const url = `${host}/r/${sub}/${sort}.json?limit=${limit}&t=day&raw_json=1`;
     try {
@@ -91,18 +95,57 @@ async function fetchSub(sub: string, sort: string, limit: number) {
           "Accept-Language": "en-US,en;q=0.9",
         },
       });
-      if (!r.ok) {
-        console.warn(`[reddit] ${host} ${sub}/${sort} ${r.status}`);
-        continue;
-      }
+      if (!r.ok) { console.warn(`[reddit-json] ${host} ${sub}/${sort} ${r.status}`); continue; }
       const j = await r.json();
       const children: RedditChild[] = j?.data?.children ?? [];
       return children.filter((c) => !c.data.stickied).map((c) => c.data);
-    } catch (e) {
-      console.warn(`[reddit] ${host} ${sub}/${sort} fetch error`, e);
-    }
+    } catch (e) { console.warn(`[reddit-json] ${host} ${sub}/${sort} fetch error`, e); }
   }
-  return [];
+  return null;
+}
+
+function decodeEntities(s: string): string {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#x27;/g, "'");
+}
+function stripHtml(s: string): string {
+  return decodeEntities(s.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+async function fetchRss(sub: string, sort: string, limit: number): Promise<RedditChild["data"][]> {
+  const url = `https://www.reddit.com/r/${sub}/${sort}.rss?limit=${limit}`;
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/atom+xml,application/xml;q=0.9,*/*;q=0.8" } });
+    if (!r.ok) { console.warn(`[reddit-rss] ${sub}/${sort} ${r.status}`); return []; }
+    const xml = await r.text();
+    const entries = xml.split("<entry>").slice(1);
+    const out: RedditChild["data"][] = [];
+    for (const raw of entries) {
+      const block = raw.split("</entry>")[0];
+      const title = decodeEntities((block.match(/<title>([\s\S]*?)<\/title>/)?.[1] ?? "").trim());
+      const link = (block.match(/<link[^>]+href="([^"]+)"/)?.[1] ?? "").trim();
+      const id = (block.match(/<id>([\s\S]*?)<\/id>/)?.[1] ?? link).trim();
+      const author = (block.match(/<name>([\s\S]*?)<\/name>/)?.[1] ?? "").replace(/^\/u\//, "").trim();
+      const updated = (block.match(/<updated>([\s\S]*?)<\/updated>/)?.[1] ?? "").trim();
+      const contentHtml = (block.match(/<content[^>]*>([\s\S]*?)<\/content>/)?.[1] ?? "");
+      const selftext = stripHtml(contentHtml).slice(0, 600);
+      const permalink = link.replace(/^https?:\/\/(www|old)\.reddit\.com/, "");
+      const created = updated ? Math.floor(new Date(updated).getTime() / 1000) : Math.floor(Date.now() / 1000);
+      out.push({
+        id: id.split("_").pop() ?? id,
+        title, selftext, permalink,
+        score: 0, num_comments: 0,
+        created_utc: created, author, subreddit: sub,
+        link_flair_text: null, upvote_ratio: undefined, stickied: false,
+      });
+    }
+    return out;
+  } catch (e) { console.warn(`[reddit-rss] ${sub}/${sort} fetch error`, e); return []; }
+}
+
+async function fetchSub(sub: string, sort: string, limit: number) {
+  const json = await fetchJson(sub, sort, limit);
+  if (json && json.length) return json;
+  return await fetchRss(sub, sort, limit);
 }
 
 Deno.serve(async (req) => {
