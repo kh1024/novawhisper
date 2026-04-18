@@ -643,7 +643,7 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
   );
 }
 
-// ── Conflict Resolution Layer chip ─────────────────────────────────────────
+// ── NOVA reasoning chip (formerly CRL — Conflict Resolution Layer) ────────
 function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?: Verdict["metrics"] }) {
   const verdictStyle: Record<typeof crl.verdict, string> = {
     GO:      "bg-bullish/15 text-bullish border-bullish/40",
@@ -660,6 +660,12 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
   return (
     <div className="mt-3 rounded-md border border-border/60 bg-surface/30 p-2.5 space-y-1.5">
       <div className="flex items-center gap-1.5 flex-wrap">
+        <span
+          className="text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border bg-primary/15 text-primary border-primary/40"
+          title="NOVA — the rules engine that reconciles technicals, Greeks and risk into a single verdict"
+        >
+          NOVA
+        </span>
         <span className={cn("text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border", verdictStyle[crl.verdict])}>
           {crl.verdict}
         </span>
@@ -706,7 +712,7 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
         )}
       </div>
       <p className="text-[11px] text-foreground/85 leading-snug">
-        <span className="text-muted-foreground">Reasoning · </span>{crl.reason}
+        <span className="text-muted-foreground">NOVA · </span>{crl.reason}
       </p>
       {metrics && (
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-mono text-muted-foreground pt-1 border-t border-border/40">
