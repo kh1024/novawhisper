@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2 } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign } from "lucide-react";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
 import { toast } from "sonner";
 import { useBudget } from "@/lib/budget";
@@ -9,8 +9,10 @@ import {
   REFRESH_OPTIONS,
   AI_MODELS,
   RISK_PROFILES,
+  BROKER_PRESETS,
   type AiModel,
   type RiskProfile,
+  type BrokerPreset,
 } from "@/lib/settings";
 import { useApiHealth } from "@/lib/apiHealth";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
