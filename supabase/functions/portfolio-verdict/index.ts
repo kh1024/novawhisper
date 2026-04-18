@@ -355,10 +355,11 @@ Deno.serve(async (req) => {
     }
     const symbols = [...new Set(positions.map((p) => p.symbol.toUpperCase()))];
 
-    // ── Fetch quotes, daily history, and option chains in parallel ──
+    // ── Fetch quotes, daily history (≥220d for SMA200), option chains in parallel ──
+    const opening = beforeOpeningRange();
     const [quotesResp, histResp, ...chainResps] = await Promise.all([
       fetchJson<{ quotes: Quote[] }>("quotes-fetch", { symbols }),
-      fetchJson<{ histories: History[] }>("quotes-history", { symbols, lookbackDays: 30 }),
+      fetchJson<{ histories: History[] }>("quotes-history", { symbols, lookbackDays: 220 }),
       ...symbols.map((s) => fetchJson<{ contracts: OptionContract[] }>("options-fetch", { underlying: s, limit: 250 })),
     ]);
     const quotes = quotesResp?.quotes ?? [];
@@ -376,9 +377,12 @@ Deno.serve(async (req) => {
       const isCall = p.optionType.includes("call");
       const closes = hMap.get(sym) ?? [];
       const ema8 = ema(closes, 8);
+      const sma200 = sma(closes, 200);
       const rsi14 = rsi(closes, 14);
       const winningStreak = streak(closes);
+      const realizedVol = realizedVolAnnualized(closes, 30);
       const contract = matchContract(cMap.get(sym) ?? [], Number(p.strike), p.expiry, isCall);
+      const ivPercentile = ivPercentileEstimate(contract?.iv ?? null, realizedVol);
       // Estimate unrealized $ P&L using contract mid if available, else intrinsic.
       let unrealizedPnl: number | null = null;
       if (p.entryPremium != null && contract?.mid != null) {
@@ -398,12 +402,18 @@ Deno.serve(async (req) => {
         iv: contract?.iv ?? null,
         dte, isLong: p.direction === "long", isCall,
         unrealizedPnl,
+        sma200,
+        ivPercentile,
+        beforeOpeningRange: opening,
+        entryPremium: p.entryPremium ?? null,
+        currentPremium: contract?.mid ?? null,
       });
       return {
-        ...p, spot, dte, ema8, rsi14, winningStreak,
+        ...p, spot, dte, ema8, sma200, rsi14, winningStreak,
         delta: contract?.delta ?? null,
         theta: contract?.theta ?? null,
         iv: contract?.iv ?? null,
+        ivPercentile,
         currentMid: contract?.mid ?? null,
         unrealizedPnl,
         crl,
