@@ -269,6 +269,7 @@ export default function Scanner() {
                       { k: "RSI", tip: "Estimated" }, { k: "ATR%", tip: "Estimated" },
                       { k: "Opt Liq", tip: "Options liquidity proxy" },
                       { k: "Setup", tip: "Weighted final score 0–100" },
+                      { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
                       { k: "Readiness" }, { k: "" },
                     ].map((h) => (
                       <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap">
@@ -318,6 +319,25 @@ export default function Scanner() {
                           <td className="px-3 py-3 mono">{r.optionsLiquidity}</td>
                           <td className="px-3 py-3">
                             <div className={cn("mono font-semibold text-base", scoreColor(r.setupScore))}>{r.setupScore}</div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-col gap-1">
+                              <span className={cn(
+                                "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
+                                r.crl.verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
+                                r.crl.verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
+                                (r.crl.verdict === "NO" || r.crl.verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
+                                r.crl.verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
+                              )}>{r.crl.verdict}</span>
+                              {r.crl.riskBadge && (
+                                <span className={cn(
+                                  "text-[9px] px-1.5 py-0 rounded border w-fit",
+                                  r.crl.riskBadge === "Safe" && "text-bullish border-bullish/30",
+                                  r.crl.riskBadge === "Mild" && "text-warning border-warning/30",
+                                  r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
+                                )}>{r.crl.riskBadge}</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-3">
                             <span className={cn("text-[10px] px-2 py-1 rounded border font-semibold tracking-wider", ready.cls)}>
