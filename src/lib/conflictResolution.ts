@@ -1,15 +1,18 @@
 // Conflict Resolution Layer (CRL)
-// Pure logic — given technicals + Greeks, returns GO / WAIT / NO + reasoning,
-// risk badge, and stop-loss flag. Used by both Portfolio (real Greeks via
-// options-fetch) and Scanner (estimated until row expanded).
+// Pure logic — given technicals + Greeks (+ optional fundamental anchor),
+// returns GO / WAIT / NO + reasoning, risk badge, stop-loss flag, and an
+// orthogonal "Risk Alert" badge for valuation overshoots. Used by both
+// Portfolio (real Greeks via options-fetch) and Scanner.
 //
-// Rules (verbatim from product spec):
-//   1. Momentum Check  — 3+ day winning streak ⇒ "High Momentum".
+// Rules (current product spec):
+//   1. Momentum Check     — 3+ day winning streak ⇒ "High Momentum".
 //   2. Trap Filters
-//      - RSI > 70  AND  |distance from 8-EMA| > 5%  ⇒ WAIT (Technical Overextension)
-//      - Theta < -0.50  AND  DTE < 4               ⇒ NO   (Time Decay Trap)
-//   3. GO Signal      — High momentum AND RSI ∈ [40,60] (fresh breakout).
-//   4. Stop-loss      — price breaks below 8-EMA on a long ⇒ SELL AT LOSS.
+//      a. RSI > 70                       ⇒ downgrade GO → WAIT (Technical Overextension)
+//      b. DTE < 5  AND  theta < -0.50    ⇒ NO   (Mathematical Trap / Time Decay)
+//   3. GO Signal          — High momentum AND RSI ∈ [40,60] (fresh breakout).
+//   4. Stop-loss          — long & price breaks 8-EMA ⇒ EXIT (sell at loss).
+//   5. Risk Alert (orthogonal, fires on top of any verdict including Safe):
+//      spot > intrinsicValue × 1.15      ⇒ flag "Overvalued vs intrinsic"
 //
 // Risk badge (orthogonal to verdict):
 //   - Safe       — ITM (|delta| ≥ 0.65) AND |theta| < 0.30
@@ -33,6 +36,8 @@ export interface CrlInputs {
   // Position direction
   isLong: boolean;
   isCall: boolean;                     // for stop-loss direction
+  // Fundamental anchor (optional) — used for "Overvalued" risk alert.
+  intrinsicValue?: number | null;      // analyst / model fair-value estimate
 }
 
 export interface CrlOutput {
@@ -42,8 +47,17 @@ export interface CrlOutput {
   emaDistancePct: number | null;       // (spot - ema8) / ema8 * 100
   riskBadge: RiskBadge | null;
   stopLossTriggered: boolean;          // long & price broke below 8-EMA
-  flags: string[];                     // bullet flags for UI ("Overextended", "Time decay trap"...)
+  flags: string[];                     // bullet flags for UI
+  // Valuation overshoot — fires independently of verdict, even on "Safe" calls.
+  valuationAlert: {
+    triggered: boolean;
+    intrinsicValue: number | null;
+    premiumPct: number | null;         // (spot / intrinsic - 1) * 100
+    message: string | null;
+  };
 }
+
+const VALUATION_OVERSHOOT_PCT = 15; // spot > intrinsic × 1.15 ⇒ alert
 
 export function runConflictResolution(input: CrlInputs): CrlOutput {
   const { rsi, ema8, spot, winningStreakDays, delta, theta, iv, dte, isLong, isCall } = input;
