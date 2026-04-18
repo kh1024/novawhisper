@@ -499,8 +499,14 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           </Button>
           <Button asChild variant="outline" size="sm" className="gap-1.5">
             <a
-              href={`https://robinhood.com/stocks/${encodeURIComponent(row.symbol)}`}
+              href={`https://robinhood.com/options/chains/${encodeURIComponent(row.symbol)}`}
               target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ${row.symbol} options chain on Robinhood`}
+            >
+              <ExternalLink className="h-3 w-3" /> Robinhood
+            </a>
+          </Button>
               rel="noopener noreferrer"
               aria-label={`Open ${row.symbol} on Robinhood`}
             >
