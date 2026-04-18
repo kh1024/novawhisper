@@ -379,13 +379,25 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
             {dte > 0 ? ` · ${dte} DTE` : " · expired"}
           </div>
           {unrealized != null && (
-            <div
-              className={cn("mt-1 inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-mono",
-                unrealized >= 0 ? "text-bullish border-bullish/40 bg-bullish/10" : "text-bearish border-bearish/40 bg-bearish/10")}
-              title="Estimated from intrinsic value only — real option value is usually higher because of time value."
-            >
-              Unrealized (est.): {fmtUsd(unrealized)}
-              {unrealizedPct != null && <span className="opacity-80">({unrealizedPct >= 0 ? "+" : ""}{unrealizedPct.toFixed(0)}%)</span>}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <div
+                className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-mono",
+                  unrealized >= 0 ? "text-bullish border-bullish/40 bg-bullish/10" : "text-bearish border-bearish/40 bg-bearish/10",
+                  isSimulating && "ring-1 ring-warning/40")}
+                title={isSimulating
+                  ? `Simulated P&L at ${simOffsetPct > 0 ? "+" : ""}${simOffsetPct}% spot move. Real P&L: ${unrealizedReal != null ? fmtUsd(unrealizedReal) : "—"}.`
+                  : "Estimated from intrinsic value only — real option value is usually higher because of time value."}
+              >
+                {isSimulating ? "Sim P&L" : "Unrealized (est.)"}: {fmtUsd(unrealized)}
+                {unrealizedPct != null && <span className="opacity-80">({unrealizedPct >= 0 ? "+" : ""}{unrealizedPct.toFixed(0)}%)</span>}
+              </div>
+              {isSimulating && simDelta != null && (
+                <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                  simDelta >= 0 ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5")}
+                  title="Change vs. real-spot P&L">
+                  Δ {fmtUsd(simDelta)}
+                </span>
+              )}
             </div>
           )}
         </div>
