@@ -88,10 +88,14 @@ Deno.serve(async (req) => {
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
     const budget = typeof ctx.budget === "number" && ctx.budget > 0 ? ctx.budget : 1000;
+    const riskProfile = ctx.riskProfile ?? "mild";
+    const model = ctx.model && ctx.model.includes("/") ? ctx.model : "google/gemini-3-flash-preview";
+
     const userPrompt = `Ticker: ${ctx.symbol}${ctx.name ? ` (${ctx.name})` : ""}
 Sector: ${ctx.sector ?? "—"}
 Price: $${ctx.price?.toFixed(2) ?? "—"} | Change: ${ctx.changePct?.toFixed(2) ?? "—"}% | Verification: ${ctx.status ?? "—"}
 USER BUDGET: $${budget.toFixed(0)} (max spend per trade — each contract = mid × 100)
+USER RISK PROFILE: ${riskProfile.toUpperCase()} — emphasize this bucket in your Bottom Line.
 
 Top scored option picks (live):
 ${(ctx.topPicks ?? []).map((p, i) => {
@@ -109,7 +113,7 @@ Write the analyst note now — strictly enforce the budget filter.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model,
         messages: [
           { role: "system", content: SYSTEM },
           { role: "user", content: userPrompt },
