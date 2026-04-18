@@ -1,6 +1,15 @@
 // Ask Nova — generates an AI explanation for a ticker using Lovable AI Gateway.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
+interface EventRiskInput {
+  key: "geopolitics" | "political" | "fed" | "earnings";
+  label: string;
+  status: string;       // "Quiet" | "Watch" | "Hot"
+  tone: "good" | "ok" | "bad";
+  hits: number;
+  topHeadline?: string | null;
+}
+
 interface NovaContext {
   symbol: string;
   name?: string;
@@ -12,6 +21,7 @@ interface NovaContext {
   budget?: number;       // USD the user has to spend
   model?: string;        // override AI model
   riskProfile?: "safe" | "mild" | "aggressive";
+  eventRisk?: EventRiskInput[];   // live event-risk signals from the news feed
   topPicks?: Array<{
     type: string;
     strike: number;
@@ -72,9 +82,17 @@ Example: "AI power demand → XLE" is 2 (XLE is oil & gas, not grid). "AI comput
 Fit ≤ 2 caps verdict at SPECULATIVE. Fit = 3 caps at POSSIBLE BUT EARLY.
 
 STEP 3 — CAUSAL LOGIC + ANTI-FLUFF
-Identify the direct, measurable drivers. ANTI-FLUFF RULE: if a phrase sounds sophisticated but cannot be tied to a direct driver, measurable catalyst, or instrument-specific exposure, label it **narrative, not evidence**. Quote it literally. Phrases to flag (non-exhaustive): "structural necessity", "wall of demand", "capex backbone", "grid constraint pressure", "inevitable secular tailwind", "Energy Wall", "hyperscaler capex thesis", "intrinsic equilibrium", "supercycle".
+Identify the direct, measurable drivers. ANTI-FLUFF RULE: if a phrase sounds sophisticated but cannot be tied to a direct driver, measurable catalyst, or instrument-specific exposure, label it **narrative, not evidence**. Quote it literally. Phrases to flag (non-exhaustive): "structural necessity", "wall of demand", "capex backbone", "inevitable secular tailwind", "intrinsic equilibrium", "supercycle", "narrative tailwind".
 
-STEP 4 — OPTION CONTRACT QUALITY + OPTIONS REALISM
+STEP 4 — EVENT RISK CHECK (live, from market_event_risk in input)
+Use the live event-risk signals provided. Score each as Quiet / Watch / Hot.
+- **Geopolitics** (war, sanctions, tariffs, missile strikes, Iran/Russia/China/Israel) → Hot = expect risk-off gaps; downgrade speculative LONG calls; favor WAIT.
+- **Political posts** (Trump/Xi/Putin posts, executive orders, Senate votes, shutdown) → Hot = single-tweet/headline gap risk; never recommend short-dated naked calls.
+- **Fed / Rates** (FOMC, CPI/PPI/PCE, jobs, Powell, yields) → Hot = rate-sensitive sectors (tech, REITs, regional banks, gold) will whipsaw; size down or WAIT.
+- **Earnings** (major prints, guidance, warnings) → Hot for the specific name = pre-earnings IV crush risk on long calls; explicitly call this out if the contract expires within ~14d of the print.
+If any signal is Hot AND directly relevant to the trade, **action cannot be BUY** — must be WAIT or SKIP.
+
+STEP 5 — OPTION CONTRACT QUALITY + OPTIONS REALISM
 For each contract assess: moneyness, delta, theta, DTE, gamma, spread/liquidity, fragility of strike. A long call can lose money even when the thesis is broadly correct — explicitly evaluate:
   (a) Can the required move happen BEFORE expiration?
   (b) Does IV already PRICE IN the expected move?
@@ -82,18 +100,18 @@ For each contract assess: moneyness, delta, theta, DTE, gamma, spread/liquidity,
   (d) Would a debit spread be more capital-efficient than a naked call?
 If (d) is yes, BETTER STRUCTURE must recommend the spread.
 
-STEP 5 — TIMING (NOW / WAIT / AVOID)
-No "buy the dip" without confirmed support. If trend is still down, say WAIT or AVOID.
+STEP 6 — TIMING (NOW / WAIT / AVOID)
+No "buy the dip" without confirmed support. If trend is still down, say WAIT or AVOID. If any Event Risk is Hot and relevant, default to WAIT.
 
-STEP 6 — RISK STRUCTURE
+STEP 7 — RISK STRUCTURE
 Compare long call vs vertical spread, shorter vs longer expiry, smaller starter size, scaling in, or doing nothing. Budget is a CAP, not a target — never infer "large budget = many contracts".
 
-STEP 7 — VERDICT (exactly one)
-- GOOD SETUP = clean data, direct fit, decent timing, suitable contract
+STEP 8 — VERDICT (exactly one)
+- GOOD SETUP = clean data, direct fit, decent timing, suitable contract, no Hot event risk
 - POSSIBLE BUT EARLY = some merit, timing or confirmation missing
 - SPECULATIVE = can work but many things must go right quickly
 - LOW-QUALITY IDEA = weak fit, weak logic, or poor contract choice
-- NO TRADE = insufficient edge, broken data, or execution not justified
+- NO TRADE = insufficient edge, broken data, Hot relevant event risk, or execution not justified
 
 REQUIRED OUTPUT FORMAT (use this EXACT structure, no preamble, no code blocks):
 
@@ -187,6 +205,14 @@ Deno.serve(async (req) => {
       },
       user_budget: budget,
       user_risk_profile: riskProfile,
+      market_event_risk: (ctx.eventRisk ?? []).map((e) => ({
+        category: e.key,
+        label: e.label,
+        status: e.status,
+        tone: e.tone,
+        headline_count: e.hits,
+        top_headline: e.topHeadline ?? null,
+      })),
       contracts: (ctx.topPicks ?? []).map((p) => ({
         type: p.type,
         strike: p.strike,
@@ -208,13 +234,14 @@ Deno.serve(async (req) => {
       })),
     };
 
-    const userPrompt = `Evaluate this options trade idea. Apply the 8 internal self-checks, then run STEPS 1–7, then output the required format. Use ONLY the data below — do not invent prices, news, or contracts.
+    const userPrompt = `Evaluate this options trade idea. Apply the 8 internal self-checks, then run STEPS 1–8 (including STEP 4 EVENT RISK CHECK using market_event_risk), then output the required format. Use ONLY the data below — do not invent prices, news, or contracts.
 
 \`\`\`json
 ${JSON.stringify(structuredInput, null, 2)}
 \`\`\`
 
-If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.`;
+If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.
+If any market_event_risk item is "Hot" AND directly relevant to ${ctx.symbol}, action must be WAIT or SKIP.`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
