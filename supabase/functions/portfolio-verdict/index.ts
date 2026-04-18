@@ -501,11 +501,17 @@ Deno.serve(async (req) => {
           highMomentum: p.crl.highMomentum,
           emaDistancePct: p.crl.emaDistancePct,
           flags: p.crl.flags,
+          valuationAlert: p.crl.valuationAlert,
+          trendGateBroken: p.crl.trendGateBroken,
+          highPremium: p.crl.highPremium,
+          openingRange: p.crl.openingRange,
+          premiumStopTriggered: p.crl.premiumStopTriggered,
         },
         // Raw inputs (so UI can show "RSI 76 · 8-EMA 410.50")
         metrics: {
-          rsi14: p.rsi14, ema8: p.ema8, winningStreak: p.winningStreak,
-          delta: p.delta, theta: p.theta, iv: p.iv, dte: p.dte, currentMid: p.currentMid,
+          rsi14: p.rsi14, ema8: p.ema8, sma200: p.sma200, winningStreak: p.winningStreak,
+          delta: p.delta, theta: p.theta, iv: p.iv, ivPercentile: p.ivPercentile,
+          dte: p.dte, currentMid: p.currentMid,
         },
       };
     });
