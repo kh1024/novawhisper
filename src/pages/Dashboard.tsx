@@ -134,16 +134,19 @@ export default function Dashboard() {
               <Flame className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold tracking-wide">Top Opportunities Today</h2>
             </div>
-            <Tabs defaultValue="safe" className="w-auto">
+            <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
               <TabsList className="h-8 bg-surface/60">
-                <TabsTrigger value="safe" className="text-xs h-6">Safe</TabsTrigger>
-                <TabsTrigger value="mild" className="text-xs h-6">Mild</TabsTrigger>
-                <TabsTrigger value="aggressive" className="text-xs h-6">Aggressive</TabsTrigger>
+                <TabsTrigger value="safe" className="text-xs h-6">🟢 Safe</TabsTrigger>
+                <TabsTrigger value="mild" className="text-xs h-6">🟡 Mild</TabsTrigger>
+                <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
+          {picks.length === 0 && (
+            <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
+          )}
           <div className="space-y-2">
-            {picks.slice(0, 6).map((p) => (
+            {picks.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setOpenSymbol(p.symbol)}
