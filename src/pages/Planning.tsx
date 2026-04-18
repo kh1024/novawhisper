@@ -1,7 +1,7 @@
-// Planning ("Internet Talk") — synthesizes Reddit + YouTube + our quotes into
-// a ranked next-session watchlist using Lovable AI.
-import { useMemo, useState } from "react";
-import { Brain, Flame, MessageSquare, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
+// Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
+// into a ranked next-session watchlist using Lovable AI.
+import { useState } from "react";
+import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,17 +41,9 @@ export default function Planning() {
 
   const picks = data?.synthesis?.picks ?? [];
   const tone = data?.synthesis?.marketTone ?? "";
-
-  const combinedTickers = useMemo(() => {
-    const map = new Map<string, { symbol: string; reddit?: SourceTicker; youtube?: SourceTicker }>();
-    for (const t of data?.sources?.reddit?.tickers ?? []) map.set(t.symbol, { symbol: t.symbol, reddit: t });
-    for (const t of data?.sources?.youtube?.tickers ?? []) {
-      const cur = map.get(t.symbol) ?? { symbol: t.symbol };
-      cur.youtube = t;
-      map.set(t.symbol, cur);
-    }
-    return [...map.values()].sort((a, b) => (b.reddit?.heat ?? 0) + (b.youtube?.heat ?? 0) - ((a.reddit?.heat ?? 0) + (a.youtube?.heat ?? 0)));
-  }, [data]);
+  const ytTickers = data?.sources?.youtube?.tickers ?? [];
+  const ytVideos = data?.sources?.youtube?.videos ?? [];
+  const quotes = data?.sources?.quotes ?? [];
 
   return (
     <div className="space-y-6 p-6">
@@ -63,7 +55,7 @@ export default function Planning() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold">Tomorrow's Watchlist</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-            Reddit + YouTube + our verified quotes, synthesized by Nova AI into a ranked next-session plan.
+            YouTube creator chatter + our verified quotes, synthesized by Nova AI into a ranked next-session plan.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">
@@ -127,67 +119,11 @@ export default function Planning() {
           </div>
 
           {/* Sources tabs */}
-          <Tabs defaultValue="combined" className="mt-2">
+          <Tabs defaultValue="youtube" className="mt-2">
             <TabsList>
-              <TabsTrigger value="combined"><Flame className="mr-1.5 h-3.5 w-3.5" /> Combined Heat</TabsTrigger>
-              <TabsTrigger value="reddit"><MessageSquare className="mr-1.5 h-3.5 w-3.5" /> Reddit</TabsTrigger>
               <TabsTrigger value="youtube" disabled={!includeYouTube || !data?.sources?.youtube}><Youtube className="mr-1.5 h-3.5 w-3.5" /> YouTube</TabsTrigger>
+              <TabsTrigger value="quotes"><Flame className="mr-1.5 h-3.5 w-3.5" /> Quotes</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="combined" className="mt-3">
-              <Card className="p-4">
-                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                  {combinedTickers.slice(0, 24).map((t) => (
-                    <div key={t.symbol} className="flex items-center justify-between rounded-md border border-border/60 bg-surface/40 p-3 text-sm">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-semibold">{t.symbol}</span>
-                        {t.reddit && <Badge variant="outline" className="text-[10px]"><MessageSquare className="mr-1 h-3 w-3" />{t.reddit.mentions}</Badge>}
-                        {t.youtube && <Badge variant="outline" className="text-[10px]"><Youtube className="mr-1 h-3 w-3" />{t.youtube.mentions}</Badge>}
-                      </div>
-                      <div className="flex items-center gap-1 text-xs">
-                        {t.reddit && <span className={cn("rounded-sm border px-1.5 py-0.5", biasClass(t.reddit.bias))}>{biasIcon(t.reddit.bias)}</span>}
-                        {t.youtube && <span className={cn("rounded-sm border px-1.5 py-0.5", biasClass(t.youtube.bias))}>{biasIcon(t.youtube.bias)}</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="reddit" className="mt-3">
-              <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
-                <Card className="p-4">
-                  <div className="mb-2 text-[10px] uppercase tracking-widest text-muted-foreground">Top tickers · {(data?.sources?.reddit?.subs ?? []).map((s) => `r/${s}`).join(" · ")}</div>
-                  <div className="space-y-1.5">
-                    {(data?.sources?.reddit?.tickers ?? []).slice(0, 15).map((t) => <TickerRow key={t.symbol} t={t} />)}
-                  </div>
-                </Card>
-                <Card className="p-0">
-                  <ScrollArea className="h-[520px]">
-                    <div className="divide-y divide-border/60">
-                      {(data?.sources?.reddit?.posts ?? []).map((p) => (
-                        <a key={p.id} href={p.url} target="_blank" rel="noreferrer" className="block p-3 hover:bg-accent/40">
-                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-muted-foreground">
-                            <span>r/{p.sub}</span>
-                            <span>·</span>
-                            <span>↑ {compact(p.score)}</span>
-                            <span>·</span>
-                            <span>{compact(p.comments)} comments</span>
-                            <span className={cn("ml-auto rounded-sm border px-1.5 py-0.5", biasClass(p.sentiment))}>{biasIcon(p.sentiment)} {p.sentiment}</span>
-                          </div>
-                          <div className="mt-1 text-sm text-foreground line-clamp-2">{p.title}</div>
-                          {p.tickers.length > 0 && (
-                            <div className="mt-1.5 flex flex-wrap gap-1">
-                              {p.tickers.slice(0, 6).map((s) => <Badge key={s} variant="secondary" className="text-[10px] font-mono">{s}</Badge>)}
-                            </div>
-                          )}
-                        </a>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </Card>
-              </div>
-            </TabsContent>
 
             <TabsContent value="youtube" className="mt-3">
               {data?.sources?.youtube ? (
@@ -195,13 +131,13 @@ export default function Planning() {
                   <Card className="p-4">
                     <div className="mb-2 text-[10px] uppercase tracking-widest text-muted-foreground">Top tickers · creators</div>
                     <div className="space-y-1.5">
-                      {data.sources.youtube.tickers.slice(0, 15).map((t) => <TickerRow key={t.symbol} t={t} />)}
+                      {ytTickers.slice(0, 15).map((t) => <TickerRow key={t.symbol} t={t} />)}
                     </div>
                   </Card>
                   <Card className="p-0">
                     <ScrollArea className="h-[520px]">
                       <div className="divide-y divide-border/60">
-                        {data.sources.youtube.videos.map((v) => (
+                        {ytVideos.map((v) => (
                           <div key={v.id} className="p-3">
                             <a href={v.url} target="_blank" rel="noreferrer" className="flex gap-3 hover:bg-accent/30 -m-1 p-1 rounded">
                               {v.thumbnail && <img src={v.thumbnail} alt="" className="h-16 w-28 flex-none rounded object-cover" />}
@@ -233,6 +169,24 @@ export default function Planning() {
               ) : (
                 <Card className="p-4 text-sm text-muted-foreground">YouTube disabled.</Card>
               )}
+            </TabsContent>
+
+            <TabsContent value="quotes" className="mt-3">
+              <Card className="p-4">
+                <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                  {quotes.map((q) => (
+                    <div key={q.symbol} className="flex items-center justify-between rounded-md border border-border/60 bg-surface/40 p-3 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-semibold">{q.symbol}</span>
+                        <span className="text-xs text-muted-foreground">${q.price?.toFixed(2)}</span>
+                      </div>
+                      <span className={cn("text-xs", q.changePct >= 0 ? "text-bullish" : "text-bearish")}>
+                        {q.changePct >= 0 ? "+" : ""}{q.changePct?.toFixed(2)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
             </TabsContent>
           </Tabs>
         </>

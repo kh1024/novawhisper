@@ -33,20 +33,13 @@ Deno.serve(async (req) => {
     const includeYouTube: boolean = body.includeYouTube !== false;
     const ytQuery: string = body.ytQuery ?? "stock market today options unusual activity";
 
-    // 1) Pull all sources in parallel
-    const [reddit, youtube] = await Promise.all([
-      invoke("reddit-pulse", { sort: ["hot", "rising"], limit: 40 }),
-      includeYouTube ? invoke("youtube-chatter", { query: ytQuery, maxVideos: 8, commentsPerVideo: 5 }) : Promise.resolve(null),
-    ]);
-
-    const redditTickers: SourceTicker[] = reddit?.tickers ?? [];
+    // 1) Pull YouTube (Reddit dropped — IPs blocked across providers)
+    const youtube = includeYouTube ? await invoke("youtube-chatter", { query: ytQuery, maxVideos: 8, commentsPerVideo: 5 }) : null;
     const ytTickers: SourceTicker[] = youtube?.tickers ?? [];
 
-    // Union of ticker universe (top 30 across both sources)
     const universe = new Set<string>();
-    for (const t of redditTickers.slice(0, 30)) universe.add(t.symbol);
-    for (const t of ytTickers.slice(0, 25)) universe.add(t.symbol);
-    const symbols = [...universe].slice(0, 35);
+    for (const t of ytTickers.slice(0, 30)) universe.add(t.symbol);
+    const symbols = [...universe].slice(0, 30);
 
     // 2) Pull our verified quotes for that universe
     const quotesData = symbols.length ? await invoke("quotes-fetch", { symbols }) : null;
@@ -55,31 +48,26 @@ Deno.serve(async (req) => {
 
     // 3) Build a compact summary for the LLM
     const merged = symbols.map((sym) => {
-      const r = redditTickers.find((t) => t.symbol === sym);
       const y = ytTickers.find((t) => t.symbol === sym);
       const q = quoteMap.get(sym);
       return {
         symbol: sym,
-        reddit: r ? { mentions: r.mentions, bias: r.bias, heat: r.heat } : null,
         youtube: y ? { mentions: y.mentions, bias: y.bias, heat: y.heat } : null,
         quote: q ? { price: q.price, changePct: Number(q.changePct.toFixed(2)), volume: q.volume, status: q.status } : null,
       };
     });
 
-    const topRedditPosts = (reddit?.posts ?? []).slice(0, 10).map((p: { title: string; sub: string; score: number; tickers: string[] }) => ({
-      title: p.title.slice(0, 140), sub: p.sub, score: p.score, tickers: p.tickers,
-    }));
     const topVideos = (youtube?.videos ?? []).slice(0, 6).map((v: { title: string; channel: string; views: number; tickers: string[] }) => ({
       title: v.title.slice(0, 140), channel: v.channel, views: v.views, tickers: v.tickers,
     }));
 
     // 4) Call Lovable AI with structured tool output
     const systemPrompt = `You are Nova, an experienced options trader analyzing tomorrow's session.
-You synthesize three things: (a) what retail is talking about on Reddit, (b) what finance YouTube creators are covering, (c) verified market quotes.
+You synthesize two things: (a) what finance YouTube creators are covering and their comment sections, (b) verified market quotes.
 Pick 5-8 tickers worth watching for the next session. For each, give a directional bias, a one-sentence thesis, key catalysts, and risks.
 Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic advice.`;
 
-    const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop Reddit posts:\n${JSON.stringify(topRedditPosts, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool.`;
+    const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -110,7 +98,7 @@ Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic
                       thesis: { type: "string" },
                       catalysts: { type: "array", items: { type: "string" } },
                       risks: { type: "array", items: { type: "string" } },
-                      sources: { type: "array", items: { type: "string", enum: ["reddit", "youtube", "quote"] } },
+                      sources: { type: "array", items: { type: "string", enum: ["youtube", "quote"] } },
                     },
                     required: ["symbol", "bias", "conviction", "thesis", "catalysts", "risks", "sources"],
                     additionalProperties: false,
@@ -149,7 +137,6 @@ Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic
       JSON.stringify({
         synthesis,
         sources: {
-          reddit: { tickers: redditTickers.slice(0, 15), posts: (reddit?.posts ?? []).slice(0, 20), subs: reddit?.subs ?? [], fetchedAt: reddit?.fetchedAt },
           youtube: youtube ? { tickers: ytTickers.slice(0, 15), videos: (youtube?.videos ?? []).slice(0, 8), query: youtube?.query, fetchedAt: youtube?.fetchedAt } : null,
           quotes,
         },
