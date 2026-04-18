@@ -306,10 +306,30 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                   {!chainLoading && topPicks.length === 0 && (
                     <div className="text-sm text-muted-foreground p-4 text-center">No qualifying contracts in 7–60 DTE window.</div>
                   )}
-                  {topPicks.map(({ c, mid, annualized, score }) => (
+                  {topPicks.map(({ c, mid, annualized, score }) => {
+                    const absDelta = c.delta != null ? Math.abs(c.delta) : null;
+                    const risk =
+                      absDelta == null
+                        ? { label: "?", cls: "bg-muted text-muted-foreground border-border", tip: "No delta data" }
+                        : absDelta >= 0.7
+                        ? { label: "🟢 Safe", cls: "bg-bullish/15 text-bullish border-bullish/40", tip: "Deep ITM · Δ ≥ 0.70 · acts like the stock" }
+                        : absDelta >= 0.4
+                        ? { label: "🟡 Mild", cls: "bg-warning/15 text-warning border-warning/40", tip: "Balanced · Δ 0.40–0.69 · 2–5 day swing" }
+                        : { label: "🔴 Aggressive", cls: "bg-bearish/15 text-bearish border-bearish/40", tip: "OTM · Δ < 0.40 · high theta decay" };
+                    const cost = mid * 100;
+                    const inBudget = cost <= budget;
+                    return (
                     <Card key={c.ticker} className="glass-card p-3 flex items-center gap-3">
                       <div className="flex-1">
-                        <div className="text-sm font-medium capitalize">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${risk.cls}`} title={risk.tip}>
+                            {risk.label}
+                          </span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${inBudget ? "bg-bullish/10 text-bullish border-bullish/30" : "bg-bearish/10 text-bearish border-bearish/30"}`} title={inBudget ? `Affords ${Math.floor(budget / cost)}x at $${budget}` : `Over your $${budget} budget`}>
+                            ${cost.toFixed(0)}{inBudget ? ` · ${Math.floor(budget / cost)}x` : " 🚫"}
+                          </span>
+                        </div>
+                        <div className="text-sm font-medium capitalize mt-1">
                           {c.type} ${c.strike} <span className="text-muted-foreground text-xs">· exp {c.expiration.slice(5)} · {c.dte}d</span>
                         </div>
                         <div className="text-[11px] text-muted-foreground mono">
@@ -325,7 +345,8 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                       </div>
                       <div className="mono text-lg font-semibold w-10 text-right">{score}</div>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </TabsContent>
 
                 <TabsContent value="sym" className="mt-4 space-y-2">
