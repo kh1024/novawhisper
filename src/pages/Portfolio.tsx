@@ -180,7 +180,7 @@ export default function Portfolio() {
   );
 }
 
-function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Verdict; spot?: number }) {
+function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const isCall = p.option_type.includes("call");
@@ -194,10 +194,11 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
     : null;
   const distance = spot != null ? ((spot - Number(p.strike)) / Number(p.strike)) * 100 : null;
 
-  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null) : null;
+  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null, settings) : null;
   const unrealizedPct = unrealized != null && p.entry_premium != null && p.direction === "long"
     ? (unrealized / (Number(p.entry_premium) * p.contracts * 100)) * 100
     : null;
+  const roundTripFee = feeRoundTrip(settings, p.contracts);
 
   return (
     <Card className="p-4">
