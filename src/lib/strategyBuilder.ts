@@ -269,9 +269,6 @@ function warningsFor(kind: StrategyKind, profile: TraderProfile): string[] {
   return w;
 }
 
-interface RecommendationContext {
-  reasonsByKind: Partial<Record<StrategyKind, string>>;
-}
 
 function pick(kind: StrategyKind, why: string, profile: TraderProfile): StrategySuggestion {
   const t = TEMPLATES[kind];
