@@ -203,8 +203,18 @@ function runCrl(args: {
   iv: number | null; dte: number | null; isLong: boolean; isCall: boolean;
   intrinsicValue?: number | null;
   unrealizedPnl?: number | null;
+  // Strategic Validation Layer inputs
+  sma200?: number | null;
+  ivPercentile?: number | null;
+  beforeOpeningRange?: boolean;
+  entryPremium?: number | null;
+  currentPremium?: number | null;
 }): CrlOutput {
-  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall, intrinsicValue, unrealizedPnl } = args;
+  const {
+    rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall,
+    intrinsicValue, unrealizedPnl,
+    sma200, ivPercentile, beforeOpeningRange: opening, entryPremium, currentPremium,
+  } = args;
   const emaDistancePct = ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
   const highMomentum = winningStreak >= 3;
   const riskBadge = classifyRisk(delta, theta, iv, r);
@@ -215,6 +225,21 @@ function runCrl(args: {
   const valuationAlert = computeValuationAlert(spot, intrinsicValue ?? null);
   if (valuationAlert.triggered && valuationAlert.message) flags.push(valuationAlert.message);
 
+  // High Premium / IV Percentile flag (orthogonal)
+  const highPremium = ivPercentile != null && ivPercentile > HIGH_PREMIUM_IVP;
+  if (highPremium) flags.push(`High Premium (IVP ${ivPercentile}% > ${HIGH_PREMIUM_IVP})`);
+
+  // Trend Gate — long-term support broken (only matters for CALL suggestions)
+  const trendGateBroken = isCall && spot != null && sma200 != null && spot < sma200;
+
+  // Premium hard stop — for open longs only
+  let premiumStopTriggered = false;
+  let premiumDropPct: number | null = null;
+  if (isLong && entryPremium != null && entryPremium > 0 && currentPremium != null) {
+    premiumDropPct = ((currentPremium - entryPremium) / entryPremium) * 100;
+    if (premiumDropPct <= -PREMIUM_STOP_PCT) premiumStopTriggered = true;
+  }
+
   let stopLoss = false;
   if (isLong && spot != null && ema8 != null) {
     if (isCall && spot < ema8) stopLoss = true;
@@ -223,7 +248,27 @@ function runCrl(args: {
 
   const make = (verdict: CrlVerdict, reason: string, sl = stopLoss): CrlOutput => ({
     verdict, reason, riskBadge, stopLossTriggered: sl, emaDistancePct, highMomentum, flags, valuationAlert,
+    trendGateBroken, highPremium, openingRange: !!opening, premiumStopTriggered,
   });
+
+  // ── Hard Stop-Loss (overrides EMA / everything else for open longs) ──
+  if (premiumStopTriggered) {
+    flags.push(`Hard stop −${Math.abs(premiumDropPct!).toFixed(0)}% premium`);
+    return make(
+      "EXIT",
+      `Premium dropped ${premiumDropPct!.toFixed(0)}% from entry $${entryPremium!.toFixed(2)} → $${currentPremium!.toFixed(2)}. Hard stop hit — sell at loss now.`,
+      true,
+    );
+  }
+
+  // ── Trend Gate — block CALL suggestions when price is below 200-SMA ──
+  if (trendGateBroken) {
+    flags.push("Trend Gate: below 200-SMA");
+    return make(
+      "NO",
+      `Price $${spot!.toFixed(2)} is below 200-SMA $${sma200!.toFixed(2)} — long-term trend is broken. No calls until support reclaims.`,
+    );
+  }
 
   // Trap a — Early Exit on losing trade with steep theta + tiny DTE
   if (
@@ -261,15 +306,22 @@ function runCrl(args: {
     return make("WAIT", `RSI ${r.toFixed(0)}${dist} — chasing the peak. Wait for a pullback.`);
   }
 
-  // Trap e — Stop-loss EXIT
+  // Trap e — Stop-loss EXIT (broke 8-EMA)
   if (stopLoss) {
     flags.push("Broke 8-EMA — sell at loss");
     return make("EXIT", `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`, true);
   }
 
+  // Helper to apply opening-range filter to GO signals.
+  const applyOpening = (out: CrlOutput): CrlOutput => {
+    if (out.verdict !== "GO" || !opening) return out;
+    out.flags.push("Opening Range Testing (before 10:30 AM ET)");
+    return { ...out, verdict: "WAIT", reason: `Opening Range Testing — first hour is noisy, wait for 10:30 AM ET to confirm ${out.reason}` };
+  };
+
   if (highMomentum && r != null && r >= 40 && r <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
-    return make("GO", `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, false);
+    return applyOpening(make("GO", `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, false));
   }
   if (highMomentum && r != null && r > 60) {
     return make("WAIT", `Momentum is up but RSI ${r.toFixed(0)} is hot — wait for a cooldown.`);
