@@ -1,4 +1,4 @@
-import { LayoutDashboard, Radar, Microscope, Layers, Briefcase, BookText, BellRing, Settings as SettingsIcon } from "lucide-react";
+import { LayoutDashboard, Radar, Microscope, Layers, Briefcase, BookText, BellRing, Brain, Settings as SettingsIcon } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -15,6 +15,7 @@ import {
 const items = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Market Scanner", url: "/scanner", icon: Radar },
+  { title: "Planning", url: "/planning", icon: Brain },
   { title: "Research", url: "/research", icon: Microscope },
   { title: "Chains", url: "/chains", icon: Layers },
   { title: "Portfolio", url: "/portfolio", icon: Briefcase },
