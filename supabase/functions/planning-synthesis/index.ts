@@ -137,7 +137,6 @@ Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic
       JSON.stringify({
         synthesis,
         sources: {
-          reddit: { tickers: redditTickers.slice(0, 15), posts: (reddit?.posts ?? []).slice(0, 20), subs: reddit?.subs ?? [], fetchedAt: reddit?.fetchedAt },
           youtube: youtube ? { tickers: ytTickers.slice(0, 15), videos: (youtube?.videos ?? []).slice(0, 8), query: youtube?.query, fetchedAt: youtube?.fetchedAt } : null,
           quotes,
         },
