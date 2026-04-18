@@ -11,8 +11,9 @@ import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo } from "react";
-import { useSettings } from "@/lib/settings";
+import { useSettings, BROKER_PRESETS, type AppSettings } from "@/lib/settings";
 import { dispatchVerdictTransitions } from "@/lib/webhook";
+import { feeOneSide, feeRoundTrip } from "@/lib/fees";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
