@@ -2,8 +2,9 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles } from "lucide-react";
-import { getMockQuotes, getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
+import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, ShieldAlert } from "lucide-react";
+import { getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
+import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 
@@ -13,11 +14,12 @@ const fade: Variants = {
 };
 
 export default function Dashboard() {
-  const quotes = useMemo(() => getMockQuotes(), []);
+  const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
   const picks = useMemo(() => getMockPicks(20), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
+  const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
