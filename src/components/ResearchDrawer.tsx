@@ -96,6 +96,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   // Ask Nova AI explanation
   const [novaText, setNovaText] = useState<string>("");
   const [novaLoading, setNovaLoading] = useState(false);
+  const [budget, setBudget] = useState<number>(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem("nova_budget") : null;
+    return saved ? Number(saved) || 500 : 500;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("nova_budget", String(budget));
+  }, [budget]);
 
   const generateNova = async () => {
     if (!symbol || !q) return;
@@ -111,6 +119,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
           change: q.change,
           changePct: q.changePct,
           status: q.status,
+          budget,
           topPicks: topPicks.map((p) => ({
             type: p.c.type,
             strike: p.c.strike,
