@@ -127,7 +127,7 @@ For each pick: ticker, strategy, thesis (1 sentence grounded in the actual artic
     return new Response(
       JSON.stringify({
         ...buckets,
-        sources: scraped.map((s) => ({ name: s.name, url: s.url })),
+        sources: allSources,
         fetchedAt: new Date().toISOString(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
