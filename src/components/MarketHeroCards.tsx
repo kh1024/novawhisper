@@ -4,8 +4,9 @@
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, ShieldCheck, TrendingUp, Info } from "lucide-react";
+import { Activity, AlertTriangle, ShieldCheck, TrendingUp, Info, Cpu, Zap } from "lucide-react";
 import { MARKET_REGIME } from "@/lib/mockData";
+import { useNarrativeSignals } from "@/lib/sentimentSignals";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
@@ -30,71 +31,74 @@ const TONE_STYLES: Record<Tone, { bar: string; text: string; pillBg: string; rin
   bad:  { bar: "bg-bearish", text: "text-bearish", pillBg: "bg-bearish/15", ring: "ring-bearish/40" },
 };
 
-function buildCards(): MeterCard[] {
-  // 1) Market Regime — bullish/risk-on label drives tone
+function buildCards(memory: ReturnType<typeof useNarrativeSignals>["memory"], energy: ReturnType<typeof useNarrativeSignals>["energy"]): MeterCard[] {
+  // 1) Market Regime
   const regimeTone: Tone = MARKET_REGIME.regime.toLowerCase().includes("on") ? "good" : MARKET_REGIME.regime.toLowerCase().includes("off") ? "bad" : "ok";
   const regimeMeter = regimeTone === "good" ? 85 : regimeTone === "ok" ? 50 : 20;
 
-  // 2) VIX — lower is calmer (good), higher is fearful (bad)
-  // Calm <15 · Normal 15-22 · Elevated 22-30 · Panic 30+
+  // 2) VIX
   const vix = MARKET_REGIME.vix;
   const vixTone: Tone = vix < 15 ? "good" : vix < 22 ? "ok" : "bad";
   const vixLabel = vix < 15 ? "Calm" : vix < 22 ? "Normal" : vix < 30 ? "Elevated" : "Panic";
   const vixMeter = Math.max(5, Math.min(100, 100 - ((vix - 10) / 30) * 100));
 
-  // 3) Breadth — % of stocks above 50DMA
+  // 3) Breadth
   const b = MARKET_REGIME.breadth;
   const breadthTone: Tone = b >= 60 ? "good" : b >= 40 ? "ok" : "bad";
   const breadthLabel = b >= 70 ? "Strong" : b >= 55 ? "Healthy" : b >= 40 ? "Mixed" : "Weak";
-
-  // 4) Event Risk — qualitative
-  const eventTone: Tone = "bad"; // FOMC + earnings present
-  const eventMeter = 80;
 
   return [
     {
       label: "Market Mood",
       status: regimeTone === "good" ? "Good" : regimeTone === "ok" ? "Mixed" : "Risky",
-      tone: regimeTone,
-      meter: regimeMeter,
+      tone: regimeTone, meter: regimeMeter,
       detail: `${MARKET_REGIME.regime} · ${MARKET_REGIME.trend}`,
       icon: TrendingUp,
       tip: "How aggressive money is positioning. Risk-On = buying growth, Risk-Off = flight to safety.",
     },
     {
       label: "Fear Level",
-      status: vixLabel,
-      tone: vixTone,
-      meter: vixMeter,
+      status: vixLabel, tone: vixTone, meter: vixMeter,
       detail: `VIX ${vix.toFixed(2)} (${MARKET_REGIME.vixChange >= 0 ? "+" : ""}${MARKET_REGIME.vixChange} today)`,
       icon: Activity,
       tip: "VIX measures expected volatility. Below 15 = calm, 15-22 = normal, 22+ = elevated fear.",
     },
     {
       label: "Market Breadth",
-      status: breadthLabel,
-      tone: breadthTone,
-      meter: b,
+      status: breadthLabel, tone: breadthTone, meter: b,
       detail: `${b}% of stocks above 50-day avg`,
       icon: ShieldCheck,
       tip: "How many stocks are participating in the trend. Higher = healthier rally.",
     },
     {
       label: "Event Risk",
-      status: "Watch Out",
-      tone: eventTone,
-      meter: eventMeter,
+      status: "Watch Out", tone: "bad", meter: 80,
       detail: "FOMC + 2 earnings this week",
       icon: AlertTriangle,
       tip: "Major scheduled events that can spike volatility. Size positions smaller this week.",
+    },
+    {
+      label: "Memory Cycle",
+      status: memory.status, tone: memory.tone, meter: memory.meter,
+      detail: memory.detail,
+      icon: Cpu,
+      tip: "Tracks HBM3E/HBM4 demand & memory-spot narratives in live news. Hot Tailwind = AI memory supercycle accelerating (good for Micron, ASML, SMH).",
+    },
+    {
+      label: "Energy Wall",
+      status: energy.status, tone: energy.tone, meter: energy.meter,
+      detail: energy.detail,
+      icon: Zap,
+      tip: "Power-grid constraints for AI data centers. Wall Pressure can flip GO signals to WAIT — even strong chip names face rollout delays.",
     },
   ];
 }
 
 export function MarketHeroCards() {
-  const cards = buildCards();
+  const { memory, energy } = useNarrativeSignals();
+  const cards = buildCards(memory, energy);
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
       {cards.map((c, i) => {
         const styles = TONE_STYLES[c.tone];
         return (
