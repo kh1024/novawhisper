@@ -19,8 +19,8 @@ export interface AppSettings {
 
 const KEY = "nova_settings";
 const DEFAULTS: AppSettings = {
-  refreshMs: 5_000,
-  tickerSymbols: [],          // empty = use full universe
+  refreshMs: 30_000,           // safe default — Finnhub free = 60 calls/min
+  tickerSymbols: [],           // empty = use full universe
   aiModel: "google/gemini-3-flash-preview",
   riskProfile: "mild",
 };
@@ -63,10 +63,10 @@ export function useSettings(): [AppSettings, (patch: Partial<AppSettings>) => vo
 }
 
 export const REFRESH_OPTIONS: { label: string; ms: number; hint: string }[] = [
-  { label: "5s",  ms: 5_000,  hint: "Near-real-time. May hit rate limits." },
-  { label: "15s", ms: 15_000, hint: "Recommended balance." },
-  { label: "30s", ms: 30_000, hint: "Conservative — fewer API calls." },
-  { label: "1m",  ms: 60_000, hint: "Light usage." },
+  { label: "15s", ms: 15_000, hint: "Aggressive — may hit Finnhub free-tier limit (60/min) on full universe." },
+  { label: "30s", ms: 30_000, hint: "Recommended balance." },
+  { label: "1m",  ms: 60_000, hint: "Conservative — stays well within free quotas." },
+  { label: "5m",  ms: 300_000, hint: "Light usage." },
 ];
 
 export const AI_MODELS: { value: AiModel; label: string; hint: string }[] = [
