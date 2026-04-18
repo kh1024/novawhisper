@@ -318,7 +318,7 @@ export function recommendStrategies(profile: TraderProfile): StrategySuggestion[
     if (event === "earnings" && bearishBias) {
       out.push(pick("bear_put_spread", "Earnings + bearish: defined-risk debit spread to fade the move.", profile));
     }
-    if (event === "earnings" && (neutralBias || outlook === "uncertain")) {
+    if (event === "earnings" && neutralBias) {
       out.push(pick("iron_condor", "Earnings + uncertain: defined-risk neutral, profits if the move stays inside the wings.", profile));
     }
     if (!event || event === "none" || event === "macro") {
