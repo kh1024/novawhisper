@@ -3,7 +3,20 @@
 // and a quick sentiment hint based on title keywords.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
-const SUBS_DEFAULT = ["wallstreetbets", "options", "stocks"];
+const SUBS_DEFAULT = [
+  "wallstreetbets",
+  "options",
+  "options_trading",
+  "optionstrading",
+  "thetagang",
+  "stocks",
+  "investing",
+  "stockmarket",
+  "smallstreetbets",
+  "daytrading",
+  "swingtrading",
+  "pennystocks",
+];
 const UA = "NovaTerminal/1.0 (planning aggregator)";
 
 const POS = ["calls", "moon", "rip", "squeeze", "breakout", "buy", "long", "bull", "beat", "raise", "rally", "pump"];
