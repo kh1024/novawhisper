@@ -364,6 +364,32 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
     ? estimateUnrealizedPnl(p, realSpot * 1.1, settings) : null;
   const roundTripFee = feeRoundTrip(settings, p.contracts);
 
+  // Target-P&L → required underlying move (binary search on estimateUnrealizedPnl).
+  // Fires only in "pnl" mode for open paper trades; updates simOffsetPct so the
+  // rest of the card (sim spot, P&L band, range) re-renders consistently.
+  useEffect(() => {
+    if (simMode !== "pnl" || !p.is_paper || p.status !== "open" || realSpot == null) return;
+    const MIN = -20, MAX = 20;
+    const pnlAt = (pct: number) => estimateUnrealizedPnl(p, realSpot * (1 + pct / 100), settings);
+    const pnlMin = pnlAt(MIN);
+    const pnlMax = pnlAt(MAX);
+    // Clamp target to what's reachable inside ±20% — slider edges show the cap.
+    const lo = Math.min(pnlMin ?? 0, pnlMax ?? 0);
+    const hi = Math.max(pnlMin ?? 0, pnlMax ?? 0);
+    const clamped = Math.max(lo, Math.min(hi, targetPnl));
+    // Determine monotonic direction (calls = increasing, puts = decreasing in spot).
+    const ascending = (pnlMax ?? 0) >= (pnlMin ?? 0);
+    let lo2 = MIN, hi2 = MAX;
+    for (let i = 0; i < 28; i++) {
+      const mid = (lo2 + hi2) / 2;
+      const v = pnlAt(mid) ?? 0;
+      if ((ascending && v < clamped) || (!ascending && v > clamped)) lo2 = mid;
+      else hi2 = mid;
+    }
+    const solved = +(((lo2 + hi2) / 2)).toFixed(1);
+    if (solved !== simOffsetPct) setSimOffsetPct(solved);
+  }, [targetPnl, simMode, p, realSpot, settings, simOffsetPct]);
+
   return (
     <Card className="p-4">
       {/* Header — symbol + action on top row, spot pinned right */}
