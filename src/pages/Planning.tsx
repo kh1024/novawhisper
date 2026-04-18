@@ -221,6 +221,18 @@ function PickCard({ pick }: { pick: PlanningPick }) {
         </div>
       </div>
       <p className="mt-3 text-sm text-foreground/90">{pick.thesis}</p>
+
+      <OptionContract
+        symbol={pick.symbol}
+        optionType={pick.optionType}
+        direction={pick.direction}
+        strike={pick.strike}
+        strikeShort={pick.strikeShort}
+        expiry={pick.expiry}
+        playAt={pick.playAt}
+        premiumEstimate={pick.premiumEstimate}
+      />
+
       {pick.catalysts.length > 0 && (
         <div className="mt-3">
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Catalysts</div>
@@ -240,6 +252,35 @@ function PickCard({ pick }: { pick: PlanningPick }) {
     </Card>
   );
 }
+
+function OptionContract({ symbol, optionType, direction, strike, strikeShort, expiry, playAt, premiumEstimate }: {
+  symbol: string;
+  optionType: string;
+  direction: string;
+  strike: number;
+  strikeShort?: number;
+  expiry: string;
+  playAt: number;
+  premiumEstimate?: string;
+}) {
+  const isCall = optionType.includes("call") || optionType === "straddle" || optionType === "strangle";
+  const tone = direction === "long" && isCall ? "text-bullish" : direction === "long" && optionType.includes("put") ? "text-bearish" : "text-foreground";
+  const typeLabel = optionType.replace("_", " ");
+  const strikeLabel = strikeShort ? `${strike}/${strikeShort}` : String(strike);
+  return (
+    <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 p-2.5">
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Contract</div>
+      <div className={cn("mt-0.5 font-mono text-sm font-semibold", tone)}>
+        {direction.toUpperCase()} {symbol} ${strikeLabel} {typeLabel.toUpperCase()} · {expiry}
+      </div>
+      <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
+        <div><span className="text-muted-foreground">Play at: </span><span className="font-mono text-foreground/90">${playAt?.toFixed(2)}</span></div>
+        {premiumEstimate && <div><span className="text-muted-foreground">Premium: </span><span className="font-mono text-foreground/90">{premiumEstimate}</span></div>}
+      </div>
+    </div>
+  );
+}
+
 
 function TickerRow({ t }: { t: SourceTicker }) {
   const top = t.topPost ?? t.topVideo;
