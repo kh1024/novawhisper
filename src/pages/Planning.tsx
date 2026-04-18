@@ -1,6 +1,6 @@
 // Planning ("Internet Talk") — synthesizes Reddit + YouTube + our quotes into
 // a ranked next-session watchlist using Lovable AI.
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Brain, Flame, MessageSquare, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
