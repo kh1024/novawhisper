@@ -149,3 +149,100 @@ export function clearWebhookLog() {
   localStorage.removeItem(LOG_KEY);
   setSettings({});
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Scanner / Web Picks GO-tier alerts
+//  Separate dedupe state so portfolio-position transitions stay independent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const PICK_STATE_KEY = "nova_webhook_pick_seen";
+// Cap the seen-set so localStorage doesn't grow forever.
+const MAX_SEEN_KEYS = 500;
+
+function readPickSeen(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(PICK_STATE_KEY) || "{}"); }
+  catch { return {}; }
+}
+function writePickSeen(s: Record<string, number>) {
+  // Keep the newest MAX_SEEN_KEYS entries (by timestamp).
+  const entries = Object.entries(s).sort((a, b) => b[1] - a[1]).slice(0, MAX_SEEN_KEYS);
+  localStorage.setItem(PICK_STATE_KEY, JSON.stringify(Object.fromEntries(entries)));
+}
+
+export interface PickAlert {
+  /** Stable key — same pick on repeat scans must produce the same key. */
+  key: string;
+  symbol: string;
+  source: "scanner" | "web-pick" | "planning";
+  /** Plain-language reason this alert fired. */
+  reason: string;
+  /** Optional contract details — included in payload but not required. */
+  strategy?: string;
+  optionType?: string;
+  direction?: string;
+  strike?: number;
+  expiry?: string;
+  /** Optional risk tier (safe / mild / aggressive). */
+  risk?: string;
+}
+
+interface DispatchPicksInput {
+  settings: AppSettings;
+  picks: PickAlert[];
+}
+
+/**
+ * Fire a GO webhook for any pick whose `key` we haven't seen before.
+ * Caller is responsible for filtering to GO-tier picks only.
+ */
+export async function dispatchPickAlerts({ settings, picks }: DispatchPicksInput) {
+  if (!settings.webhookEnabled || !settings.webhookUrl) return;
+  if (picks.length === 0) return;
+  const seen = readPickSeen();
+  const next = { ...seen };
+  let fired = false;
+
+  for (const pick of picks) {
+    if (seen[pick.key]) continue;
+    next[pick.key] = Date.now();
+    fired = true;
+
+    const sourceLabel = pick.source === "scanner" ? "Scanner" : pick.source === "web-pick" ? "Web Pick" : "Planning";
+    const headline = `🟢 GO — ${pick.symbol} (${sourceLabel})`;
+    const contract = pick.strike != null && pick.optionType
+      ? ` · $${pick.strike} ${pick.optionType.toUpperCase()}${pick.expiry ? ` exp ${pick.expiry}` : ""}`
+      : "";
+    const payload = {
+      event: "nova_pick_signal",
+      symbol: pick.symbol,
+      source: pick.source,
+      key: pick.key,
+      from: "NEW",
+      to: "GO" as Signal,
+      reason: pick.reason,
+      strategy: pick.strategy,
+      optionType: pick.optionType,
+      direction: pick.direction,
+      strike: pick.strike,
+      expiry: pick.expiry,
+      risk: pick.risk,
+      text: `${headline}${contract}\n${pick.reason}`,
+      at: new Date().toISOString(),
+    };
+    const res = await post(settings.webhookUrl, payload);
+    pushLog({
+      at: payload.at,
+      symbol: `${pick.symbol} · ${sourceLabel}`,
+      from: "NEW" as Signal,
+      to: "GO",
+      ok: res.ok,
+      error: res.error,
+    });
+  }
+  if (fired) writePickSeen(next);
+}
+
+/** Wipe the pick dedupe state — useful for "force re-alert" buttons. */
+export function clearPickSeenState() {
+  localStorage.removeItem(PICK_STATE_KEY);
+}
