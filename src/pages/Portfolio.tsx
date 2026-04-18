@@ -529,6 +529,14 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
             Risk: {crl.riskBadge}
           </span>
         )}
+        {crl.valuationAlert?.triggered && (
+          <span
+            className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-warning/15 text-warning border-warning/40"
+            title={crl.valuationAlert.message ?? ""}
+          >
+            ⚠ Risk Alert: +{crl.valuationAlert.premiumPct?.toFixed(1)}% vs intrinsic
+          </span>
+        )}
         {crl.stopLossTriggered && (
           <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/20 text-bearish border-bearish/50 animate-pulse">
             🚨 SELL AT LOSS
