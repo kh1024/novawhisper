@@ -54,7 +54,8 @@ const seed = (s: string) => {
   };
 };
 
-const universe: Array<OptionPick<Quote, "symbol" | "name" | "sector" | "marketCap"> & { base: number }> = [
+type UniverseEntry = Pick<Quote, "symbol" | "name" | "sector" | "marketCap"> & { base: number };
+const universe: UniverseEntry[] = [
   { symbol: "SPY", name: "SPDR S&P 500 ETF", sector: "ETF", base: 478 },
   { symbol: "QQQ", name: "Invesco QQQ Trust", sector: "ETF", base: 425 },
   { symbol: "DIA", name: "SPDR Dow Jones ETF", sector: "ETF", base: 384 },
