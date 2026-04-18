@@ -1,43 +1,82 @@
 import { Card } from "@/components/ui/card";
-import { Wallet, Check } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { useBudget } from "@/lib/budget";
 import { useState, useEffect } from "react";
+import {
+  useSettings,
+  REFRESH_OPTIONS,
+  AI_MODELS,
+  RISK_PROFILES,
+  type AiModel,
+  type RiskProfile,
+} from "@/lib/settings";
+import { useApiHealth } from "@/lib/apiHealth";
+import { TICKER_UNIVERSE } from "@/lib/mockData";
 
 const PRESETS = [250, 500, 1000, 2500, 5000];
+
+function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
+  if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-bullish" />;
+  if (status === "degraded") return <AlertTriangle className="h-4 w-4 text-warning" />;
+  return <XCircle className="h-4 w-4 text-bearish" />;
+}
 
 export default function Settings() {
   const [budget, setBudget] = useBudget();
   const [draft, setDraft] = useState<string>(String(budget));
   const [savedFlash, setSavedFlash] = useState(false);
+  const [settings, updateSettings] = useSettings();
+  const { data: health = [], isLoading: healthLoading, refetch: refetchHealth } = useApiHealth();
 
   useEffect(() => setDraft(String(budget)), [budget]);
 
-  const commit = (v: number) => {
-    setBudget(v);
+  const flashSaved = () => {
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1200);
   };
 
+  const commit = (v: number) => {
+    setBudget(v);
+    flashSaved();
+  };
+
+  const toggleSymbol = (sym: string) => {
+    const set = new Set(settings.tickerSymbols.length ? settings.tickerSymbols : TICKER_UNIVERSE.map((u) => u.symbol));
+    if (set.has(sym)) set.delete(sym);
+    else set.add(sym);
+    updateSettings({ tickerSymbols: Array.from(set) });
+    flashSaved();
+  };
+
+  const activeTickerSet = new Set(
+    settings.tickerSymbols.length ? settings.tickerSymbols : TICKER_UNIVERSE.map((u) => u.symbol)
+  );
+
   return (
-    <div className="p-6 md:p-8 space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Workspace defaults applied across Nova analysis.</p>
+    <div className="p-6 md:p-8 space-y-6 max-w-4xl mx-auto">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Workspace defaults applied across Nova analysis.
+          </p>
+        </div>
+        {savedFlash && (
+          <span className="pill pill-bullish text-[10px]">
+            <Check className="h-3 w-3" /> Saved
+          </span>
+        )}
       </div>
 
+      {/* ───────────── Budget ───────────── */}
       <Card className="glass-card p-6 space-y-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-primary" /> Default trade budget
-            </h2>
-            <p className="text-xs text-muted-foreground mt-1 max-w-md">
-              Max you'd spend on a single options trade. Nova uses this to filter picks you can actually afford and is pre-filled in every Research drawer.
-            </p>
-          </div>
-          {savedFlash && (
-            <span className="pill pill-bullish text-[10px]"><Check className="h-3 w-3" /> Saved</span>
-          )}
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-primary" /> Default trade budget
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1 max-w-md">
+            Max you'd spend on a single options trade. Used to filter picks and pre-fill every Research drawer.
+          </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -76,13 +115,212 @@ export default function Settings() {
         </div>
       </Card>
 
-      <Card className="glass-card p-6">
-        <h2 className="text-sm font-semibold mb-2">Coming soon</h2>
-        <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-5">
-          <li>Data sources & API health</li>
-          <li>AI provider & default risk profile</li>
-          <li>Refresh interval and ticker tape symbols</li>
-        </ul>
+      {/* ───────────── Data sources & API health ───────────── */}
+      <Card className="glass-card p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Activity className="h-4 w-4 text-primary" /> Data sources & API health
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Live ping of every backend feed. Auto-refreshes every minute.
+            </p>
+          </div>
+          <button
+            onClick={() => refetchHealth()}
+            className="text-xs px-3 py-1.5 rounded-md border border-border hover:bg-surface transition-colors"
+          >
+            {healthLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "Test now"}
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {healthLoading && health.length === 0 && (
+            <div className="text-xs text-muted-foreground py-4 text-center">Pinging providers…</div>
+          )}
+          {health.map((h) => (
+            <div
+              key={h.name}
+              className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30"
+            >
+              <StatusDot status={h.status} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{h.name}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{h.description} · {h.detail}</div>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="font-mono text-xs">
+                  {h.latencyMs == null ? "—" : `${h.latencyMs}ms`}
+                </div>
+                <div className={`text-[10px] uppercase tracking-wider ${
+                  h.status === "ok" ? "text-bullish" : h.status === "degraded" ? "text-warning" : "text-bearish"
+                }`}>
+                  {h.status}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* ───────────── AI provider & default risk ───────────── */}
+      <Card className="glass-card p-6 space-y-5">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Brain className="h-4 w-4 text-primary" /> AI provider & default risk profile
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Choose which model powers Nova explanations and the default risk tilt for picks.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">AI model</div>
+          <div className="grid sm:grid-cols-2 gap-2">
+            {AI_MODELS.map((m) => {
+              const active = settings.aiModel === m.value;
+              return (
+                <button
+                  key={m.value}
+                  onClick={() => {
+                    updateSettings({ aiModel: m.value as AiModel });
+                    flashSaved();
+                  }}
+                  className={`text-left p-3 rounded-lg border transition-all ${
+                    active
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-surface/30 hover:border-primary/40"
+                  }`}
+                >
+                  <div className="text-sm font-medium flex items-center gap-2">
+                    {m.label}
+                    {active && <Check className="h-3.5 w-3.5 text-primary" />}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{m.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Default risk profile</div>
+          <div className="grid grid-cols-3 gap-2">
+            {RISK_PROFILES.map((r) => {
+              const active = settings.riskProfile === r.value;
+              return (
+                <button
+                  key={r.value}
+                  onClick={() => {
+                    updateSettings({ riskProfile: r.value as RiskProfile });
+                    flashSaved();
+                  }}
+                  className={`text-left p-3 rounded-lg border transition-all ${
+                    active
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-surface/30 hover:border-primary/40"
+                  }`}
+                >
+                  <div className="text-sm font-medium">
+                    {r.emoji} {r.label}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{r.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {/* ───────────── Refresh interval & ticker tape ───────────── */}
+      <Card className="glass-card p-6 space-y-5">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Clock className="h-4 w-4 text-primary" /> Refresh interval & ticker tape
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            How often live quotes refresh, and which symbols stream across the top tape.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Quote refresh interval</div>
+          <div className="flex gap-2 flex-wrap">
+            {REFRESH_OPTIONS.map((r) => {
+              const active = settings.refreshMs === r.ms;
+              return (
+                <button
+                  key={r.ms}
+                  onClick={() => {
+                    updateSettings({ refreshMs: r.ms });
+                    flashSaved();
+                  }}
+                  className={`px-3 py-2 rounded-md border text-sm transition-colors ${
+                    active
+                      ? "bg-primary/20 border-primary text-primary"
+                      : "border-border hover:bg-surface text-muted-foreground"
+                  }`}
+                  title={r.hint}
+                >
+                  {r.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            Faster = fresher prices but more API calls. 15s is the sweet spot for most users.
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Tag className="h-3 w-3" /> Ticker tape symbols
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  updateSettings({ tickerSymbols: [] });
+                  flashSaved();
+                }}
+                className="text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Select all
+              </button>
+              <span className="text-muted-foreground">·</span>
+              <button
+                onClick={() => {
+                  updateSettings({ tickerSymbols: ["SPY"] });
+                  flashSaved();
+                }}
+                className="text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {TICKER_UNIVERSE.map((u) => {
+              const active = activeTickerSet.has(u.symbol);
+              return (
+                <button
+                  key={u.symbol}
+                  onClick={() => toggleSymbol(u.symbol)}
+                  className={`text-xs font-mono px-2.5 py-1 rounded border transition-colors ${
+                    active
+                      ? "bg-primary/15 border-primary/60 text-primary"
+                      : "border-border text-muted-foreground hover:bg-surface"
+                  }`}
+                >
+                  {u.symbol}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            {activeTickerSet.size} of {TICKER_UNIVERSE.length} symbols streaming.
+          </div>
+        </div>
       </Card>
     </div>
   );

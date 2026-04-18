@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { useBudget } from "@/lib/budget";
+import { useSettings } from "@/lib/settings";
 
 type Props = {
   symbol: string | null;
@@ -98,6 +99,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   const [novaText, setNovaText] = useState<string>("");
   const [novaLoading, setNovaLoading] = useState(false);
   const [budget, setBudget] = useBudget();
+  const [settings] = useSettings();
 
   const generateNova = async () => {
     if (!symbol || !q) return;
@@ -114,6 +116,8 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
           changePct: q.changePct,
           status: q.status,
           budget,
+          model: settings.aiModel,
+          riskProfile: settings.riskProfile,
           topPicks: topPicks.map((p) => ({
             type: p.c.type,
             strike: p.c.strike,

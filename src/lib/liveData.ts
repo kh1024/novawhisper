@@ -2,6 +2,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TICKER_UNIVERSE } from "./mockData";
+import { useSettings } from "./settings";
 
 export type QuoteStatus = "verified" | "close" | "mismatch" | "stale" | "unavailable";
 
@@ -58,16 +59,17 @@ async function fetchQuotes(symbols: string[]): Promise<VerifiedQuote[]> {
   });
 }
 
-/** Live verified quotes for the selected symbols. Defaults to the full universe. */
+/** Live verified quotes for the selected symbols. Defaults to the full universe.
+ *  Refresh interval is driven by the global Settings store unless overridden. */
 export function useLiveQuotes(symbols?: string[], opts?: { refetchMs?: number }) {
+  const [settings] = useSettings();
   const list = symbols && symbols.length ? symbols : TICKER_UNIVERSE.map((u) => u.symbol);
-  // Refresh every 5 seconds for near-real-time updates.
-  const defaultMs = 5_000;
+  const interval = opts?.refetchMs ?? settings.refreshMs;
   return useQuery({
     queryKey: ["live-quotes", list.join(",")],
     queryFn: () => fetchQuotes(list),
-    refetchInterval: opts?.refetchMs ?? defaultMs,
-    staleTime: 2_000,
+    refetchInterval: interval,
+    staleTime: Math.max(1_000, Math.floor(interval / 2)),
   });
 }
 
