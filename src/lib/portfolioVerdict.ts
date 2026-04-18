@@ -6,10 +6,12 @@ import type { CrlVerdict, RiskBadge } from "./conflictResolution";
 export interface VerdictMetrics {
   rsi14: number | null;
   ema8: number | null;
+  sma200: number | null;
   winningStreak: number | null;
   delta: number | null;
   theta: number | null;
   iv: number | null;
+  ivPercentile: number | null;
   dte: number | null;
   currentMid: number | null;
 }
@@ -28,6 +30,11 @@ export interface VerdictCrl {
     premiumPct: number | null;
     message: string | null;
   };
+  // Strategic Validation Layer
+  trendGateBroken?: boolean;
+  highPremium?: boolean;
+  openingRange?: boolean;
+  premiumStopTriggered?: boolean;
 }
 
 export interface Verdict {
