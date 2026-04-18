@@ -118,13 +118,13 @@ export default function Market() {
           <Search className="h-4 w-4 text-muted-foreground flex-shrink-0" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search any ticker — e.g. NVDA, AAPL, SPY…"
+            onChange={(e) => setSearch(e.target.value.toUpperCase())}
+            placeholder="Search any ticker — e.g. NVDA, MSTR, COIN, BABA…"
             className="h-9 border-0 focus-visible:ring-0 px-0 text-sm font-mono bg-transparent"
             onKeyDown={(e) => {
-              if (e.key === "Enter" && searchResults[0]) {
-                setFocused(searchResults[0].symbol);
-                setSearch("");
+              if (e.key === "Enter") {
+                const sym = (searchResults[0]?.symbol ?? search.trim().toUpperCase());
+                if (sym) { setFocused(sym); setSearch(""); }
               }
             }}
           />
@@ -132,19 +132,36 @@ export default function Market() {
             <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSearch("")}>Clear</Button>
           )}
         </div>
-        {searchResults.length > 0 && (
+        {search.trim().length >= 1 && (
           <div className="absolute left-3 right-3 top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-20 max-h-72 overflow-y-auto">
             {searchResults.map((u) => (
               <button
                 key={u.symbol}
                 onClick={() => { setFocused(u.symbol); setSearch(""); }}
-                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface/60 transition-colors text-left first:rounded-t-lg last:rounded-b-lg"
+                className="w-full flex items-center gap-3 px-3 py-2 hover:bg-surface/60 transition-colors text-left"
               >
-                <div className="font-mono font-semibold text-sm w-14">{u.symbol}</div>
+                <div className="font-mono font-semibold text-sm w-16">{u.symbol}</div>
                 <div className="flex-1 truncate text-xs text-muted-foreground">{u.name}</div>
                 {u.sector && <Badge variant="outline" className="text-[9px]">{u.sector}</Badge>}
               </button>
             ))}
+            {/* Always allow opening the typed symbol, even if it's not in our universe */}
+            {(() => {
+              const typed = search.trim().toUpperCase();
+              const inList = searchResults.some((u) => u.symbol === typed);
+              if (!typed || inList) return null;
+              return (
+                <button
+                  onClick={() => { setFocused(typed); setSearch(""); }}
+                  className="w-full flex items-center gap-3 px-3 py-2 hover:bg-primary/10 border-t border-border transition-colors text-left"
+                >
+                  <Search className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                  <span className="text-xs">
+                    Open <span className="font-mono font-semibold text-foreground">{typed}</span> in Research
+                  </span>
+                </button>
+              );
+            })()}
           </div>
         )}
       </Card>
