@@ -277,12 +277,25 @@ Deno.serve(async (req) => {
       const rsi14 = rsi(closes, 14);
       const winningStreak = streak(closes);
       const contract = matchContract(cMap.get(sym) ?? [], Number(p.strike), p.expiry, isCall);
+      // Estimate unrealized $ P&L using contract mid if available, else intrinsic.
+      let unrealizedPnl: number | null = null;
+      if (p.entryPremium != null && contract?.mid != null) {
+        const sign = p.direction === "long" ? 1 : -1;
+        unrealizedPnl = sign * (Number(contract.mid) - Number(p.entryPremium)) * (p.contracts ?? 1) * 100;
+      } else if (p.entryPremium != null && spot != null) {
+        const intrinsic = isCall
+          ? Math.max(0, spot - Number(p.strike))
+          : Math.max(0, Number(p.strike) - spot);
+        const sign = p.direction === "long" ? 1 : -1;
+        unrealizedPnl = sign * (intrinsic - Number(p.entryPremium)) * (p.contracts ?? 1) * 100;
+      }
       const crl = runCrl({
         rsi: rsi14, ema8, spot, winningStreak,
         delta: contract?.delta ?? null,
         theta: contract?.theta ?? null,
         iv: contract?.iv ?? null,
         dte, isLong: p.direction === "long", isCall,
+        unrealizedPnl,
       });
       return {
         ...p, spot, dte, ema8, rsi14, winningStreak,
@@ -290,6 +303,7 @@ Deno.serve(async (req) => {
         theta: contract?.theta ?? null,
         iv: contract?.iv ?? null,
         currentMid: contract?.mid ?? null,
+        unrealizedPnl,
         crl,
         dayChangePct: q?.changePct ?? null,
       };
