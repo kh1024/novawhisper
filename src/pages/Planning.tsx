@@ -479,26 +479,55 @@ function TickerRow({ t }: { t: SourceTicker }) {
   );
 }
 
+function pickKey(p: ScoutPick): string {
+  return `webpick:${p.symbol}:${p.strategy}:${p.optionType}:${p.strike}:${p.strikeShort ?? "_"}:${p.expiry}`;
+}
+
 function WebPicksPanel() {
   const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
   const qc = useQueryClient();
   const [settings] = useSettings();
 
-  // Fire a GO webhook for each fresh pick the scout returns.
-  // Dedupe key includes contract identity so re-scrapes don't re-spam, but a
-  // genuinely new pick (different strike / expiry / symbol) still alerts.
-  useEffect(() => {
-    if (!data) return;
-    const all: { tier: "safe" | "mild" | "aggressive"; pick: ScoutPick }[] = [
+  // Collect every pick across tiers + their stable keys so the expiration
+  // engine has a single flat list to chew on.
+  const allPicks = useMemo(() => {
+    if (!data) return [] as { tier: "safe" | "mild" | "aggressive"; pick: ScoutPick }[];
+    return [
       ...(data.safe ?? []).map((p) => ({ tier: "safe" as const, pick: p })),
       ...(data.mild ?? []).map((p) => ({ tier: "mild" as const, pick: p })),
       ...(data.aggressive ?? []).map((p) => ({ tier: "aggressive" as const, pick: p })),
     ];
-    if (all.length === 0) return;
+  }, [data]);
+
+  // Pull live quotes so the engine can compute price-drift since the pick was
+  // first surfaced (the playAt baseline is captured per-pick on first sight).
+  const symbols = useMemo(() => Array.from(new Set(allPicks.map((x) => x.pick.symbol))), [allPicks]);
+  const { data: quotes = [] } = useLiveQuotes(symbols.length ? symbols : undefined, { refetchMs: 60_000 });
+  const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
+
+  const expiryInputs = useMemo<PickInputs[]>(() => allPicks.map(({ pick: p }) => ({
+    key: pickKey(p),
+    price: quoteMap.get(p.symbol)?.price ?? p.playAt ?? null,
+    rsi: null,             // scout doesn't surface RSI yet — RSI flip is no-op here
+    verdict: null,
+    theta: null,
+    confidence: null,
+  })), [allPicks, quoteMap]);
+  const expiryStatus = usePickExpiration(expiryInputs);
+
+  // Fire a GO webhook for each fresh pick the scout returns. Skip stale or
+  // timed-out picks so we don't push old setups to the webhook.
+  useEffect(() => {
+    if (allPicks.length === 0) return;
+    const live = allPicks.filter(({ pick }) => {
+      const s = expiryStatus.get(pickKey(pick));
+      return !(s?.isStale || s?.isTimedOut);
+    });
+    if (live.length === 0) return;
     dispatchPickAlerts({
       settings,
-      picks: all.map(({ tier, pick: p }) => ({
-        key: `webpick:${p.symbol}:${p.strategy}:${p.optionType}:${p.strike}:${p.strikeShort ?? "_"}:${p.expiry}`,
+      picks: live.map(({ tier, pick: p }) => ({
+        key: pickKey(p),
         symbol: p.symbol,
         source: "web-pick",
         reason: p.thesis,
@@ -510,7 +539,7 @@ function WebPicksPanel() {
         risk: tier,
       })),
     });
-  }, [data, settings]);
+  }, [allPicks, settings, expiryStatus]);
 
   if (isLoading) {
     return (
@@ -529,6 +558,12 @@ function WebPicksPanel() {
     );
   }
 
+  // Hide timed-out picks per tier.
+  const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
+    const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
+    return (src ?? []).filter((p) => !expiryStatus.get(pickKey(p))?.isTimedOut);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -543,9 +578,9 @@ function WebPicksPanel() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={data?.safe ?? []} />
-        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={data?.mild ?? []} />
-        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={data?.aggressive ?? []} />
+        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={tierPicks("safe")} expiryStatus={expiryStatus} />
+        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={tierPicks("mild")} expiryStatus={expiryStatus} />
+        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={tierPicks("aggressive")} expiryStatus={expiryStatus} />
       </div>
 
       {data?.sources && data.sources.length > 0 && (
