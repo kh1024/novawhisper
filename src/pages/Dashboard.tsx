@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info } from "lucide-react";
+import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
 import { getMockPicks, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
@@ -14,6 +14,9 @@ import { PlaybookCard } from "@/components/PlaybookCard";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { TickerPrice } from "@/components/TickerPrice";
 import { TipsRotator } from "@/components/TipsRotator";
+import { SortableList } from "@/components/SortableList";
+
+const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
 type RiskBucket = "safe" | "mild" | "aggressive";
 
