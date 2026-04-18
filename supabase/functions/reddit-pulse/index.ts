@@ -94,10 +94,16 @@ Deno.serve(async (req) => {
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const subs: string[] = Array.isArray(body.subs) && body.subs.length ? body.subs : SUBS_DEFAULT;
-    const sort: string = body.sort ?? "hot";
-    const limit: number = Math.min(50, Number(body.limit ?? 25));
+    const sortsRaw = body.sort ?? ["hot", "rising"];
+    const sorts: string[] = Array.isArray(sortsRaw) ? sortsRaw : [sortsRaw];
+    const limit: number = Math.min(50, Number(body.limit ?? 30));
 
-    const all = (await Promise.all(subs.map((s) => fetchSub(s, sort, limit)))).flat();
+    const tasks = subs.flatMap((s) => sorts.map((sort) => fetchSub(s, sort, limit)));
+    const all = (await Promise.all(tasks)).flat();
+
+    // Dedupe by post id (a post can show in both hot and rising)
+    const seen = new Set<string>();
+    const dedup = all.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
 
     // Build per-ticker rollup
     const tickers = new Map<string, {
