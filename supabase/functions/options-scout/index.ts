@@ -14,6 +14,8 @@ const QUERIES = [
   { tier: "mild", q: "best swing trade options ideas next week catalyst" },
   { tier: "aggressive", q: "unusual options activity today whale trades aggressive" },
   { tier: "aggressive", q: "0DTE options momentum plays today high risk high reward" },
+  { tier: "mild", q: "site:seekingalpha.com earnings calendar this week expected move" },
+  { tier: "aggressive", q: "site:cnbc.com pre-market movers today stocks gainers losers" },
 ];
 
 async function fcSearch(query: string): Promise<Array<{ url: string; title: string; markdown: string }>> {
