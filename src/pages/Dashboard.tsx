@@ -13,6 +13,7 @@ import { MarketHeroCards } from "@/components/MarketHeroCards";
 import { PlaybookCard } from "@/components/PlaybookCard";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { TickerPrice } from "@/components/TickerPrice";
+import { TipsRotator } from "@/components/TipsRotator";
 
 type RiskBucket = "safe" | "mild" | "aggressive";
 
@@ -192,6 +193,8 @@ export default function Dashboard() {
               Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
             </p>
           </Card>
+
+          <TipsRotator />
 
           <PlaybookCard onPick={setOpenSymbol} />
 
