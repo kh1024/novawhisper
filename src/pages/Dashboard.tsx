@@ -143,6 +143,9 @@ export default function Dashboard() {
                       {p.riskBucket}
                     </span>
                   </div>
+                  <div className={`mono text-[11px] mt-1 font-semibold ${p.bias === "bullish" ? "text-bullish" : p.bias === "bearish" ? "text-bearish" : "text-foreground"}`}>
+                    ${p.strike} {(p.strategy.includes("put") ? "PUT" : "CALL")} · exp {p.expiration}
+                  </div>
                   <div className="text-xs text-muted-foreground truncate mt-0.5">{p.reason}</div>
                 </div>
                 <div className="text-right shrink-0">
