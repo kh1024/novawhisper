@@ -132,20 +132,32 @@ export default function Portfolio() {
       feesPaid += feeRoundTrip(settings, p.contracts);
     }
     let unrealized = 0;
+    let unrealizedSim = 0;
     let unrealizedKnown = false;
+    let anySim = false;
     let costBasis = 0;
     for (const p of open) {
       const spot = quoteMap.get(p.symbol)?.price ?? null;
       const u = estimateUnrealizedPnl(p, spot, settings);
       if (u != null) { unrealized += u; unrealizedKnown = true; }
+      const off = simOffsets[p.id] ?? 0;
+      const simSpot = spot != null && off !== 0 ? spot * (1 + off / 100) : spot;
+      const uSim = estimateUnrealizedPnl(p, simSpot, settings);
+      if (uSim != null) unrealizedSim += uSim;
+      if (off !== 0) anySim = true;
       if (p.entry_premium != null && p.direction === "long") {
         costBasis += Number(p.entry_premium) * p.contracts * 100;
       }
       // Entry fee already paid on open positions.
       feesPaid += feeOneSide(settings, p.contracts);
     }
-    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis, feesPaid };
-  }, [open, closed, quoteMap, settings]);
+    return {
+      openCount, realized, unrealized, unrealizedSim, unrealizedKnown, anySim,
+      total: realized + unrealized,
+      totalSim: realized + unrealizedSim,
+      costBasis, feesPaid,
+    };
+  }, [open, closed, quoteMap, settings, simOffsets]);
 
   return (
     <div className="space-y-6 p-6">
