@@ -2,19 +2,14 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, Info } from "lucide-react";
-import { getMockPicks, MARKET_REGIME, UPCOMING_EVENTS } from "@/lib/mockData";
+import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info } from "lucide-react";
+import { getMockPicks, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { NewsFeed } from "@/components/NewsFeed";
 import { SectorBreakdown } from "@/components/SectorBreakdown";
-
-const fade: Variants = {
-  hidden: { opacity: 0, y: 8 },
-  show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.4, ease: "easeOut" } }),
-};
+import { MarketHeroCards } from "@/components/MarketHeroCards";
 
 type RiskBucket = "safe" | "mild" | "aggressive";
 
@@ -34,27 +29,8 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
-      {/* Hero strip */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Market Regime", value: MARKET_REGIME.regime, sub: MARKET_REGIME.trend, icon: TrendingUp, tone: "bullish" as const },
-          { label: "Volatility (VIX)", value: MARKET_REGIME.vix.toFixed(2), sub: `${MARKET_REGIME.vixChange > 0 ? "+" : ""}${MARKET_REGIME.vixChange} today`, icon: Activity, tone: "neutral" as const },
-          { label: "Breadth", value: `${MARKET_REGIME.breadth}%`, sub: "Stocks above 50DMA", icon: ShieldCheck, tone: "bullish" as const },
-          { label: "Event Risk", value: "Elevated", sub: "FOMC + 2 earnings this week", icon: AlertTriangle, tone: "bearish" as const },
-        ].map((c, i) => (
-          <motion.div key={c.label} variants={fade} initial="hidden" animate="show" custom={i}>
-            <Card className="glass-card-elevated p-5 relative overflow-hidden group">
-              <div className="absolute -top-12 -right-12 w-32 h-32 rounded-full bg-gradient-primary opacity-10 blur-2xl group-hover:opacity-20 transition-opacity" />
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[11px] tracking-[0.18em] text-muted-foreground uppercase">{c.label}</span>
-                <c.icon className={`h-4 w-4 ${c.tone === "bullish" ? "text-bullish" : c.tone === "bearish" ? "text-bearish" : "text-primary"}`} />
-              </div>
-              <div className="text-2xl font-semibold mono">{c.value}</div>
-              <div className="text-xs text-muted-foreground mt-1">{c.sub}</div>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
+      {/* Hero strip — plain-English meters */}
+      <MarketHeroCards />
 
       {/* ETF strip */}
       <Card className="glass-card p-5">
