@@ -25,21 +25,26 @@ Deno.serve(async (req) => {
     let symbol: string | null = null;
     let category = "general";
     let limit = 12;
+    let sources: string[] | null = null;
 
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       symbol = body.symbol ?? null;
       category = body.category ?? "general";
       limit = Math.min(50, Number(body.limit ?? 12));
+      if (Array.isArray(body.sources) && body.sources.length) {
+        sources = body.sources.map((s: string) => String(s).toLowerCase());
+      }
     } else {
       symbol = url.searchParams.get("symbol");
       category = url.searchParams.get("category") ?? "general";
       limit = Math.min(50, Number(url.searchParams.get("limit") ?? 12));
+      const s = url.searchParams.get("sources");
+      if (s) sources = s.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
     }
 
     let endpoint: string;
     if (symbol) {
-      // Company-specific news from last 7 days
       const to = new Date();
       const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -56,9 +61,20 @@ Deno.serve(async (req) => {
     }
     const raw: NewsItem[] = await r.json();
 
+    // Pull a wider pool when filtering so we have enough survivors after the source filter.
+    const poolSize = sources ? Math.max(limit * 8, 80) : limit;
+
+    const matchesSource = (n: NewsItem) => {
+      if (!sources) return true;
+      const hay = `${n.source ?? ""} ${n.url ?? ""}`.toLowerCase();
+      return sources.some((s) => hay.includes(s));
+    };
+
     const items = (raw ?? [])
       .filter((n) => n.headline && n.url)
       .sort((a, b) => b.datetime - a.datetime)
+      .slice(0, poolSize)
+      .filter(matchesSource)
       .slice(0, limit)
       .map((n) => ({
         id: String(n.id ?? n.url),
