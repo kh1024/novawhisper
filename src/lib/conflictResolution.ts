@@ -187,7 +187,16 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     );
   }
 
-  // ── Trap d: Technical Overextension (RSI > 70) ──
+  // ── Trap d: Exhaustion Filter — RSI > 72 AND strong momentum (9-day-run peak) ──
+  if (rsi != null && rsi > 72 && highMomentum) {
+    flags.push("Exhaustion Filter (RSI > 72 + strong momentum)");
+    const dist = emaDistancePct != null ? ` and ${emaDistancePct.toFixed(1)}% vs 8-EMA` : "";
+    return build(
+      "WAIT",
+      `RSI ${rsi.toFixed(0)} at the peak of a ${winningStreakDays}-day run${dist} — liquidity trap. Wait for a pullback.`,
+    );
+  }
+  // Soft overextension (RSI > 70 without confirmed momentum) still warrants a WAIT.
   if (rsi != null && rsi > 70) {
     flags.push("Overextended (RSI > 70)");
     const dist = emaDistancePct != null ? ` and ${emaDistancePct.toFixed(1)}% vs 8-EMA` : "";
