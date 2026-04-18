@@ -341,8 +341,9 @@ function EmptySlot({ tier, slotIndex }: { tier: RiskTier; slotIndex: number }) {
 function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTier; slotIndex?: number }) {
   const tierMeta = tier ? TIER_META[tier] : null;
   const TierIcon = tierMeta?.icon;
+  const { volatilityTrap, trapReason } = evalRisk(pick);
   return (
-    <Card className={cn("flex flex-col p-4", tierMeta?.cls)}>
+    <Card className={cn("flex flex-col p-4", tierMeta?.cls, volatilityTrap && "ring-1 ring-warning/50")}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -359,6 +360,15 @@ function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTi
               {biasIcon(pick.bias)} <span className="ml-1 capitalize">{pick.bias}</span>
             </Badge>
             <Badge variant="secondary" className="text-[10px]">Conviction {pick.conviction}</Badge>
+            {volatilityTrap && (
+              <Badge
+                variant="outline"
+                className="text-[10px] border-warning/50 bg-warning/10 text-warning gap-1"
+                title={trapReason}
+              >
+                <AlertTriangle className="h-2.5 w-2.5" /> Volatility Trap
+              </Badge>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-1 shrink-0">
@@ -367,6 +377,11 @@ function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTi
           ))}
         </div>
       </div>
+      {volatilityTrap && trapReason && (
+        <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning leading-snug">
+          <span className="font-semibold">⚠ Volatility Trap · </span>{trapReason}
+        </div>
+      )}
       <p className="mt-3 text-sm text-foreground/90">{pick.thesis}</p>
 
       <OptionContract
