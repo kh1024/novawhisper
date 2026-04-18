@@ -25,6 +25,37 @@ function statusClass(s: Verdict["status"]) {
   return "text-muted-foreground border-border bg-muted/30";
 }
 
+/**
+ * Estimate unrealized P&L for an OPEN position.
+ * We don't have a live options chain here, so we approximate the contract's
+ * current value as its intrinsic value (max(0, ITM amount)). For long calls
+ * this is a CONSERVATIVE floor (real value ≥ intrinsic because of time value).
+ * For long puts, same. For shorts (credit), it's an upper bound on what's owed.
+ */
+function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undefined): number | null {
+  if (spot == null || p.entry_premium == null) return null;
+  const strike = Number(p.strike);
+  const isCall = p.option_type.includes("call");
+  const isPut = p.option_type.includes("put");
+  let intrinsic = 0;
+  if (isCall) intrinsic = Math.max(0, spot - strike);
+  else if (isPut) intrinsic = Math.max(0, strike - spot);
+  else return null;
+  const sign = p.direction === "long" ? 1 : -1;
+  return sign * (intrinsic - Number(p.entry_premium)) * p.contracts * 100;
+}
+
+function realizedPnl(p: PortfolioPosition): number | null {
+  if (p.entry_premium == null || p.close_premium == null) return null;
+  const sign = p.direction === "long" ? 1 : -1;
+  return sign * (Number(p.close_premium) - Number(p.entry_premium)) * p.contracts * 100;
+}
+
+function fmtUsd(n: number) {
+  const s = n >= 0 ? "+" : "−";
+  return `${s}$${Math.abs(n).toFixed(0)}`;
+}
+
 export default function Portfolio() {
   const { data: positions = [], isLoading } = usePortfolio();
   const open = useMemo(() => positions.filter((p) => p.status === "open"), [positions]);
@@ -35,16 +66,25 @@ export default function Portfolio() {
   const qc = useQueryClient();
 
   const totals = useMemo(() => {
-    let openCount = open.length;
-    let closedPnl = 0;
+    const openCount = open.length;
+    let realized = 0;
     for (const p of closed) {
-      if (p.entry_premium != null && p.close_premium != null) {
-        const sign = p.direction === "long" ? 1 : -1;
-        closedPnl += sign * (Number(p.close_premium) - Number(p.entry_premium)) * p.contracts * 100;
+      const r = realizedPnl(p);
+      if (r != null) realized += r;
+    }
+    let unrealized = 0;
+    let unrealizedKnown = false;
+    let costBasis = 0;
+    for (const p of open) {
+      const spot = quoteMap.get(p.symbol)?.price ?? null;
+      const u = estimateUnrealizedPnl(p, spot);
+      if (u != null) { unrealized += u; unrealizedKnown = true; }
+      if (p.entry_premium != null && p.direction === "long") {
+        costBasis += Number(p.entry_premium) * p.contracts * 100;
       }
     }
-    return { openCount, closedPnl };
-  }, [open, closed]);
+    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis };
+  }, [open, closed, quoteMap]);
 
   return (
     <div className="space-y-6 p-6">
@@ -58,15 +98,27 @@ export default function Portfolio() {
             Save any pick from the app. Nova checks the live underlying and tells you straight what's working and what's not.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Open</div>
             <div className="font-mono text-lg font-semibold">{totals.openCount}</div>
           </div>
+          <div className="rounded-md border border-border bg-surface/40 px-3 py-2" title="Estimated using intrinsic value (spot − strike). Real value usually higher because of time value.">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Unrealized (est.)</div>
+            <div className={cn("font-mono text-lg font-semibold", totals.unrealized >= 0 ? "text-bullish" : "text-bearish")}>
+              {totals.unrealizedKnown ? fmtUsd(totals.unrealized) : "—"}
+            </div>
+          </div>
           <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Realized P&amp;L</div>
-            <div className={cn("font-mono text-lg font-semibold", totals.closedPnl >= 0 ? "text-bullish" : "text-bearish")}>
-              {totals.closedPnl >= 0 ? "+" : ""}${totals.closedPnl.toFixed(0)}
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Realized</div>
+            <div className={cn("font-mono text-lg font-semibold", totals.realized >= 0 ? "text-bullish" : "text-bearish")}>
+              {fmtUsd(totals.realized)}
+            </div>
+          </div>
+          <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total P&amp;L</div>
+            <div className={cn("font-mono text-lg font-semibold", totals.total >= 0 ? "text-bullish" : "text-bearish")}>
+              {fmtUsd(totals.total)}
             </div>
           </div>
           <Button size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["portfolio-verdict"] }); verdictQ.refetch(); }} disabled={verdictQ.isFetching || open.length === 0}>
