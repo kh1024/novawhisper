@@ -136,9 +136,48 @@ Do NOT return vague entries like "buy calls if it breaks out". If you don't have
       catch (e) { console.error("[options-scout] parse failed", e); }
     }
 
+    // 5) Persist this run + picks for history & performance tracking
+    let runId: string | null = null;
+    try {
+      const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      const tiers = ["safe", "mild", "aggressive"] as const;
+      const allPicks = tiers.flatMap((t) => ((buckets[t] as unknown[]) ?? []).map((p) => ({ tier: t, pick: p as Record<string, unknown> })));
+      const { data: runRow, error: runErr } = await sb.from("web_picks_runs").insert({
+        market_read: (buckets.marketRead as string) ?? "",
+        source_count: allSources.length,
+        pick_count: allPicks.length,
+        sources: allSources,
+      }).select("id").single();
+      if (runErr) throw runErr;
+      runId = runRow!.id as string;
+      if (allPicks.length) {
+        const rows = allPicks.map(({ tier, pick }) => ({
+          run_id: runId, tier,
+          symbol: String(pick.symbol ?? "").toUpperCase(),
+          strategy: String(pick.strategy ?? ""),
+          option_type: String(pick.optionType ?? ""),
+          direction: String(pick.direction ?? ""),
+          strike: Number(pick.strike ?? 0),
+          strike_short: pick.strikeShort != null ? Number(pick.strikeShort) : null,
+          expiry: String(pick.expiry ?? new Date().toISOString().slice(0, 10)),
+          play_at: Number(pick.playAt ?? 0),
+          premium_estimate: pick.premiumEstimate ? String(pick.premiumEstimate) : null,
+          thesis: String(pick.thesis ?? ""),
+          risk: String(pick.risk ?? ""),
+          source: String(pick.source ?? ""),
+          outcome: "open",
+        }));
+        const { error: pickErr } = await sb.from("web_picks").insert(rows);
+        if (pickErr) console.error("[options-scout] persist picks failed", pickErr);
+      }
+    } catch (e) {
+      console.error("[options-scout] persistence failed (non-fatal)", e);
+    }
+
     return new Response(
       JSON.stringify({
         ...buckets,
+        runId,
         sources: allSources,
         fetchedAt: new Date().toISOString(),
       }),
