@@ -236,6 +236,11 @@ async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuo
       regularMarketChange?: number;
       regularMarketChangePercent?: number;
       regularMarketVolume?: number;
+      preMarketPrice?: number;
+      preMarketChangePercent?: number;
+      postMarketPrice?: number;
+      postMarketChangePercent?: number;
+      marketState?: string;
     }> = d?.quoteResponse?.result ?? [];
     for (const row of rows) {
       const price = Number(row.regularMarketPrice);
@@ -246,6 +251,11 @@ async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuo
         change: Number(row.regularMarketChange ?? 0),
         changePct: Number(row.regularMarketChangePercent ?? 0),
         volume: Number(row.regularMarketVolume ?? 0),
+        preMarketPrice: isFinite(Number(row.preMarketPrice)) ? Number(row.preMarketPrice) : null,
+        preMarketChangePct: isFinite(Number(row.preMarketChangePercent)) ? Number(row.preMarketChangePercent) : null,
+        postMarketPrice: isFinite(Number(row.postMarketPrice)) ? Number(row.postMarketPrice) : null,
+        postMarketChangePct: isFinite(Number(row.postMarketChangePercent)) ? Number(row.postMarketChangePercent) : null,
+        marketState: row.marketState ?? null,
       });
     }
   } catch (e) {
