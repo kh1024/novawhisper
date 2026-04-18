@@ -1,6 +1,15 @@
 // Ask Nova — generates an AI explanation for a ticker using Lovable AI Gateway.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
+interface EventRiskInput {
+  key: "geopolitics" | "political" | "fed" | "earnings";
+  label: string;
+  status: string;       // "Quiet" | "Watch" | "Hot"
+  tone: "good" | "ok" | "bad";
+  hits: number;
+  topHeadline?: string | null;
+}
+
 interface NovaContext {
   symbol: string;
   name?: string;
@@ -12,6 +21,7 @@ interface NovaContext {
   budget?: number;       // USD the user has to spend
   model?: string;        // override AI model
   riskProfile?: "safe" | "mild" | "aggressive";
+  eventRisk?: EventRiskInput[];   // live event-risk signals from the news feed
   topPicks?: Array<{
     type: string;
     strike: number;
