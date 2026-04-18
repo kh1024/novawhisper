@@ -96,6 +96,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   // Ask Nova AI explanation
   const [novaText, setNovaText] = useState<string>("");
   const [novaLoading, setNovaLoading] = useState(false);
+  const [budget, setBudget] = useState<number>(() => {
+    const saved = typeof window !== "undefined" ? window.localStorage.getItem("nova_budget") : null;
+    return saved ? Number(saved) || 500 : 500;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem("nova_budget", String(budget));
+  }, [budget]);
 
   const generateNova = async () => {
     if (!symbol || !q) return;
@@ -111,6 +119,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
           change: q.change,
           changePct: q.changePct,
           status: q.status,
+          budget,
           topPicks: topPicks.map((p) => ({
             type: p.c.type,
             strike: p.c.strike,
@@ -227,7 +236,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
                 <TabsContent value="why" className="mt-4">
                   <Card className="glass-card p-4 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="h-4 w-4 text-primary" /> Nova — AI analyst note
                       </div>
@@ -235,6 +244,39 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         <RefreshCw className={`h-3 w-3 ${novaLoading ? "animate-spin" : ""}`} />
                         Regenerate
                       </Button>
+                    </div>
+                    <div className="flex items-center gap-2 p-2 rounded-md bg-surface/40 border border-border/50 flex-wrap">
+                      <label htmlFor="nova-budget" className="text-xs text-muted-foreground whitespace-nowrap">
+                        💰 Your budget
+                      </label>
+                      <div className="relative flex-1 min-w-[110px] max-w-[160px]">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                        <input
+                          id="nova-budget"
+                          type="number"
+                          min={50}
+                          max={1000000}
+                          step={50}
+                          value={budget}
+                          onChange={(e) => setBudget(Math.max(50, Number(e.target.value) || 0))}
+                          className="w-full h-7 pl-5 pr-2 text-sm font-mono bg-background border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div className="flex gap-1 flex-wrap">
+                        {[250, 500, 1000, 2500].map((v) => (
+                          <button
+                            key={v}
+                            onClick={() => setBudget(v)}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border transition-colors ${
+                              budget === v
+                                ? "bg-primary/20 border-primary text-primary"
+                                : "border-border text-muted-foreground hover:bg-surface"
+                            }`}
+                          >
+                            ${v >= 1000 ? `${v / 1000}k` : v}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                     {novaLoading && !novaText && (
                       <div className="space-y-2">
