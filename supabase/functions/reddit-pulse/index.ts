@@ -3,7 +3,20 @@
 // and a quick sentiment hint based on title keywords.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
-const SUBS_DEFAULT = ["wallstreetbets", "options", "stocks"];
+const SUBS_DEFAULT = [
+  "wallstreetbets",
+  "options",
+  "options_trading",
+  "optionstrading",
+  "thetagang",
+  "stocks",
+  "investing",
+  "stockmarket",
+  "smallstreetbets",
+  "daytrading",
+  "swingtrading",
+  "pennystocks",
+];
 const UA = "NovaTerminal/1.0 (planning aggregator)";
 
 const POS = ["calls", "moon", "rip", "squeeze", "breakout", "buy", "long", "bull", "beat", "raise", "rally", "pump"];
@@ -81,10 +94,16 @@ Deno.serve(async (req) => {
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const subs: string[] = Array.isArray(body.subs) && body.subs.length ? body.subs : SUBS_DEFAULT;
-    const sort: string = body.sort ?? "hot";
-    const limit: number = Math.min(50, Number(body.limit ?? 25));
+    const sortsRaw = body.sort ?? ["hot", "rising"];
+    const sorts: string[] = Array.isArray(sortsRaw) ? sortsRaw : [sortsRaw];
+    const limit: number = Math.min(50, Number(body.limit ?? 30));
 
-    const all = (await Promise.all(subs.map((s) => fetchSub(s, sort, limit)))).flat();
+    const tasks = subs.flatMap((s) => sorts.map((sort) => fetchSub(s, sort, limit)));
+    const all = (await Promise.all(tasks)).flat();
+
+    // Dedupe by post id (a post can show in both hot and rising)
+    const seen = new Set<string>();
+    const dedup = all.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
 
     // Build per-ticker rollup
     const tickers = new Map<string, {
@@ -98,7 +117,7 @@ Deno.serve(async (req) => {
       topPost?: { title: string; url: string; score: number; comments: number; sub: string };
     }>();
 
-    const posts = all.map((p) => {
+    const posts = dedup.map((p) => {
       const text = `${p.title} ${p.selftext ?? ""}`;
       const ts = extractTickers(text);
       const sent = sentimentOf(text);
@@ -150,9 +169,10 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         subs,
-        sort,
-        posts: posts.sort((a, b) => b.score - a.score).slice(0, 60),
-        tickers: ranked.slice(0, 30),
+        sorts,
+        postCount: dedup.length,
+        posts: posts.sort((a, b) => b.score - a.score).slice(0, 80),
+        tickers: ranked.slice(0, 40),
         fetchedAt: new Date().toISOString(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
