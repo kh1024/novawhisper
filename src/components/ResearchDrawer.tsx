@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { useBudget } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
+import { NovaVerdictCard, type NovaCard } from "@/components/NovaVerdictCard";
 
 type Props = {
   symbol: string | null;
