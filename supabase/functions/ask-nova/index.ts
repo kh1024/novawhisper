@@ -72,9 +72,17 @@ Example: "AI power demand → XLE" is 2 (XLE is oil & gas, not grid). "AI comput
 Fit ≤ 2 caps verdict at SPECULATIVE. Fit = 3 caps at POSSIBLE BUT EARLY.
 
 STEP 3 — CAUSAL LOGIC + ANTI-FLUFF
-Identify the direct, measurable drivers. ANTI-FLUFF RULE: if a phrase sounds sophisticated but cannot be tied to a direct driver, measurable catalyst, or instrument-specific exposure, label it **narrative, not evidence**. Quote it literally. Phrases to flag (non-exhaustive): "structural necessity", "wall of demand", "capex backbone", "grid constraint pressure", "inevitable secular tailwind", "Energy Wall", "hyperscaler capex thesis", "intrinsic equilibrium", "supercycle".
+Identify the direct, measurable drivers. ANTI-FLUFF RULE: if a phrase sounds sophisticated but cannot be tied to a direct driver, measurable catalyst, or instrument-specific exposure, label it **narrative, not evidence**. Quote it literally. Phrases to flag (non-exhaustive): "structural necessity", "wall of demand", "capex backbone", "inevitable secular tailwind", "intrinsic equilibrium", "supercycle", "narrative tailwind".
 
-STEP 4 — OPTION CONTRACT QUALITY + OPTIONS REALISM
+STEP 4 — EVENT RISK CHECK (live, from market_event_risk in input)
+Use the live event-risk signals provided. Score each as Quiet / Watch / Hot.
+- **Geopolitics** (war, sanctions, tariffs, missile strikes, Iran/Russia/China/Israel) → Hot = expect risk-off gaps; downgrade speculative LONG calls; favor WAIT.
+- **Political posts** (Trump/Xi/Putin posts, executive orders, Senate votes, shutdown) → Hot = single-tweet/headline gap risk; never recommend short-dated naked calls.
+- **Fed / Rates** (FOMC, CPI/PPI/PCE, jobs, Powell, yields) → Hot = rate-sensitive sectors (tech, REITs, regional banks, gold) will whipsaw; size down or WAIT.
+- **Earnings** (major prints, guidance, warnings) → Hot for the specific name = pre-earnings IV crush risk on long calls; explicitly call this out if the contract expires within ~14d of the print.
+If any signal is Hot AND directly relevant to the trade, **action cannot be BUY** — must be WAIT or SKIP.
+
+STEP 5 — OPTION CONTRACT QUALITY + OPTIONS REALISM
 For each contract assess: moneyness, delta, theta, DTE, gamma, spread/liquidity, fragility of strike. A long call can lose money even when the thesis is broadly correct — explicitly evaluate:
   (a) Can the required move happen BEFORE expiration?
   (b) Does IV already PRICE IN the expected move?
@@ -82,8 +90,8 @@ For each contract assess: moneyness, delta, theta, DTE, gamma, spread/liquidity,
   (d) Would a debit spread be more capital-efficient than a naked call?
 If (d) is yes, BETTER STRUCTURE must recommend the spread.
 
-STEP 5 — TIMING (NOW / WAIT / AVOID)
-No "buy the dip" without confirmed support. If trend is still down, say WAIT or AVOID.
+STEP 6 — TIMING (NOW / WAIT / AVOID)
+No "buy the dip" without confirmed support. If trend is still down, say WAIT or AVOID. If any Event Risk is Hot and relevant, default to WAIT.
 
 STEP 6 — RISK STRUCTURE
 Compare long call vs vertical spread, shorter vs longer expiry, smaller starter size, scaling in, or doing nothing. Budget is a CAP, not a target — never infer "large budget = many contracts".
