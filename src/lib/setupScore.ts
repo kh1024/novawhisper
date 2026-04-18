@@ -5,6 +5,7 @@
 
 import { TICKER_UNIVERSE } from "./mockData";
 import type { VerifiedQuote } from "./liveData";
+import { runConflictResolution, type CrlVerdict, type RiskBadge } from "./conflictResolution";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
