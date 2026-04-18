@@ -11,6 +11,7 @@ import { useLiveQuotes, useOptionsChain, statusMeta, type OptionContract } from 
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 type Props = {
   symbol: string | null;
@@ -244,8 +245,8 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                       </div>
                     )}
                     {novaText && (
-                      <div className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap">
-                        {novaText}
+                      <div className="text-sm text-foreground/90 leading-relaxed space-y-2 [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1.5 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-surface/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_em]:text-muted-foreground [&_em]:not-italic">
+                        <ReactMarkdown>{novaText}</ReactMarkdown>
                       </div>
                     )}
                     {!novaLoading && !novaText && q && (
