@@ -328,6 +328,35 @@ function TickerRow({ t }: { t: SourceTicker }) {
 function WebPicksPanel() {
   const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
   const qc = useQueryClient();
+  const [settings] = useSettings();
+
+  // Fire a GO webhook for each fresh pick the scout returns.
+  // Dedupe key includes contract identity so re-scrapes don't re-spam, but a
+  // genuinely new pick (different strike / expiry / symbol) still alerts.
+  useEffect(() => {
+    if (!data) return;
+    const all: { tier: "safe" | "mild" | "aggressive"; pick: ScoutPick }[] = [
+      ...(data.safe ?? []).map((p) => ({ tier: "safe" as const, pick: p })),
+      ...(data.mild ?? []).map((p) => ({ tier: "mild" as const, pick: p })),
+      ...(data.aggressive ?? []).map((p) => ({ tier: "aggressive" as const, pick: p })),
+    ];
+    if (all.length === 0) return;
+    dispatchPickAlerts({
+      settings,
+      picks: all.map(({ tier, pick: p }) => ({
+        key: `webpick:${p.symbol}:${p.strategy}:${p.optionType}:${p.strike}:${p.strikeShort ?? "_"}:${p.expiry}`,
+        symbol: p.symbol,
+        source: "web-pick",
+        reason: p.thesis,
+        strategy: p.strategy,
+        optionType: p.optionType,
+        direction: p.direction,
+        strike: p.strike,
+        expiry: p.expiry,
+        risk: tier,
+      })),
+    });
+  }, [data, settings]);
 
   if (isLoading) {
     return (
