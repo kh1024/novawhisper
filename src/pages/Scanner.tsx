@@ -511,6 +511,7 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
         <div>
           <div className="font-mono font-semibold text-lg">{row.symbol}</div>
           <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">{row.name}</div>
+          <ChartLinks symbol={row.symbol} className="mt-1.5" />
         </div>
         <div className="text-right">
           <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
