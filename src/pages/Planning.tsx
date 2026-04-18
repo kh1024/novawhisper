@@ -292,22 +292,29 @@ function EmptySlot({ tier, slotIndex }: { tier: RiskTier; slotIndex: number }) {
 }
 
 function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTier; slotIndex?: number }) {
+  const tierMeta = tier ? TIER_META[tier] : null;
+  const TierIcon = tierMeta?.icon;
   return (
-    <Card className="flex flex-col p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
+    <Card className={cn("flex flex-col p-4", tierMeta?.cls)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {tierMeta && TierIcon && (
+              <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", tierMeta.chipCls)}>
+                <TierIcon className="h-3 w-3" /> {tierMeta.label}{slotIndex ? ` #${slotIndex}` : ""}
+              </span>
+            )}
             <span className="font-mono text-lg font-semibold">{pick.symbol}</span>
             <TickerPrice symbol={pick.symbol} showChange />
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5">
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px]", biasClass(pick.bias))}>
               {biasIcon(pick.bias)} <span className="ml-1 capitalize">{pick.bias}</span>
             </Badge>
             <Badge variant="secondary" className="text-[10px]">Conviction {pick.conviction}</Badge>
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-1">
+        <div className="flex flex-wrap justify-end gap-1 shrink-0">
           {pick.sources.map((s) => (
             <Badge key={s} variant="outline" className="text-[10px] capitalize">{s}</Badge>
           ))}
