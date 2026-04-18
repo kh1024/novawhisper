@@ -12,6 +12,8 @@ import Portfolio from "./pages/Portfolio";
 import Journal from "./pages/Journal";
 import Alerts from "./pages/Alerts";
 import Planning from "./pages/Planning";
+import Patterns from "./pages/Patterns";
+import Market from "./pages/Market";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -26,7 +28,9 @@ const App = () => (
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/market" element={<Market />} />
             <Route path="/scanner" element={<Scanner />} />
+            <Route path="/patterns" element={<Patterns />} />
             <Route path="/research" element={<Research />} />
             <Route path="/chains" element={<Chains />} />
             <Route path="/portfolio" element={<Portfolio />} />
