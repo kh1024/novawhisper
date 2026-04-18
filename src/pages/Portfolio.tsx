@@ -315,6 +315,9 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
   // Per-card simulated spot override (paper trades only). Manual chips set a
   // fixed offset; auto-cycle drives a random-walk offset every 2s.
   const [simOffsetPct, setSimOffsetPct] = useState(0);
+  // Slider mode: drag a % move OR drag a target P&L $ and solve for the move.
+  const [simMode, setSimMode] = useState<"pct" | "pnl">("pct");
+  const [targetPnl, setTargetPnl] = useState(0);
 
   // Random-walk auto-cycle: only runs for open paper trades when parent toggles autoSim.
   useEffect(() => {
