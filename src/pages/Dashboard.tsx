@@ -11,6 +11,7 @@ import { NewsFeed } from "@/components/NewsFeed";
 import { SectorBreakdown } from "@/components/SectorBreakdown";
 import { MarketHeroCards } from "@/components/MarketHeroCards";
 import { PlaybookCard } from "@/components/PlaybookCard";
+import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 
 type RiskBucket = "safe" | "mild" | "aggressive";
 
@@ -124,11 +125,18 @@ export default function Dashboard() {
             <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
           )}
           <div className="space-y-2">
-            {picks.map((p) => (
-              <button
+            {picks.map((p) => {
+              const isPut = p.strategy.includes("put");
+              const optionType = isPut ? "put" : "call";
+              const direction = (p.strategy === "csp" || p.strategy === "covered-call") ? "short" : "long";
+              return (
+              <div
                 key={p.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setOpenSymbol(p.symbol)}
-                className="w-full flex items-center gap-4 p-3 rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all text-left"
+                onKeyDown={(e) => { if (e.key === "Enter") setOpenSymbol(p.symbol); }}
+                className="w-full flex items-center gap-4 p-3 rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all text-left cursor-pointer"
               >
                 <div className={`h-10 w-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold ${p.bias === "bullish" ? "bg-bullish/15 text-bullish" : p.bias === "bearish" ? "bg-bearish/15 text-bearish" : "bg-muted text-muted-foreground"}`}>
                   {p.symbol.slice(0, 4)}
@@ -144,7 +152,7 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <div className={`mono text-[11px] mt-1 font-semibold ${p.bias === "bullish" ? "text-bullish" : p.bias === "bearish" ? "text-bearish" : "text-foreground"}`}>
-                    ${p.strike} {(p.strategy.includes("put") ? "PUT" : "CALL")} · exp {p.expiration}
+                    ${p.strike} {isPut ? "PUT" : "CALL"} · exp {p.expiration}
                   </div>
                   <div className="text-xs text-muted-foreground truncate mt-0.5">{p.reason}</div>
                 </div>
@@ -156,8 +164,19 @@ export default function Dashboard() {
                   <div className="mono text-lg font-semibold">{p.score}</div>
                   <div className="text-[10px] text-muted-foreground">Grade {p.confidence}</div>
                 </div>
-              </button>
-            ))}
+                <SaveToPortfolioButton
+                  size="xs"
+                  symbol={p.symbol}
+                  optionType={optionType}
+                  direction={direction}
+                  strike={p.strike}
+                  expiry={p.expiration}
+                  entryPremium={p.premium}
+                  thesis={p.reason}
+                  source="dashboard"
+                />
+              </div>
+            );})}
           </div>
         </Card>
 
