@@ -5,6 +5,7 @@ import { TICKER_UNIVERSE, getMockQuotes } from "./mockData";
 import { useSettings } from "./settings";
 
 export type QuoteStatus = "verified" | "close" | "mismatch" | "stale" | "unavailable";
+export type Session = "pre" | "regular" | "post" | "closed";
 
 export interface VerifiedQuote {
   symbol: string;
@@ -17,10 +18,46 @@ export interface VerifiedQuote {
   status: QuoteStatus;
   diffPct: number | null;
   updatedAt: string;
+  // Extended hours
+  session?: Session;
+  preMarketPrice?: number | null;
+  preMarketChangePct?: number | null;
+  postMarketPrice?: number | null;
+  postMarketChangePct?: number | null;
+  /** Pre/post price for the *current* extended session (null in regular/closed). */
+  extendedPrice?: number | null;
+  extendedChangePct?: number | null;
   // enriched client-side
   name?: string;
   sector?: string;
   marketCap?: number;
+}
+
+/**
+ * Returns the current US-equity session in the user's clock. Used to choose
+ * the right refresh cadence and badge label without waiting for the server.
+ */
+export function currentSessionET(): Session {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour12: false,
+    weekday: "short", hour: "2-digit", minute: "2-digit",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const wd = parts.find((p) => p.type === "weekday")?.value ?? "";
+  const hh = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const mm = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  if (wd === "Sat" || wd === "Sun") return "closed";
+  const minutes = hh * 60 + mm;
+  if (minutes >= 4 * 60 && minutes < 9 * 60 + 30) return "pre";
+  if (minutes >= 9 * 60 + 30 && minutes < 16 * 60) return "regular";
+  if (minutes >= 16 * 60 && minutes < 20 * 60) return "post";
+  return "closed";
+}
+
+export function sessionLabel(s: Session | undefined): { short: string; long: string } | null {
+  if (s === "pre") return { short: "PRE", long: "Pre-market" };
+  if (s === "post") return { short: "AH", long: "After hours" };
+  return null;
 }
 
 export interface OptionContract {
