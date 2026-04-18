@@ -275,11 +275,15 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
         </div>
       ) : (
         <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
-          {p.close_premium != null && p.entry_premium != null && (
-            <span className={cn("font-mono", (Number(p.close_premium) - Number(p.entry_premium)) * (p.direction === "long" ? 1 : -1) >= 0 ? "text-bullish" : "text-bearish")}>
-              P&amp;L: {((Number(p.close_premium) - Number(p.entry_premium)) * (p.direction === "long" ? 1 : -1) * p.contracts * 100).toFixed(0)} USD
-            </span>
-          )}
+          {(() => {
+            const r = realizedPnl(p, settings);
+            if (r == null) return <span />;
+            return (
+              <span className={cn("font-mono", r >= 0 ? "text-bullish" : "text-bearish")} title={`Net of $${roundTripFee.toFixed(2)} round-trip fees`}>
+                P&amp;L: {fmtUsd(r)} <span className="opacity-60">(net)</span>
+              </span>
+            );
+          })()}
           <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground" onClick={() => del.mutate(p.id)}>
             <Trash2 className="mr-1 h-3 w-3" /> Delete
           </Button>
