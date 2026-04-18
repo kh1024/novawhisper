@@ -87,7 +87,12 @@ function read(): AppSettings {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw);
-    const merged = { ...DEFAULTS, ...parsed };
+    const merged: AppSettings = {
+      ...DEFAULTS,
+      ...parsed,
+      // Deep-merge traderProfile so we don't lose new fields added later.
+      traderProfile: { ...DEFAULTS.traderProfile, ...(parsed?.traderProfile ?? {}) },
+    };
     // Migrate: anyone with the old 5s default gets bumped to safe 30s.
     if (merged.refreshMs < 15_000) merged.refreshMs = 30_000;
     return merged;
