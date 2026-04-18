@@ -31,7 +31,7 @@ interface VerifiedQuote {
 }
 
 // ── In-memory caches (per isolate; resets on cold start) ──
-const QUOTE_TTL_MS = 2 * 60_000; // 2 min — quotes are "live-ish" research feed, not order entry
+const QUOTE_TTL_MS = 60_000; // 60s — fresh enough for research, friendly to free-tier APIs
 const ALPHA_TTL_MS = 10 * 60_000; // 10 min — Alpha free is 25 req/DAY, conserve aggressively
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
