@@ -123,19 +123,20 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   const avgVolume = estimateAvgVolume(q.symbol, marketCap);
   const relVolume = q.volume > 0 ? +(q.volume / avgVolume).toFixed(2) : 0;
 
-  // Estimated technicals (deterministic per symbol; nudged by today's %chg)
+  // Estimated technicals (deterministic per symbol; nudged by today's %chg
+  // *including* any pre/post move so the verdict updates after-hours)
   const baseRsi = 45 + r() * 25; // 45-70
-  const rsi = clamp(Math.round(baseRsi + q.changePct * 1.4), 5, 95);
+  const rsi = clamp(Math.round(baseRsi + effectiveChangePct * 1.4), 5, 95);
 
   const baseEma20 = (r() - 0.5) * 4; // -2 to +2
   const baseEma50 = (r() - 0.5) * 8; // -4 to +4
-  const emaDist20 = +(baseEma20 + q.changePct * 0.4).toFixed(2);
-  const emaDist50 = +(baseEma50 + q.changePct * 0.25).toFixed(2);
+  const emaDist20 = +(baseEma20 + effectiveChangePct * 0.4).toFixed(2);
+  const emaDist50 = +(baseEma50 + effectiveChangePct * 0.25).toFixed(2);
 
   const atrBase = SECTOR_ATR[sector] ?? 2.2;
   const atrPct = +(atrBase * (0.85 + r() * 0.4)).toFixed(2);
 
-  const ivRank = Math.round(clamp(40 + r() * 50 + Math.abs(q.changePct) * 2, 5, 98));
+  const ivRank = Math.round(clamp(40 + r() * 50 + Math.abs(effectiveChangePct) * 2, 5, 98));
 
   const earningsInDays = r() > 0.78 ? Math.floor(r() * 21) : null;
 
