@@ -5,8 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 export interface ScoutPick {
   symbol: string;
   strategy: string;
+  optionType: "call" | "put" | "call_spread" | "put_spread" | "straddle" | "strangle" | "iron_condor";
+  direction: "long" | "short";
+  strike: number;
+  strikeShort?: number;
+  expiry: string;
+  playAt: number;
+  premiumEstimate?: string;
   thesis: string;
-  entry: string;
   risk: string;
   source: string;
 }
