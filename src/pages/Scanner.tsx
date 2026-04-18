@@ -170,7 +170,12 @@ export default function Scanner() {
   // Dedupe key includes the date so the same GO re-fires once per trading day.
   const [settings] = useSettings();
   useEffect(() => {
-    const goRows = rows.filter((r) => r.crl?.verdict === "GO");
+    // Use effectiveVerdict so RSI-flipped rows don't fire false GO alerts.
+    const goRows = rows.filter((r) => {
+      const exp = expiryStatus.get(`scanner:${r.symbol}`);
+      const v = exp?.effectiveVerdict ?? r.crl?.verdict;
+      return v === "GO" && !exp?.isStale && !exp?.isTimedOut;
+    });
     if (goRows.length === 0) return;
     const today = new Date().toISOString().slice(0, 10);
     dispatchPickAlerts({
@@ -183,7 +188,7 @@ export default function Scanner() {
         risk: r.crl?.riskBadge,
       })),
     });
-  }, [rows, settings]);
+  }, [rows, settings, expiryStatus]);
 
   const counts = useMemo(() => ({
     now: rows.filter((r) => r.readiness === "NOW").length,
