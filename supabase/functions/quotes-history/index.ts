@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
   try {
     const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
     const symbolsIn: unknown = body.symbols;
-    const lookbackDays = Math.min(120, Math.max(15, Number(body.lookbackDays ?? 60)));
+    const lookbackDays = Math.min(260, Math.max(15, Number(body.lookbackDays ?? 60)));
     if (!Array.isArray(symbolsIn) || symbolsIn.length === 0) {
       return new Response(JSON.stringify({ error: "symbols (array) required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
