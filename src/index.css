@@ -2,95 +2,90 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Nova Market Terminal — premium dark trading-terminal design system.
+   All colors HSL. No raw colors in components. */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Deep graphite / navy base */
+    --background: 222 30% 6%;
+    --foreground: 210 40% 96%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --surface: 222 28% 9%;
+    --surface-elevated: 222 26% 12%;
+    --surface-glass: 222 30% 10%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --card: 222 28% 9%;
+    --card-foreground: 210 40% 96%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --popover: 222 30% 8%;
+    --popover-foreground: 210 40% 96%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Subtle blue accent for structure / nav */
+    --primary: 212 100% 62%;
+    --primary-foreground: 222 47% 6%;
+    --primary-glow: 212 100% 70%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --secondary: 222 22% 16%;
+    --secondary-foreground: 210 40% 96%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --muted: 222 20% 14%;
+    --muted-foreground: 215 16% 60%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 222 24% 18%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
+    /* Bullish / Bearish */
+    --bullish: 142 70% 48%;
+    --bullish-foreground: 142 80% 96%;
+    --bullish-glow: 142 80% 56%;
+    --bearish: 0 75% 58%;
+    --bearish-foreground: 0 80% 97%;
+    --bearish-glow: 0 85% 65%;
+    --neutral: 45 90% 58%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 0 80% 97%;
+
+    --border: 222 22% 16%;
+    --input: 222 22% 14%;
+    --ring: 212 100% 62%;
+
+    --radius: 0.75rem;
+
+    /* Sidebar */
+    --sidebar-background: 222 32% 5%;
+    --sidebar-foreground: 215 16% 70%;
+    --sidebar-primary: 212 100% 62%;
+    --sidebar-primary-foreground: 222 47% 6%;
+    --sidebar-accent: 222 26% 12%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 24% 12%;
+    --sidebar-ring: 212 100% 62%;
+
+    /* Gradients */
+    --gradient-bullish: linear-gradient(135deg, hsl(142 70% 40%), hsl(160 70% 45%));
+    --gradient-bearish: linear-gradient(135deg, hsl(0 70% 50%), hsl(15 75% 55%));
+    --gradient-primary: linear-gradient(135deg, hsl(212 100% 55%), hsl(230 100% 65%));
+    --gradient-surface: linear-gradient(180deg, hsl(222 28% 10%), hsl(222 30% 7%));
+    --gradient-glow: radial-gradient(circle at 50% 0%, hsl(212 100% 50% / 0.15), transparent 60%);
+
+    /* Shadows */
+    --shadow-glass: 0 1px 0 0 hsl(0 0% 100% / 0.04) inset, 0 8px 32px -8px hsl(222 50% 2% / 0.6);
+    --shadow-elevated: 0 20px 60px -20px hsl(222 80% 2% / 0.8);
+    --shadow-bullish: 0 0 24px -4px hsl(var(--bullish) / 0.4);
+    --shadow-bearish: 0 0 24px -4px hsl(var(--bearish) / 0.4);
+    --shadow-primary: 0 0 28px -6px hsl(var(--primary) / 0.5);
+
+    /* Motion */
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+    --transition-smooth: all 0.3s var(--ease-out-quart);
+  }
+
+  /* Default to dark — terminal is dark-only */
+  .dark {
+    --background: 222 30% 6%;
+    --foreground: 210 40% 96%;
   }
 }
 
@@ -98,8 +93,104 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
-  body {
-    @apply bg-background text-foreground;
+  html {
+    @apply dark;
+    color-scheme: dark;
   }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    background-image: var(--gradient-glow);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: hsl(var(--surface) / 0.7);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-card-elevated {
+    background: hsl(var(--surface-elevated) / 0.85);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .text-bullish { color: hsl(var(--bullish)); }
+  .text-bearish { color: hsl(var(--bearish)); }
+  .bg-bullish { background-color: hsl(var(--bullish)); }
+  .bg-bearish { background-color: hsl(var(--bearish)); }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .pill-bullish {
+    background: hsl(var(--bullish) / 0.12);
+    color: hsl(var(--bullish));
+    border: 1px solid hsl(var(--bullish) / 0.25);
+  }
+
+  .pill-bearish {
+    background: hsl(var(--bearish) / 0.12);
+    color: hsl(var(--bearish));
+    border: 1px solid hsl(var(--bearish) / 0.25);
+  }
+
+  .pill-neutral {
+    background: hsl(var(--muted) / 0.6);
+    color: hsl(var(--muted-foreground));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .pill-live {
+    background: hsl(var(--bullish) / 0.15);
+    color: hsl(var(--bullish));
+    border: 1px solid hsl(var(--bullish) / 0.3);
+  }
+
+  .live-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full;
+    background: hsl(var(--bullish));
+    box-shadow: 0 0 8px hsl(var(--bullish));
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  /* Ticker tape */
+  .ticker-track {
+    display: flex;
+    width: max-content;
+    animation: ticker-scroll 90s linear infinite;
+  }
+  .ticker-track:hover { animation-play-state: paused; }
+
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-feature-settings: "tnum"; }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.4) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
+  50% { box-shadow: 0 0 0 8px hsl(var(--primary) / 0); }
 }
