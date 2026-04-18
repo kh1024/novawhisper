@@ -417,7 +417,7 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
             <div className="mt-2 space-y-1 text-[11px]">
               <div><span className="text-muted-foreground">Risk: </span><span className="text-foreground/80">{p.risk}</span></div>
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[10px] text-muted-foreground italic truncate">via {p.source}</div>
+                <SourceBadge source={p.source} />
                 <SaveToPortfolioButton
                   size="xs"
                   symbol={p.symbol}
