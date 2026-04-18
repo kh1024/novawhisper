@@ -11,6 +11,7 @@ import Chains from "./pages/Chains";
 import Portfolio from "./pages/Portfolio";
 import Journal from "./pages/Journal";
 import Alerts from "./pages/Alerts";
+import Planning from "./pages/Planning";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound.tsx";
 
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/journal" element={<Journal />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/planning" element={<Planning />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />
