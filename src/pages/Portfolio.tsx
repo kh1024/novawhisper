@@ -81,6 +81,9 @@ export default function Portfolio() {
   const paperCount = allPositions.filter((p) => p.is_paper).length;
   const realCount = allPositions.length - paperCount;
   const addPos = useAddPosition();
+  // Auto-cycle paper prices: random walk applied to every paper card every ~2s.
+  // Paper trades only — real positions are never affected.
+  const [autoSim, setAutoSim] = useState(false);
 
   const seedSamples = () => {
     const samples = buildSamplePaperTrades();
@@ -253,7 +256,7 @@ export default function Portfolio() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {open.map((p) => (
-                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} />
+                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={autoSim} />
               ))}
             </div>
           )}
@@ -263,7 +266,7 @@ export default function Portfolio() {
             <Card className="p-6 text-sm text-muted-foreground">No closed positions yet.</Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {closed.map((p) => <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} settings={settings} />)}
+              {closed.map((p) => <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={false} />)}
             </div>
           )}
         </TabsContent>
