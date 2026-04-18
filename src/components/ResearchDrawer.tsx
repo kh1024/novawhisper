@@ -411,7 +411,12 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                 </TabsContent>
               </Tabs>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <a href={`https://robinhood.com/options/chains/${symbol}`} target="_blank" rel="noreferrer">
+                    <TrendingUp className="h-3.5 w-3.5" />Robinhood
+                  </a>
+                </Button>
                 <Button asChild variant="outline" size="sm" className="gap-1.5">
                   <a href={`https://www.tradingview.com/symbols/${symbol}/`} target="_blank" rel="noreferrer">
                     <TrendingUp className="h-3.5 w-3.5" />TradingView
