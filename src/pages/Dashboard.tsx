@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
 import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, Info } from "lucide-react";
-import { getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
+import { getMockPicks, MARKET_REGIME, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { NewsFeed } from "@/components/NewsFeed";
+import { SectorBreakdown } from "@/components/SectorBreakdown";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
