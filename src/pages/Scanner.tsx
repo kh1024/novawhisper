@@ -564,10 +564,11 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <div className="flex justify-between"><span className="text-muted-foreground">Earnings</span><span>{row.earningsInDays != null ? `${row.earningsInDays}d` : "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Data quality</span><span className={scoreColor(row.dataQuality)}>{row.dataQuality}</span></div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={onOpen} className="flex-1" size="sm">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={onOpen} className="flex-1 min-w-[140px]" size="sm">
             Open full research →
           </Button>
+          <SaveToPortfolioButton {...deriveContractFromRow(row)} size="sm" />
           <Button asChild variant="outline" size="sm" className="gap-1.5">
             <a
               href={`https://robinhood.com/options/chains/${encodeURIComponent(row.symbol)}`}
@@ -626,6 +627,10 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" />{row.warnings[0]}
         </div>
       )}
+
+      <div className="flex justify-end pt-1" onClick={(e) => e.stopPropagation()}>
+        <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
+      </div>
     </Card>
   );
 }
