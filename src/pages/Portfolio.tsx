@@ -263,7 +263,7 @@ export default function Portfolio() {
             <Card className="p-6 text-sm text-muted-foreground">No closed positions yet.</Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {closed.map((p) => <PositionCard key={p.id} p={p} settings={settings} />)}
+              {closed.map((p) => <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} settings={settings} />)}
             </div>
           )}
         </TabsContent>
@@ -281,12 +281,22 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
   const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
 
-  const moneyness = spot != null
-    ? (isCall ? (spot > Number(p.strike) ? "ITM" : "OTM") : isPut ? (spot < Number(p.strike) ? "ITM" : "OTM") : "—")
-    : null;
-  const distance = spot != null ? ((spot - Number(p.strike)) / Number(p.strike)) * 100 : null;
+  // Per-card simulated spot override (paper trades only). Lets users bump the
+  // underlying ±5% / ±10% to see how P&L and moneyness react. Real spot is
+  // untouched; we just compute against `effectiveSpot`.
+  const [simOffsetPct, setSimOffsetPct] = useState(0);
+  const realSpot = spot ?? null;
+  const effectiveSpot = realSpot != null && simOffsetPct !== 0
+    ? realSpot * (1 + simOffsetPct / 100)
+    : realSpot;
+  const isSimulating = simOffsetPct !== 0 && realSpot != null;
 
-  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null, settings) : null;
+  const moneyness = effectiveSpot != null
+    ? (isCall ? (effectiveSpot > Number(p.strike) ? "ITM" : "OTM") : isPut ? (effectiveSpot < Number(p.strike) ? "ITM" : "OTM") : "—")
+    : null;
+  const distance = effectiveSpot != null ? ((effectiveSpot - Number(p.strike)) / Number(p.strike)) * 100 : null;
+
+  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, effectiveSpot ?? null, settings) : null;
   const unrealizedPct = unrealized != null && p.entry_premium != null && p.direction === "long"
     ? (unrealized / (Number(p.entry_premium) * p.contracts * 100)) * 100
     : null;
