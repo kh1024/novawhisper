@@ -22,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
+import { PickExpiryChips } from "@/components/PickExpiryChips";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -131,8 +133,23 @@ export default function Scanner() {
 
   const rows: SetupRow[] = useMemo(() => computeSetups(quotes).sort((a, b) => b.setupScore - a.setupScore), [quotes]);
 
+  // ── Pick Expiration Engine ────────────────────────────────────────────
+  // Track first-seen price/time for every scanner row. Force WAIT when RSI > 75.
+  // Hide rows that timed out without ever hitting GO.
+  const expiryInputs = useMemo<PickInputs[]>(() => rows.map((r) => ({
+    key: `scanner:${r.symbol}`,
+    price: r.price,
+    rsi: r.rsi,
+    verdict: r.crl?.verdict ?? null,
+    theta: null,             // scanner has no Greeks yet
+    confidence: null,
+  })), [rows]);
+  const expiryStatus = usePickExpiration(expiryInputs);
+
   const filtered = useMemo(() => {
     return rows.filter((r) => {
+      const exp = expiryStatus.get(`scanner:${r.symbol}`);
+      if (exp?.isTimedOut) return false;          // remove old setups
       if (filters.search && !r.symbol.includes(filters.search.toUpperCase()) && !r.name.toUpperCase().includes(filters.search.toUpperCase())) return false;
       if (filters.sector !== "all" && r.sector !== filters.sector) return false;
       if (filters.bias !== "all" && r.bias !== filters.bias) return false;
@@ -147,7 +164,7 @@ export default function Scanner() {
       if (filters.excludeEarnings && r.earningsInDays != null && r.earningsInDays <= 7) return false;
       return true;
     });
-  }, [rows, filters]);
+  }, [rows, filters, expiryStatus]);
 
   // Fire webhook for any NEW scanner row whose CRL verdict is GO.
   // Dedupe key includes the date so the same GO re-fires once per trading day.
