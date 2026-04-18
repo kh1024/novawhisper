@@ -193,7 +193,8 @@ export default function Dashboard() {
 
           <NewsFeed limit={6} title="Market News" />
 
-
+          <Card className="glass-card p-5">
+            <h2 className="text-sm font-semibold tracking-wide mb-3">Top Sectors</h2>
             <div className="space-y-2">
               {TOP_SECTORS.map((s) => {
                 const up = s.change >= 0;
