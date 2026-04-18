@@ -49,28 +49,40 @@ export default function Dashboard() {
       <Card className="glass-card p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
-          <span className="text-[11px] text-muted-foreground">8 instruments</span>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            {quotesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+            <span className="pill pill-bullish">
+              <ShieldAlert className="h-3 w-3" /> {verifiedCount}/{quotes.length} verified
+            </span>
+            <span>{etfs.length} ETFs</span>
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-          {etfs.map((e) => {
-            const up = e.change >= 0;
-            return (
-              <button
-                key={e.symbol}
-                onClick={() => setOpenSymbol(e.symbol)}
-                className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs font-semibold">{e.symbol}</span>
-                  <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
-                    {up ? "+" : ""}{e.changePct.toFixed(2)}%
-                  </span>
-                </div>
-                <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
-              </button>
-            );
-          })}
-        </div>
+        {etfs.length === 0 && !quotesLoading ? (
+          <div className="text-xs text-muted-foreground py-6 text-center">No ETF quotes available right now.</div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+            {etfs.map((e) => {
+              const up = e.change >= 0;
+              const meta = statusMeta(e.status);
+              return (
+                <button
+                  key={e.symbol}
+                  onClick={() => setOpenSymbol(e.symbol)}
+                  className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs font-semibold">{e.symbol}</span>
+                    <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
+                      {up ? "+" : ""}{e.changePct.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
+                  <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
