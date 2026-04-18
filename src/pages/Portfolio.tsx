@@ -467,9 +467,32 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
         <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-2.5">
           <div className="flex items-center justify-between gap-2 mb-2">
             <div className="text-[10px] uppercase tracking-widest text-warning flex items-center gap-1">
-              <FlaskConical className="h-3 w-3" /> Simulate price move
+              <FlaskConical className="h-3 w-3" /> Simulate {simMode === "pct" ? "price move" : "target P&L"}
             </div>
             <div className="flex items-center gap-2">
+              {/* Mode toggle */}
+              <div role="radiogroup" aria-label="Simulation mode" className="flex rounded border border-border bg-background/50 p-0.5">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={simMode === "pct"}
+                  onClick={() => setSimMode("pct")}
+                  className={cn("px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors",
+                    simMode === "pct" ? "bg-warning/20 text-warning" : "text-muted-foreground hover:text-foreground")}
+                >
+                  Move %
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={simMode === "pnl"}
+                  onClick={() => { setSimMode("pnl"); setTargetPnl(unrealized ?? 0); }}
+                  className={cn("px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors",
+                    simMode === "pnl" ? "bg-warning/20 text-warning" : "text-muted-foreground hover:text-foreground")}
+                >
+                  Target $
+                </button>
+              </div>
               <span className={cn(
                 "font-mono text-[11px] tabular-nums px-1.5 py-0.5 rounded border",
                 simOffsetPct === 0
@@ -482,7 +505,7 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
               </span>
               {isSimulating && (
                 <button
-                  onClick={() => setSimOffsetPct(0)}
+                  onClick={() => { setSimOffsetPct(0); setTargetPnl(0); }}
                   className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
                 >
                   reset
@@ -490,17 +513,62 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
               )}
             </div>
           </div>
-          <Slider
-            value={[simOffsetPct]}
-            min={-20}
-            max={20}
-            step={0.5}
-            onValueChange={(v) => setSimOffsetPct(+v[0].toFixed(1))}
-            className="my-1"
-          />
-          <div className="flex justify-between text-[9px] font-mono text-muted-foreground mt-1">
-            <span>−20%</span><span>−10%</span><span className="opacity-60">0</span><span>+10%</span><span>+20%</span>
-          </div>
+          {simMode === "pct" ? (
+            <>
+              <Slider
+                value={[simOffsetPct]}
+                min={-20}
+                max={20}
+                step={0.5}
+                onValueChange={(v) => setSimOffsetPct(+v[0].toFixed(1))}
+                className="my-1"
+              />
+              <div className="flex justify-between text-[9px] font-mono text-muted-foreground mt-1">
+                <span>−20%</span><span>−10%</span><span className="opacity-60">0</span><span>+10%</span><span>+20%</span>
+              </div>
+            </>
+          ) : (
+            <>
+              {(() => {
+                // Compute reachable P&L range so the slider snaps to what's actually possible.
+                const lo = Math.min(worstCase ?? 0, bestCase ?? 0);
+                const hi = Math.max(worstCase ?? 0, bestCase ?? 0);
+                // Pad slightly so user can pull beyond ±10% extremes (full ±20% solver range).
+                const padLo = Math.floor(lo * 1.6 / 10) * 10;
+                const padHi = Math.ceil(hi * 1.6 / 10) * 10;
+                const minBound = Math.min(padLo, -10);
+                const maxBound = Math.max(padHi, 10);
+                const step = Math.max(1, Math.round((maxBound - minBound) / 200));
+                return (
+                  <>
+                    <Slider
+                      value={[Math.max(minBound, Math.min(maxBound, targetPnl))]}
+                      min={minBound}
+                      max={maxBound}
+                      step={step}
+                      onValueChange={(v) => setTargetPnl(Math.round(v[0]))}
+                      className="my-1"
+                    />
+                    <div className="flex justify-between text-[9px] font-mono text-muted-foreground mt-1">
+                      <span>{fmtUsd(minBound)}</span>
+                      <span className="opacity-60">$0</span>
+                      <span>{fmtUsd(maxBound)}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between rounded border border-warning/30 bg-warning/5 px-2 py-1 text-[10px] font-mono">
+                      <span className="text-muted-foreground uppercase tracking-wider text-[9px]">Target P&amp;L</span>
+                      <span className={cn("font-semibold", targetPnl >= 0 ? "text-bullish" : "text-bearish")}>{fmtUsd(targetPnl)}</span>
+                      <span className="text-muted-foreground/60">→ needs</span>
+                      <span className={cn("font-semibold", simOffsetPct >= 0 ? "text-bullish" : "text-bearish")}>
+                        {simOffsetPct > 0 ? "+" : ""}{simOffsetPct.toFixed(1)}% spot
+                      </span>
+                      <span className="text-muted-foreground/60">·</span>
+                      <span className="text-foreground/80">${(realSpot * (1 + simOffsetPct / 100)).toFixed(2)}</span>
+                    </div>
+                  </>
+                );
+              })()}
+            </>
+          )}
           {(worstCase != null || bestCase != null) && (
             <div className="mt-2 flex items-center justify-between gap-2 rounded border border-border/60 bg-background/40 px-2 py-1 text-[10px] font-mono">
               <span className="flex items-center gap-1">
@@ -519,7 +587,9 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
             </div>
           )}
           <div className="text-[9px] text-muted-foreground mt-1.5 leading-tight">
-            Drag to project P&amp;L at any underlying move — Nova's verdict still uses real spot.
+            {simMode === "pct"
+              ? "Drag to project P&L at any underlying move — Nova's verdict still uses real spot."
+              : "Drag a target P&L $ — we solve for the underlying move required to get there."}
           </div>
         </div>
       )}
