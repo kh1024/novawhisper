@@ -1,4 +1,4 @@
-import { LayoutDashboard, Radar, Microscope, Layers, Briefcase, BookText, BellRing, Brain, Settings as SettingsIcon, GripVertical, RotateCcw, Globe, Activity } from "lucide-react";
+import { LayoutDashboard, Radar, Microscope, Layers, Briefcase, BookText, BellRing, Brain, Settings as SettingsIcon, GripVertical, RotateCcw, Globe, Activity, Compass } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
