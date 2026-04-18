@@ -83,6 +83,108 @@ export type Database = {
         }
         Relationships: []
       }
+      verdict_alert_log: {
+        Row: {
+          created_at: string
+          error: string | null
+          from_signal: string
+          id: string
+          ok: boolean
+          owner_key: string
+          position_id: string | null
+          source: string
+          symbol: string
+          to_signal: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          from_signal: string
+          id?: string
+          ok: boolean
+          owner_key: string
+          position_id?: string | null
+          source?: string
+          symbol: string
+          to_signal: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          from_signal?: string
+          id?: string
+          ok?: boolean
+          owner_key?: string
+          position_id?: string | null
+          source?: string
+          symbol?: string
+          to_signal?: string
+        }
+        Relationships: []
+      }
+      verdict_alert_state: {
+        Row: {
+          last_changed_at: string
+          last_signal: string
+          owner_key: string
+          position_id: string
+          symbol: string
+          updated_at: string
+        }
+        Insert: {
+          last_changed_at?: string
+          last_signal: string
+          owner_key: string
+          position_id: string
+          symbol: string
+          updated_at?: string
+        }
+        Update: {
+          last_changed_at?: string
+          last_signal?: string
+          owner_key?: string
+          position_id?: string
+          symbol?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      verdict_cron_config: {
+        Row: {
+          alert_on_wait: boolean
+          created_at: string
+          enabled: boolean
+          id: string
+          last_run_at: string | null
+          last_run_status: string | null
+          owner_key: string
+          updated_at: string
+          webhook_url: string | null
+        }
+        Insert: {
+          alert_on_wait?: boolean
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_status?: string | null
+          owner_key: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Update: {
+          alert_on_wait?: boolean
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_run_at?: string | null
+          last_run_status?: string | null
+          owner_key?: string
+          updated_at?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       web_picks: {
         Row: {
           created_at: string
