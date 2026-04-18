@@ -98,6 +98,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   // Ask Nova AI explanation
   const [novaText, setNovaText] = useState<string>("");
+  const [novaCard, setNovaCard] = useState<NovaCard | null>(null);
   const [novaLoading, setNovaLoading] = useState(false);
   const [budget, setBudget] = useBudget();
   const [settings] = useSettings();
@@ -106,6 +107,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
     if (!symbol || !q) return;
     setNovaLoading(true);
     setNovaText("");
+    setNovaCard(null);
     try {
       const { data, error } = await supabase.functions.invoke("ask-nova", {
         body: {
@@ -140,6 +142,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
         },
       });
       if (error) throw error;
+      setNovaCard((data?.card as NovaCard) ?? null);
       setNovaText(data?.explanation ?? "");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to reach Nova";
@@ -151,7 +154,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   // Auto-generate Nova when drawer opens with live data ready
   useEffect(() => {
-    if (symbol && q && !novaText && !novaLoading) {
+    if (symbol && q && !novaText && !novaCard && !novaLoading) {
       generateNova();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,6 +163,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   // Reset Nova when symbol changes
   useEffect(() => {
     setNovaText("");
+    setNovaCard(null);
   }, [symbol]);
 
   const status = q ? statusMeta(q.status) : null;
