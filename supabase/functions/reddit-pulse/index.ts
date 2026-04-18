@@ -142,10 +142,76 @@ async function fetchRss(sub: string, sort: string, limit: number): Promise<Reddi
   } catch (e) { console.warn(`[reddit-rss] ${sub}/${sort} fetch error`, e); return []; }
 }
 
+// Firecrawl fallback — Reddit blocks Supabase Edge Function IPs on JSON+RSS,
+// but Firecrawl scrapes via residential proxies that succeed. Costs credits.
+async function fetchFirecrawl(sub: string, sort: string, limit: number): Promise<RedditChild["data"][]> {
+  const key = Deno.env.get("FIRECRAWL_API_KEY");
+  if (!key) return [];
+  const target = `https://old.reddit.com/r/${sub}/${sort}/`;
+  try {
+    const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url: target, formats: ["markdown", "links"], onlyMainContent: true }),
+    });
+    if (!r.ok) {
+      console.warn(`[reddit-firecrawl] ${sub}/${sort} ${r.status} ${await r.text().catch(() => "")}`);
+      return [];
+    }
+    const j = await r.json();
+    // Firecrawl v2 returns { success, data: { markdown, links, metadata } }
+    const md: string = j?.data?.markdown ?? j?.markdown ?? "";
+    const links: string[] = j?.data?.links ?? j?.links ?? [];
+    if (!md) return [];
+
+    // Extract post permalinks for this sub from links
+    const permalinkRe = new RegExp(`/r/${sub}/comments/([a-z0-9]+)/([a-z0-9_-]+)/?`, "i");
+    const postLinks = [...new Set(links.filter((l) => permalinkRe.test(l)))].slice(0, limit);
+
+    // Walk markdown and pair each post link with the nearest preceding heading/title text.
+    // old.reddit listings render each post title as a markdown link. We split on links.
+    const out: RedditChild["data"][] = [];
+    const lines = md.split("\n");
+    for (const link of postLinks) {
+      const m = link.match(permalinkRe);
+      if (!m) continue;
+      const id = m[1];
+      const slug = m[2].replace(/[-_]/g, " ");
+      // Find the line containing this link to grab nearby title text
+      const lineIdx = lines.findIndex((l) => l.includes(link));
+      let title = slug;
+      if (lineIdx >= 0) {
+        const ln = lines[lineIdx];
+        const titleMatch = ln.match(/\[([^\]]+)\]\([^)]*comments\/[^)]+\)/);
+        if (titleMatch) title = titleMatch[1].trim();
+      }
+      out.push({
+        id,
+        title,
+        selftext: "",
+        permalink: link.replace(/^https?:\/\/(www|old)\.reddit\.com/, ""),
+        score: 0, num_comments: 0,
+        created_utc: Math.floor(Date.now() / 1000),
+        author: "",
+        subreddit: sub,
+        link_flair_text: null,
+        upvote_ratio: undefined,
+        stickied: false,
+      });
+    }
+    return out;
+  } catch (e) {
+    console.warn(`[reddit-firecrawl] ${sub}/${sort} fetch error`, e);
+    return [];
+  }
+}
+
 async function fetchSub(sub: string, sort: string, limit: number) {
   const json = await fetchJson(sub, sort, limit);
   if (json && json.length) return json;
-  return await fetchRss(sub, sort, limit);
+  const rss = await fetchRss(sub, sort, limit);
+  if (rss.length) return rss;
+  return await fetchFirecrawl(sub, sort, limit);
 }
 
 Deno.serve(async (req) => {
