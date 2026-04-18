@@ -121,14 +121,16 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
   });
 }
 
-// Massive snapshot endpoint (Polygon-compatible).
-// Returns: { ticker: { day: {c,o,h,l,v}, prevDay: {c}, todaysChange, todaysChangePerc } }
+// Massive previous-day aggregate (works on free/basic plans).
+// GET /v2/aggs/ticker/{SYMBOL}/prev → { results: [{ o,h,l,c,v }] }
+// We use prevDay close as the "Massive price" for cross-checking. It's a 1-day-old
+// reference but if Finnhub's intraday is way off Massive's prev-close, we flag it.
 async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
   if (!MASSIVE_KEY) return null;
   const cached = massiveCache.get(symbol);
   if (cached && Date.now() - cached.at < MASSIVE_TTL_MS) return cached.q;
   try {
-    const url = `https://api.massive.com/v3/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(symbol)}`;
+    const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true`;
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
     });
@@ -144,25 +146,17 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
       return cached?.q ?? null;
     }
     const d = await r.json();
-    const t = d?.ticker ?? {};
-    // Prefer last trade / min close, fallback to day close, then prevDay.
-    const lastTrade = Number(t?.lastTrade?.p);
-    const minClose = Number(t?.min?.c);
-    const dayClose = Number(t?.day?.c);
-    const prevClose = Number(t?.prevDay?.c);
-    const price =
-      isFinite(lastTrade) && lastTrade > 0 ? lastTrade :
-      isFinite(minClose) && minClose > 0 ? minClose :
-      isFinite(dayClose) && dayClose > 0 ? dayClose :
-      isFinite(prevClose) && prevClose > 0 ? prevClose : 0;
-    if (!isFinite(price) || price === 0) {
+    const row = Array.isArray(d?.results) ? d.results[0] : null;
+    const close = Number(row?.c);
+    const open = Number(row?.o);
+    if (!isFinite(close) || close === 0) {
       massiveCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
       return cached?.q ?? null;
     }
-    const change = Number(t?.todaysChange ?? (isFinite(prevClose) ? price - prevClose : 0));
-    const changePct = Number(t?.todaysChangePerc ?? (isFinite(prevClose) && prevClose ? ((price - prevClose) / prevClose) * 100 : 0));
-    const volume = Number(t?.day?.v ?? 0);
-    const q: SourceQuote = { source: "massive", price, change, changePct, volume };
+    const change = isFinite(open) ? close - open : 0;
+    const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
+    const volume = Number(row?.v ?? 0);
+    const q: SourceQuote = { source: "massive", price: close, change, changePct, volume };
     massiveCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
