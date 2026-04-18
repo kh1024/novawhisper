@@ -21,6 +21,33 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
+import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+
+// Build a sensible default options contract from a scanner row so the user can
+// save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
+// option type follows the row's bias (bullish → call, bearish → put,
+// neutral/reversal → call by default).
+function deriveContractFromRow(r: SetupRow) {
+  const optionType = r.bias === "bearish" ? "put" : "call";
+  // ATM-ish: round to nearest dollar (or nearest $5 for stocks > $100).
+  const step = r.price >= 100 ? 5 : 1;
+  const strike = Math.max(step, Math.round(r.price / step) * step);
+  // Next Friday at least 28 days out.
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 28);
+  while (d.getUTCDay() !== 5) d.setUTCDate(d.getUTCDate() + 1);
+  const expiry = d.toISOString().slice(0, 10);
+  return {
+    symbol: r.symbol,
+    optionType,
+    direction: "long",
+    strike,
+    expiry,
+    entryUnderlying: r.price,
+    thesis: r.crl?.reason || `${r.bias} setup · score ${r.setupScore}`,
+    source: "scanner" as const,
+  };
+}
 
 type View = "table" | "cards";
 
