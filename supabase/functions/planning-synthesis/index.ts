@@ -48,20 +48,15 @@ Deno.serve(async (req) => {
 
     // 3) Build a compact summary for the LLM
     const merged = symbols.map((sym) => {
-      const r = redditTickers.find((t) => t.symbol === sym);
       const y = ytTickers.find((t) => t.symbol === sym);
       const q = quoteMap.get(sym);
       return {
         symbol: sym,
-        reddit: r ? { mentions: r.mentions, bias: r.bias, heat: r.heat } : null,
         youtube: y ? { mentions: y.mentions, bias: y.bias, heat: y.heat } : null,
         quote: q ? { price: q.price, changePct: Number(q.changePct.toFixed(2)), volume: q.volume, status: q.status } : null,
       };
     });
 
-    const topRedditPosts = (reddit?.posts ?? []).slice(0, 10).map((p: { title: string; sub: string; score: number; tickers: string[] }) => ({
-      title: p.title.slice(0, 140), sub: p.sub, score: p.score, tickers: p.tickers,
-    }));
     const topVideos = (youtube?.videos ?? []).slice(0, 6).map((v: { title: string; channel: string; views: number; tickers: string[] }) => ({
       title: v.title.slice(0, 140), channel: v.channel, views: v.views, tickers: v.tickers,
     }));
