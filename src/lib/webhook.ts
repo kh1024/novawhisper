@@ -90,7 +90,7 @@ export async function dispatchVerdictTransitions({ settings, verdicts, positions
     // First-ever sighting: only alert if it's a GO/EXIT (or WAIT when opted in)
     const isFirstSighting = prev === undefined;
     const shouldFire =
-      sig === "GO" || sig === "EXIT" ||
+      sig === "GO" || sig === "EXIT" || sig === "NO" ||
       (sig === "WAIT" && settings.webhookOnWait && !isFirstSighting);
     if (!shouldFire) continue;
     if (isFirstSighting && sig === "WAIT") continue;
@@ -98,7 +98,8 @@ export async function dispatchVerdictTransitions({ settings, verdicts, positions
     const symbol = symBy.get(v.id) ?? "?";
     const headline =
       sig === "GO"   ? `🟢 GO — ${symbol}` :
-      sig === "EXIT" ? `🚨 EXIT — ${symbol}` :
+      sig === "EXIT" ? `🚨 EXIT — ${symbol} (broke 8-EMA)` :
+      sig === "NO"   ? `⛔ NO — ${symbol} (time decay trap)` :
                        `⏳ WAIT — ${symbol}`;
     const payload = {
       event: "nova_verdict_transition",
