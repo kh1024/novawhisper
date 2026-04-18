@@ -24,6 +24,7 @@ export interface AppSettings {
   feePerContract: number;     // per contract, per side (entry & exit each charged)
   feePerTrade: number;        // flat per trade, per side
   regulatoryFeePerContract: number; // ORF/OCC/SEC pass-through, per side
+  paperMode: boolean;         // when true, new saves are tagged is_paper=true
 }
 
 export type BrokerPreset = "robinhood" | "webull" | "schwab" | "ibkr" | "tastytrade" | "custom";
