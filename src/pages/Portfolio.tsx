@@ -574,7 +574,30 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
             ⚠ Risk Alert: +{crl.valuationAlert.premiumPct?.toFixed(1)}% vs intrinsic
           </span>
         )}
-        {crl.stopLossTriggered && (
+        {crl.trendGateBroken && (
+          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/15 text-bearish border-bearish/40"
+            title="Price is below 200-day SMA — long-term trend broken, no calls.">
+            ⛔ Trend Gate
+          </span>
+        )}
+        {crl.highPremium && (
+          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-warning/15 text-warning border-warning/40"
+            title={`IV Percentile ${metrics?.ivPercentile ?? "?"}% — you may be overpaying for premium.`}>
+            💰 High Premium{metrics?.ivPercentile != null ? ` · IVP ${metrics.ivPercentile}%` : ""}
+          </span>
+        )}
+        {crl.openingRange && (
+          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-muted/40 text-muted-foreground border-border"
+            title="Before 10:30 AM ET — opening range is noisy. GO signals downgraded to WAIT.">
+            🕘 Opening Range Testing
+          </span>
+        )}
+        {crl.premiumStopTriggered && (
+          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/25 text-bearish border-bearish/50 animate-pulse">
+            🛑 −30% Hard Stop
+          </span>
+        )}
+        {crl.stopLossTriggered && !crl.premiumStopTriggered && (
           <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/20 text-bearish border-bearish/50 animate-pulse">
             🚨 SELL AT LOSS
           </span>
@@ -587,10 +610,12 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-mono text-muted-foreground pt-1 border-t border-border/40">
           {metrics.rsi14 != null && <span>RSI {metrics.rsi14.toFixed(0)}</span>}
           {metrics.ema8 != null && <span>8-EMA ${metrics.ema8.toFixed(2)}</span>}
+          {metrics.sma200 != null && <span>200-SMA ${metrics.sma200.toFixed(2)}</span>}
           {crl.emaDistancePct != null && <span className={crl.emaDistancePct >= 0 ? "text-bullish" : "text-bearish"}>{crl.emaDistancePct >= 0 ? "+" : ""}{crl.emaDistancePct.toFixed(1)}% vs 8-EMA</span>}
           {metrics.delta != null && <span>Δ {metrics.delta.toFixed(2)}</span>}
           {metrics.theta != null && <span>Θ {metrics.theta.toFixed(2)}</span>}
           {metrics.iv != null && <span>IV {(metrics.iv * 100).toFixed(0)}%</span>}
+          {metrics.ivPercentile != null && <span>IVP {metrics.ivPercentile}%</span>}
           {metrics.dte != null && <span>{metrics.dte}d DTE</span>}
         </div>
       )}
