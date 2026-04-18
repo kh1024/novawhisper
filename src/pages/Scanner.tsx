@@ -507,12 +507,6 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
               <ExternalLink className="h-3 w-3" /> Robinhood
             </a>
           </Button>
-              rel="noopener noreferrer"
-              aria-label={`Open ${row.symbol} on Robinhood`}
-            >
-              <ExternalLink className="h-3 w-3" /> Robinhood
-            </a>
-          </Button>
         </div>
       </div>
     </div>
