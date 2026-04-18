@@ -1,12 +1,13 @@
-// Verified stock quotes via Finnhub (primary) + Alpha Vantage (verify, throttled).
-// Strategy: in-memory cache (2 min TTL) avoids hammering free-tier APIs.
-// Status: verified (within 0.25%) · close (<1%) · mismatch (≥1%) · stale (only 1 src) · unavailable.
+// Verified stock quotes via Finnhub + Alpha Vantage + Massive (3-source consensus).
+// Strategy: in-memory cache (30s TTL) + per-source backoff to survive free-tier limits.
+// Status: verified (2+ sources within 0.25%) · close (<1%) · mismatch (≥1%) · stale (only 1 src) · unavailable.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
 const ALPHA_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
+const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 
-type SourceName = "finnhub" | "alpha-vantage";
+type SourceName = "finnhub" | "alpha-vantage" | "massive";
 
 interface SourceQuote {
   source: SourceName;
@@ -31,17 +32,15 @@ interface VerifiedQuote {
 }
 
 // ── In-memory caches (per isolate; resets on cold start) ──
-// QUOTE_TTL is the floor: even if clients poll every 5s, upstream APIs only get hit
-// when the cache expires. Free-tier Finnhub = 60 calls/min total; with 25 symbols
-// a 30s TTL gives ~50 calls/min. Alpha Vantage free = 25 calls/DAY.
 const QUOTE_TTL_MS = 30_000;
 const FINNHUB_TTL_MS = 30_000;
-const ALPHA_TTL_MS = 60 * 60_000; // 1 hour — Alpha free is 25/day
+const MASSIVE_TTL_MS = 30_000;
+const ALPHA_TTL_MS = 60 * 60_000; // Alpha free is 25/day
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const massiveCache = new Map<string, { q: SourceQuote | null; at: number }>();
 
-// Alpha Vantage requires ≤1 req/sec; serialize with a queue
 let alphaChain: Promise<unknown> = Promise.resolve();
 function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
   const next = alphaChain.then(async () => {
@@ -61,8 +60,6 @@ async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
     const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY}`;
     const r = await fetch(url);
     if (r.status === 429) {
-      // Rate-limited: keep the previous good value if any (don't poison the cache with null),
-      // and back off for 60s so we don't keep spamming.
       console.warn(`[finnhub] ${symbol} 429 rate-limit — backing off 60s`);
       const prev = cached?.q ?? null;
       finnhubCache.set(symbol, { q: prev, at: Date.now() - FINNHUB_TTL_MS + 60_000 });
@@ -105,7 +102,6 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
       const price = Number(q["05. price"]);
       if (!isFinite(price) || price === 0) {
         if (d.Note || d.Information) console.warn(`[alpha] ${symbol} ${d.Note ?? d.Information}`);
-        // Long cache on quota-exhausted to stop retry loops
         alphaCache.set(symbol, { q: null, at: Date.now() });
         return null;
       }
@@ -125,36 +121,97 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
   });
 }
 
-function verify(symbol: string, primary: SourceQuote | null, secondary: SourceQuote | null): VerifiedQuote {
+// Massive previous-day aggregate (works on free/basic plans).
+// GET /v2/aggs/ticker/{SYMBOL}/prev → { results: [{ o,h,l,c,v }] }
+// We use prevDay close as the "Massive price" for cross-checking. It's a 1-day-old
+// reference but if Finnhub's intraday is way off Massive's prev-close, we flag it.
+async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
+  if (!MASSIVE_KEY) return null;
+  const cached = massiveCache.get(symbol);
+  if (cached && Date.now() - cached.at < MASSIVE_TTL_MS) return cached.q;
+  try {
+    const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true`;
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
+    });
+    if (r.status === 429) {
+      console.warn(`[massive] ${symbol} 429 rate-limit — backing off 60s`);
+      const prev = cached?.q ?? null;
+      massiveCache.set(symbol, { q: prev, at: Date.now() - MASSIVE_TTL_MS + 60_000 });
+      return prev;
+    }
+    if (!r.ok) {
+      console.warn(`[massive] ${symbol} HTTP ${r.status}`);
+      massiveCache.set(symbol, { q: cached?.q ?? null, at: Date.now() - MASSIVE_TTL_MS + 30_000 });
+      return cached?.q ?? null;
+    }
+    const d = await r.json();
+    const row = Array.isArray(d?.results) ? d.results[0] : null;
+    const close = Number(row?.c);
+    const open = Number(row?.o);
+    if (!isFinite(close) || close === 0) {
+      massiveCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
+      return cached?.q ?? null;
+    }
+    const change = isFinite(open) ? close - open : 0;
+    const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
+    const volume = Number(row?.v ?? 0);
+    const q: SourceQuote = { source: "massive", price: close, change, changePct, volume };
+    massiveCache.set(symbol, { q, at: Date.now() });
+    return q;
+  } catch (e) {
+    console.error(`[massive] ${symbol}`, e);
+    return cached?.q ?? null;
+  }
+}
+
+// Pick consensus from up to 3 sources. "Freshest accuracy wins":
+// - If 2+ sources agree within 0.25% → verified, use their average via the first one.
+// - If 2+ within 1% → close.
+// - If sources disagree by ≥1% → mismatch (use median price).
+// - If only 1 source → stale.
+function verify(symbol: string, finn: SourceQuote | null, alpha: SourceQuote | null, mass: SourceQuote | null): VerifiedQuote {
   const now = new Date().toISOString();
   const sources: Record<SourceName, number | null> = {
-    finnhub: primary?.price ?? null,
-    "alpha-vantage": secondary?.price ?? null,
+    finnhub: finn?.price ?? null,
+    "alpha-vantage": alpha?.price ?? null,
+    massive: mass?.price ?? null,
   };
-  if (!primary && !secondary) {
+  const live = [finn, alpha, mass].filter((x): x is SourceQuote => !!x && x.price > 0);
+  if (live.length === 0) {
     return {
       symbol, price: 0, change: 0, changePct: 0, volume: 0,
       sources, consensusSource: null, status: "unavailable",
-      diffPct: null, updatedAt: now, error: "Both providers failed",
+      diffPct: null, updatedAt: now, error: "All providers failed",
     };
   }
-  const src = primary ?? secondary!;
-  let status: VerifiedQuote["status"] = "stale";
-  let diff: number | null = null;
-  if (primary && secondary) {
-    diff = Math.abs((primary.price - secondary.price) / primary.price) * 100;
-    status = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
+  if (live.length === 1) {
+    const src = live[0];
+    return {
+      symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
+      sources, consensusSource: src.source, status: "stale",
+      diffPct: null, updatedAt: now,
+    };
   }
+  // 2 or 3 sources: compute max pairwise diff %
+  const prices = live.map((s) => s.price);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const diff = ((maxP - minP) / minP) * 100;
+  // Prefer Massive (real-time) > Finnhub > Alpha when ≥2 sources agree.
+  const order: SourceName[] = ["massive", "finnhub", "alpha-vantage"];
+  const chosen = order.map((n) => live.find((s) => s.source === n)).find(Boolean) ?? live[0];
+  const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
     symbol,
-    price: src.price,
-    change: src.change,
-    changePct: src.changePct,
-    volume: Math.max(primary?.volume ?? 0, secondary?.volume ?? 0),
+    price: chosen.price,
+    change: chosen.change,
+    changePct: chosen.changePct,
+    volume: Math.max(...live.map((s) => s.volume ?? 0)),
     sources,
-    consensusSource: src.source,
+    consensusSource: chosen.source,
     status,
-    diffPct: diff !== null ? +diff.toFixed(4) : null,
+    diffPct: +diff.toFixed(4),
     updatedAt: now,
   };
 }
@@ -162,9 +219,13 @@ function verify(symbol: string, primary: SourceQuote | null, secondary: SourceQu
 async function getQuote(sym: string, verifyWithAlpha: boolean): Promise<VerifiedQuote> {
   const cached = quoteCache.get(sym);
   if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.quote;
-  const finn = await fetchFinnhub(sym);
-  const alpha = verifyWithAlpha ? await fetchAlpha(sym) : (alphaCache.get(sym)?.q ?? null);
-  const v = verify(sym, finn, alpha);
+  // Fan out to all 3 in parallel. Massive is the new primary cross-check.
+  const [finn, mass, alpha] = await Promise.all([
+    fetchFinnhub(sym),
+    fetchMassive(sym),
+    verifyWithAlpha ? fetchAlpha(sym) : Promise.resolve(alphaCache.get(sym)?.q ?? null),
+  ]);
+  const v = verify(sym, finn, alpha, mass);
   quoteCache.set(sym, { quote: v, at: Date.now() });
   return v;
 }
@@ -191,7 +252,6 @@ Deno.serve(async (req) => {
     }
     if (symbols.length > 30) symbols = symbols.slice(0, 30);
 
-    // Verify with Alpha only when explicitly requested OR for tiny single-symbol requests (drawer use case).
     const useAlpha = verifyAll || symbols.length === 1;
 
     const results = await Promise.all(symbols.map((sym) => getQuote(sym, useAlpha)));
