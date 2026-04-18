@@ -142,6 +142,9 @@ async function fetchRss(sub: string, sort: string, limit: number): Promise<Reddi
   } catch (e) { console.warn(`[reddit-rss] ${sub}/${sort} fetch error`, e); return []; }
 }
 
+// NOTE: Reddit blocks Supabase Edge Function IPs on JSON+RSS, and Firecrawl
+// refuses to scrape reddit.com ("we do not support this site"). The only
+// working path is Reddit OAuth via oauth.reddit.com. See planning page docs.
 async function fetchSub(sub: string, sort: string, limit: number) {
   const json = await fetchJson(sub, sort, limit);
   if (json && json.length) return json;
