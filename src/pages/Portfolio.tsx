@@ -239,6 +239,8 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
         </div>
       </div>
 
+      {verdict?.crl && <CrlPanel crl={verdict.crl} metrics={verdict.metrics} />}
+
       {verdict && (
         <div className={cn("mt-3 rounded-md border p-2.5", statusClass(verdict.status))}>
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest">
