@@ -18,7 +18,15 @@ interface SourceQuote {
   change: number;
   changePct: number;
   volume: number;
+  // Extended hours (only Yahoo populates these today)
+  preMarketPrice?: number | null;
+  preMarketChangePct?: number | null;
+  postMarketPrice?: number | null;
+  postMarketChangePct?: number | null;
+  marketState?: string | null;     // "PRE" | "REGULAR" | "POST" | "CLOSED" | "PREPRE" | "POSTPOST"
 }
+
+export type Session = "pre" | "regular" | "post" | "closed";
 
 interface VerifiedQuote {
   symbol: string;
@@ -31,6 +39,15 @@ interface VerifiedQuote {
   status: "verified" | "close" | "mismatch" | "stale" | "unavailable";
   diffPct: number | null;
   updatedAt: string;
+  // Extended hours
+  session: Session;
+  preMarketPrice: number | null;
+  preMarketChangePct: number | null;
+  postMarketPrice: number | null;
+  postMarketChangePct: number | null;
+  /** Most-relevant extended price for the current session (null in regular/closed). */
+  extendedPrice: number | null;
+  extendedChangePct: number | null;
   error?: string;
 }
 
