@@ -1,7 +1,9 @@
 import { Card } from "@/components/ui/card";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play } from "lucide-react";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
+import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
 import { toast } from "sonner";
+
 import { useBudget } from "@/lib/budget";
 import { useState, useEffect } from "react";
 import {
@@ -552,6 +554,146 @@ export default function Settings() {
           </div>
         </details>
       </Card>
+
+      {/* ───────────── Background cron (server-side, runs even when app closed) ───────────── */}
+      <BackgroundCronCard />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Background verdict cron card
+// ─────────────────────────────────────────────────────────────────────────────
+function BackgroundCronCard() {
+  const { data: cfg, isLoading } = useVerdictCronConfig();
+  const { data: log = [] } = useVerdictCronLog(30);
+  const save = useSaveVerdictCronConfig();
+  const [url, setUrl] = useState<string | null>(null);
+  const [running, setRunning] = useState(false);
+
+  const enabled = cfg?.enabled ?? false;
+  const webhookUrl = url ?? cfg?.webhookUrl ?? "";
+  const alertOnWait = cfg?.alertOnWait ?? false;
+
+  const persist = (patch: Parameters<typeof save.mutate>[0]) =>
+    save.mutate(
+      { enabled, webhookUrl, alertOnWait, ...patch },
+      {
+        onSuccess: () => toast.success("Background alerts saved"),
+        onError: (e) => toast.error(`Save failed: ${(e as Error).message}`),
+      },
+    );
+
+  return (
+    <Card className="glass-card p-6 space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Clock3 className="h-4 w-4 text-primary" /> Background alerts (runs every 5 min, market hours)
+        </h2>
+        <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+          When enabled, our server runs the verdict check on a 5-minute cron from 9:30 AM to 4:00 PM ET (Mon–Fri)
+          and POSTs the same WAIT→GO / EXIT alerts to your webhook — even when this app is closed.
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading background config…
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Webhook URL (server-side)</div>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="url"
+                placeholder="https://hook.eu2.make.com/..."
+                value={webhookUrl}
+                onChange={(e) => setUrl(e.target.value)}
+                onBlur={() => persist({ webhookUrl })}
+                className="flex-1 min-w-[280px] h-10 px-3 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <button
+                disabled={!webhookUrl || running}
+                onClick={async () => {
+                  setRunning(true);
+                  const r = await runVerdictCronNow();
+                  setRunning(false);
+                  if (r.ok) toast.success("Cron run triggered — check log below.");
+                  else toast.error(`Run failed: ${r.error}`);
+                }}
+                className="h-10 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              >
+                {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                Run now
+              </button>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-2 pt-2 border-t border-border/40">
+            <button
+              onClick={() => persist({ enabled: !enabled })}
+              className={`text-left p-3 rounded-lg border transition-all ${
+                enabled ? "border-primary bg-primary/10" : "border-border bg-surface/30 hover:border-primary/40"
+              }`}
+            >
+              <div className="text-sm font-medium flex items-center gap-2">
+                {enabled ? "Background cron ON" : "Background cron OFF"}
+                {enabled && <Check className="h-3.5 w-3.5 text-primary" />}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Server fires alerts every 5 min during market hours.</div>
+            </button>
+            <button
+              onClick={() => persist({ alertOnWait: !alertOnWait })}
+              className={`text-left p-3 rounded-lg border transition-all ${
+                alertOnWait ? "border-primary bg-primary/10" : "border-border bg-surface/30 hover:border-primary/40"
+              }`}
+            >
+              <div className="text-sm font-medium flex items-center gap-2">
+                Also alert on new WAIT
+                {alertOnWait && <Check className="h-3.5 w-3.5 text-primary" />}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">Off by default — keeps signal clean.</div>
+            </button>
+          </div>
+
+          {cfg?.lastRunAt && (
+            <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3 font-mono">
+              Last server run: {new Date(cfg.lastRunAt).toLocaleString()} · {cfg.lastRunStatus ?? "—"}
+            </div>
+          )}
+
+          {log.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3">
+              No background alerts yet. Enable the cron above and add at least one open position.
+            </div>
+          ) : (
+            <div className="space-y-2 pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Background alerts ({log.length})</div>
+                <button
+                  onClick={async () => { await clearVerdictCronLog(); toast.success("Log cleared."); }}
+                  className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  <Trash2 className="h-3 w-3" /> Clear
+                </button>
+              </div>
+              <div className="space-y-1 max-h-56 overflow-y-auto">
+                {log.map((e) => (
+                  <div key={e.id} className="flex items-center gap-2 text-[11px] font-mono p-2 rounded border border-border/60 bg-surface/30">
+                    <span className={e.ok ? "text-bullish" : "text-bearish"}>{e.ok ? "✓" : "✗"}</span>
+                    <span className="text-muted-foreground">{new Date(e.createdAt).toLocaleString()}</span>
+                    <span className="font-semibold">{e.symbol}</span>
+                    <span className="text-muted-foreground">{e.fromSignal} → {e.toSignal}</span>
+                    <span className="ml-auto text-[10px] uppercase tracking-wider text-primary/70">{e.source}</span>
+                    {e.error && <span className="text-bearish truncate">{e.error}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
