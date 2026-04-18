@@ -26,7 +26,7 @@ interface MeterCard {
 
 const TONE_STYLES: Record<Tone, { bar: string; text: string; pillBg: string; ring: string }> = {
   good: { bar: "bg-bullish", text: "text-bullish", pillBg: "bg-bullish/15", ring: "ring-bullish/40" },
-  ok:   { bar: "bg-warning", text: "text-warning", pillBg: "bg-warning/15", ring: "ring-warning/40" },
+  ok:   { bar: "bg-neutral", text: "text-neutral", pillBg: "bg-neutral/15", ring: "ring-neutral/40" },
   bad:  { bar: "bg-bearish", text: "text-bearish", pillBg: "bg-bearish/15", ring: "ring-bearish/40" },
 };
 
