@@ -65,7 +65,14 @@ ANTI-FLUFF RULE: If a claim sounds sophisticated but cannot be tied to (a) a dir
 Narrative phrases to flag (non-exhaustive): "structural necessity", "wall of demand", "capex backbone", "grid constraint pressure", "inevitable secular tailwind", "Energy Wall", "hyperscaler capex thesis", "intrinsic equilibrium", "supercycle".
 Quote any such phrase literally in WHAT DOES NOT HOLD UP and label it "narrative, not evidence".
 
-D. EVALUATE EACH CONTRACT — strike distance, delta, theta, DTE, required move magnitude, IV sensitivity, liquidity, spread quality, probability of underperforming even if directionally right.
+D. EVALUATE EACH CONTRACT + OPTIONS REALISM RULE
+Assess: strike distance, delta, theta, DTE, required move magnitude, IV sensitivity, liquidity, spread quality, probability of underperforming even if directionally right.
+OPTIONS REALISM RULE — a long call can lose money even when the underlying thesis is broadly correct. For EVERY contract, explicitly evaluate:
+  1. Can the required move actually happen BEFORE expiration? (size of move vs DTE)
+  2. Does implied volatility already PRICE IN the expected move? (high IV = move must exceed what's priced)
+  3. Can time decay (theta) overwhelm a slow grind upward? (especially DTE ≤ 30)
+  4. Would a debit spread (e.g., \`$X/$Y bull call\`) be more capital-efficient than a naked call?
+If any of (1)–(3) is uncertain or unfavorable, the contract's "Main risk" must say so plainly. If (4) is yes, the BETTER STRUCTURE section MUST recommend the spread.
 
 E. TIMING — NOW / WAIT / AVOID. WAIT if support unconfirmed or trend still down. AVOID if decay too high or thesis link weak.
 
