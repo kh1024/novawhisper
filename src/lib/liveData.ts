@@ -125,20 +125,21 @@ export interface NewsItem {
   category: string;
 }
 
-async function fetchNews(params: { symbol?: string | null; category?: string; limit?: number }): Promise<NewsItem[]> {
+async function fetchNews(params: { symbol?: string | null; category?: string; limit?: number; sources?: string[] }): Promise<NewsItem[]> {
   const { data, error } = await supabase.functions.invoke("news-fetch", { body: params });
   if (error) throw error;
   return (data?.items ?? []) as NewsItem[];
 }
 
-/** General market news (or company news when symbol provided). */
-export function useNews(opts?: { symbol?: string | null; category?: string; limit?: number; refetchMs?: number }) {
+/** General market news (or company news when symbol provided). Optionally filter by source name. */
+export function useNews(opts?: { symbol?: string | null; category?: string; limit?: number; refetchMs?: number; sources?: string[] }) {
   const symbol = opts?.symbol ?? null;
   const category = opts?.category ?? "general";
   const limit = opts?.limit ?? 12;
+  const sources = opts?.sources;
   return useQuery({
-    queryKey: ["news", symbol ?? "_general", category, limit],
-    queryFn: () => fetchNews({ symbol, category, limit }),
+    queryKey: ["news", symbol ?? "_general", category, limit, sources?.join(",") ?? ""],
+    queryFn: () => fetchNews({ symbol, category, limit, sources }),
     refetchInterval: opts?.refetchMs ?? 5 * 60_000, // 5 min
     staleTime: 2 * 60_000,
   });
