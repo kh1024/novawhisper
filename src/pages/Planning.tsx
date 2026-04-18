@@ -108,21 +108,8 @@ export default function Planning() {
         </div>
       ) : (
         <>
-          {/* AI Picks grid */}
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-              <Flame className="h-3.5 w-3.5" /> AI Picks · next session
-            </div>
-            {picks.length === 0 ? (
-              <Card className="p-6 text-sm text-muted-foreground">
-                No synthesized picks yet. Try Re-synthesize, or check that the YOUTUBE_API_KEY is valid.
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {picks.map((p) => <PickCard key={p.symbol} pick={p} />)}
-              </div>
-            )}
-          </div>
+          {/* AI Picks grid — fixed slots: 3 Safe + 2 Mild + 1 Aggressive */}
+          <SlottedPicks picks={picks} />
 
           {/* Sources tabs */}
           <Tabs defaultValue="webpicks" className="mt-2">
@@ -211,23 +198,123 @@ export default function Planning() {
   );
 }
 
-function PickCard({ pick }: { pick: PlanningPick }) {
+// ── Risk classification + slotted layout ─────────────────────────────────
+type RiskTier = "safe" | "mild" | "aggressive";
+
+function classifyRisk(p: PlanningPick): RiskTier {
+  // DTE
+  const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
+  // Moneyness % (positive = ITM for the trade direction)
+  const isCall = p.optionType.includes("call") || p.optionType === "straddle" || p.optionType === "strangle";
+  const isPut = p.optionType.includes("put");
+  const playAt = Number(p.playAt) || 0;
+  const strike = Number(p.strike) || 0;
+  let itmPct = 0;
+  if (playAt > 0 && strike > 0) {
+    if (isCall) itmPct = ((playAt - strike) / strike) * 100;
+    else if (isPut) itmPct = ((strike - playAt) / strike) * 100;
+  }
+  // Spreads are inherently more defined-risk → bias safer.
+  const isSpread = p.optionType.includes("spread");
+
+  // Safe: deep ITM (≥3%) OR conviction A spread, plenty of time (≥30 DTE).
+  if ((itmPct >= 3 && dte >= 21) || (isSpread && p.conviction === "A" && dte >= 14)) return "safe";
+  // Aggressive: clearly OTM (≥3%) OR very short dated (<7 DTE) OR low conviction OTM.
+  if (itmPct <= -3 || dte < 7 || (p.conviction === "C" && itmPct < 0)) return "aggressive";
+  return "mild";
+}
+
+const TIER_META: Record<RiskTier, { label: string; icon: typeof Shield; cls: string; chipCls: string }> = {
+  safe:       { label: "Safe",       icon: Shield, cls: "border-bullish/30 bg-bullish/5",   chipCls: "text-bullish border-bullish/40 bg-bullish/10" },
+  mild:       { label: "Mild",       icon: Target, cls: "border-warning/30 bg-warning/5",   chipCls: "text-warning border-warning/40 bg-warning/10" },
+  aggressive: { label: "Aggressive", icon: Zap,    cls: "border-bearish/30 bg-bearish/5",   chipCls: "text-bearish border-bearish/40 bg-bearish/10" },
+};
+
+const SLOTS: { tier: RiskTier; index: number }[] = [
+  { tier: "safe", index: 1 }, { tier: "safe", index: 2 }, { tier: "safe", index: 3 },
+  { tier: "mild", index: 1 }, { tier: "mild", index: 2 },
+  { tier: "aggressive", index: 1 },
+];
+
+function rankPick(p: PlanningPick): number {
+  // Higher = better. Conviction A=3, B=2, C=1.
+  const conv = p.conviction === "A" ? 3 : p.conviction === "B" ? 2 : 1;
+  return conv * 10 + (p.sources?.length ?? 0);
+}
+
+function SlottedPicks({ picks }: { picks: PlanningPick[] }) {
+  // Bucket + rank
+  const buckets: Record<RiskTier, PlanningPick[]> = { safe: [], mild: [], aggressive: [] };
+  for (const p of picks) buckets[classifyRisk(p)].push(p);
+  (Object.keys(buckets) as RiskTier[]).forEach((k) => buckets[k].sort((a, b) => rankPick(b) - rankPick(a)));
+  const cursors: Record<RiskTier, number> = { safe: 0, mild: 0, aggressive: 0 };
+
   return (
-    <Card className="flex flex-col p-4">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2">
+    <div>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+        <Flame className="h-3.5 w-3.5" /> AI Picks · next session
+        <span className="font-mono normal-case tracking-normal text-[10px] text-muted-foreground/70">
+          · 3 Safe + 2 Mild + 1 Aggressive
+        </span>
+      </div>
+      {picks.length === 0 ? (
+        <Card className="p-6 text-sm text-muted-foreground">
+          No synthesized picks yet. Try Re-synthesize, or check that the YOUTUBE_API_KEY is valid.
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {SLOTS.map((slot, i) => {
+            const pick = buckets[slot.tier][cursors[slot.tier]++];
+            return pick
+              ? <PickCard key={`${slot.tier}-${slot.index}-${pick.symbol}`} pick={pick} tier={slot.tier} slotIndex={slot.index} />
+              : <EmptySlot key={`empty-${i}`} tier={slot.tier} slotIndex={slot.index} />;
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptySlot({ tier, slotIndex }: { tier: RiskTier; slotIndex: number }) {
+  const meta = TIER_META[tier];
+  const Icon = meta.icon;
+  return (
+    <Card className={cn("flex flex-col items-center justify-center p-6 text-center border-dashed", meta.cls)}>
+      <span className={cn("inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider", meta.chipCls)}>
+        <Icon className="h-3 w-3" /> {meta.label} #{slotIndex}
+      </span>
+      <div className="mt-3 text-sm font-semibold text-foreground/90">No qualifying setup</div>
+      <p className="mt-1 text-xs text-muted-foreground max-w-[18rem]">
+        Nova didn't find a {meta.label.toLowerCase()} candidate that clears the bar for tomorrow. Best move: <span className="text-foreground font-medium">sit this slot out.</span>
+      </p>
+    </Card>
+  );
+}
+
+function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTier; slotIndex?: number }) {
+  const tierMeta = tier ? TIER_META[tier] : null;
+  const TierIcon = tierMeta?.icon;
+  return (
+    <Card className={cn("flex flex-col p-4", tierMeta?.cls)}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {tierMeta && TierIcon && (
+              <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider", tierMeta.chipCls)}>
+                <TierIcon className="h-3 w-3" /> {tierMeta.label}{slotIndex ? ` #${slotIndex}` : ""}
+              </span>
+            )}
             <span className="font-mono text-lg font-semibold">{pick.symbol}</span>
             <TickerPrice symbol={pick.symbol} showChange />
           </div>
-          <div className="mt-0.5 flex items-center gap-1.5">
+          <div className="mt-1 flex items-center gap-1.5 flex-wrap">
             <Badge variant="outline" className={cn("text-[10px]", biasClass(pick.bias))}>
               {biasIcon(pick.bias)} <span className="ml-1 capitalize">{pick.bias}</span>
             </Badge>
             <Badge variant="secondary" className="text-[10px]">Conviction {pick.conviction}</Badge>
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-1">
+        <div className="flex flex-wrap justify-end gap-1 shrink-0">
           {pick.sources.map((s) => (
             <Badge key={s} variant="outline" className="text-[10px] capitalize">{s}</Badge>
           ))}
