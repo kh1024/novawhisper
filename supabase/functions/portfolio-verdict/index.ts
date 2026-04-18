@@ -146,10 +146,17 @@ interface CrlOutput {
   highMomentum: boolean;
   flags: string[];
   valuationAlert: ValuationAlert;
+  // Strategic Validation Layer
+  trendGateBroken: boolean;          // price < SMA200 → no calls
+  highPremium: boolean;              // IV percentile > 75
+  openingRange: boolean;             // before 10:30 AM ET on a weekday
+  premiumStopTriggered: boolean;     // option premium dropped ≥30% from entry
 }
 
 const VALUATION_OVERSHOOT_PCT = 15;
 const EMA_OVERSHOOT_PCT = 15;
+const PREMIUM_STOP_PCT = 30;        // hard stop-loss on option premium drop
+const HIGH_PREMIUM_IVP = 75;        // IV percentile threshold for "High Premium"
 
 // Expert risk classification — Greeks AND RSI together.
 function classifyRisk(
