@@ -263,7 +263,7 @@ export default function Portfolio() {
             <Card className="p-6 text-sm text-muted-foreground">No closed positions yet.</Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {closed.map((p) => <PositionCard key={p.id} p={p} settings={settings} />)}
+              {closed.map((p) => <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} settings={settings} />)}
             </div>
           )}
         </TabsContent>
@@ -281,12 +281,22 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
   const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
 
-  const moneyness = spot != null
-    ? (isCall ? (spot > Number(p.strike) ? "ITM" : "OTM") : isPut ? (spot < Number(p.strike) ? "ITM" : "OTM") : "—")
-    : null;
-  const distance = spot != null ? ((spot - Number(p.strike)) / Number(p.strike)) * 100 : null;
+  // Per-card simulated spot override (paper trades only). Lets users bump the
+  // underlying ±5% / ±10% to see how P&L and moneyness react. Real spot is
+  // untouched; we just compute against `effectiveSpot`.
+  const [simOffsetPct, setSimOffsetPct] = useState(0);
+  const realSpot = spot ?? null;
+  const effectiveSpot = realSpot != null && simOffsetPct !== 0
+    ? realSpot * (1 + simOffsetPct / 100)
+    : realSpot;
+  const isSimulating = simOffsetPct !== 0 && realSpot != null;
 
-  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null, settings) : null;
+  const moneyness = effectiveSpot != null
+    ? (isCall ? (effectiveSpot > Number(p.strike) ? "ITM" : "OTM") : isPut ? (effectiveSpot < Number(p.strike) ? "ITM" : "OTM") : "—")
+    : null;
+  const distance = effectiveSpot != null ? ((effectiveSpot - Number(p.strike)) / Number(p.strike)) * 100 : null;
+
+  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, effectiveSpot ?? null, settings) : null;
   const unrealizedPct = unrealized != null && p.entry_premium != null && p.direction === "long"
     ? (unrealized / (Number(p.entry_premium) * p.contracts * 100)) * 100
     : null;
@@ -327,10 +337,19 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
           )}
         </div>
         <div className="flex flex-col items-end gap-1">
-          {spot != null && (
+          {realSpot != null && (
             <div className="text-right">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Spot</div>
-              <div className="font-mono text-sm font-semibold">${spot.toFixed(2)}</div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                {isSimulating ? "Sim spot" : "Spot"}
+              </div>
+              <div className={cn("font-mono text-sm font-semibold", isSimulating && "text-warning")}>
+                ${(effectiveSpot ?? realSpot).toFixed(2)}
+              </div>
+              {isSimulating && (
+                <div className="text-[9px] text-muted-foreground mono">
+                  real ${realSpot.toFixed(2)}
+                </div>
+              )}
               {distance != null && (
                 <div className={cn("text-[10px]", distance >= 0 ? "text-bullish" : "text-bearish")}>
                   {distance >= 0 ? "+" : ""}{distance.toFixed(1)}% vs strike
@@ -340,6 +359,51 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
           )}
         </div>
       </div>
+
+      {/* Simulate price move — paper trades only */}
+      {p.is_paper && p.status === "open" && realSpot != null && (
+        <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-2">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="text-[10px] uppercase tracking-widest text-warning flex items-center gap-1">
+              <FlaskConical className="h-3 w-3" /> Simulate price move
+              {isSimulating && (
+                <span className="font-mono normal-case tracking-normal ml-1">
+                  · {simOffsetPct > 0 ? "+" : ""}{simOffsetPct}%
+                </span>
+              )}
+            </div>
+            {isSimulating && (
+              <button
+                onClick={() => setSimOffsetPct(0)}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+              >
+                reset
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {[-10, -5, -2, +2, +5, +10].map((d) => (
+              <button
+                key={d}
+                onClick={() => setSimOffsetPct((cur) => (cur === d ? 0 : d))}
+                className={cn(
+                  "text-[10px] font-mono px-2 py-0.5 rounded border transition-colors",
+                  simOffsetPct === d
+                    ? d > 0
+                      ? "border-bullish bg-bullish/15 text-bullish"
+                      : "border-bearish bg-bearish/15 text-bearish"
+                    : "border-border text-muted-foreground hover:bg-surface",
+                )}
+              >
+                {d > 0 ? "+" : ""}{d}%
+              </button>
+            ))}
+          </div>
+          <div className="text-[9px] text-muted-foreground mt-1 leading-tight">
+            Adjusts P&amp;L estimate &amp; moneyness only — Nova's verdict still uses real spot.
+          </div>
+        </div>
+      )}
 
       {verdict?.crl && <CrlPanel crl={verdict.crl} metrics={verdict.metrics} />}
 
