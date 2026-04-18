@@ -363,10 +363,11 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
 
   return (
     <Card className="p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-lg font-semibold">{p.symbol}</span>
+      {/* Header — symbol + action on top row, spot pinned right */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-lg font-semibold leading-none">{p.symbol}</span>
             <TickerPrice symbol={p.symbol} price={spot ?? null} showChange />
             <Badge variant="outline" className="text-[10px] capitalize">{p.status}</Badge>
             {p.is_paper && (
@@ -376,102 +377,103 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
             )}
             {moneyness && <Badge variant="secondary" className="text-[10px]">{moneyness}</Badge>}
           </div>
-          <div className={cn("mt-1 font-mono text-sm font-semibold", tone)}>
-            {p.direction.toUpperCase()} ${strikeLabel} {p.option_type.replace("_", " ").toUpperCase()} · {p.expiry}
+          <div className={cn("font-mono text-sm font-semibold", tone)}>
+            {p.direction.toUpperCase()} ${strikeLabel} {p.option_type.replace("_", " ").toUpperCase()}
+            <span className="text-muted-foreground font-normal"> · {p.expiry}</span>
           </div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
+          <div className="text-[11px] text-muted-foreground">
             {p.contracts} contract{p.contracts > 1 ? "s" : ""}
             {p.entry_premium != null && ` · entry $${Number(p.entry_premium).toFixed(2)}`}
             {dte > 0 ? ` · ${dte} DTE` : " · expired"}
           </div>
-          {unrealized != null && (
-            <div className="mt-1 flex flex-wrap items-center gap-1.5">
-              <div
-                className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-mono",
-                  unrealized >= 0 ? "text-bullish border-bullish/40 bg-bullish/10" : "text-bearish border-bearish/40 bg-bearish/10",
-                  isSimulating && "ring-1 ring-warning/40")}
-                title={isSimulating
-                  ? `Simulated P&L at ${simOffsetPct > 0 ? "+" : ""}${simOffsetPct}% spot move. Real P&L: ${unrealizedReal != null ? fmtUsd(unrealizedReal) : "—"}.`
-                  : "Estimated from intrinsic value only — real option value is usually higher because of time value."}
-              >
-                {isSimulating ? "Sim P&L" : "Unrealized (est.)"}: {fmtUsd(unrealized)}
-                {unrealizedPct != null && <span className="opacity-80">({unrealizedPct >= 0 ? "+" : ""}{unrealizedPct.toFixed(0)}%)</span>}
-              </div>
-              {isSimulating && simDelta != null && (
-                <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border",
-                  simDelta >= 0 ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5")}
-                  title="Change vs. real-spot P&L">
-                  Δ {fmtUsd(simDelta)}
-                </span>
-              )}
-            </div>
-          )}
         </div>
-        <div className="flex flex-col items-end gap-1">
-          {realSpot != null && (
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                {isSimulating ? "Sim spot" : "Spot"}
-              </div>
-              <div className={cn("font-mono text-sm font-semibold", isSimulating && "text-warning")}>
-                ${(effectiveSpot ?? realSpot).toFixed(2)}
-              </div>
-              {isSimulating && (
-                <div className="text-[9px] text-muted-foreground mono">
-                  real ${realSpot.toFixed(2)}
-                </div>
-              )}
-              {distance != null && (
-                <div className={cn("text-[10px]", distance >= 0 ? "text-bullish" : "text-bearish")}>
-                  {distance >= 0 ? "+" : ""}{distance.toFixed(1)}% vs strike
-                </div>
-              )}
+        {realSpot != null && (
+          <div className="text-right shrink-0">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              {isSimulating ? "Sim spot" : "Spot"}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Simulate price move — paper trades only */}
-      {p.is_paper && p.status === "open" && realSpot != null && (
-        <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-2">
-          <div className="flex items-center justify-between gap-2 mb-1.5">
-            <div className="text-[10px] uppercase tracking-widest text-warning flex items-center gap-1">
-              <FlaskConical className="h-3 w-3" /> Simulate price move
-              {isSimulating && (
-                <span className="font-mono normal-case tracking-normal ml-1">
-                  · {simOffsetPct > 0 ? "+" : ""}{simOffsetPct}%
-                </span>
-              )}
+            <div className={cn("font-mono text-sm font-semibold", isSimulating && "text-warning")}>
+              ${(effectiveSpot ?? realSpot).toFixed(2)}
             </div>
             {isSimulating && (
-              <button
-                onClick={() => setSimOffsetPct(0)}
-                className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-              >
-                reset
-              </button>
+              <div className="text-[9px] font-mono text-muted-foreground">
+                real ${realSpot.toFixed(2)}
+              </div>
+            )}
+            {distance != null && (
+              <div className={cn("text-[10px]", distance >= 0 ? "text-bullish" : "text-bearish")}>
+                {distance >= 0 ? "+" : ""}{distance.toFixed(1)}% vs strike
+              </div>
             )}
           </div>
-          <div className="flex flex-wrap gap-1">
-            {[-10, -5, -2, +2, +5, +10].map((d) => (
-              <button
-                key={d}
-                onClick={() => setSimOffsetPct((cur) => (cur === d ? 0 : d))}
-                className={cn(
-                  "text-[10px] font-mono px-2 py-0.5 rounded border transition-colors",
-                  simOffsetPct === d
-                    ? d > 0
-                      ? "border-bullish bg-bullish/15 text-bullish"
-                      : "border-bearish bg-bearish/15 text-bearish"
-                    : "border-border text-muted-foreground hover:bg-surface",
-                )}
-              >
-                {d > 0 ? "+" : ""}{d}%
-              </button>
-            ))}
+        )}
+      </div>
+
+      {/* P&L band */}
+      {unrealized != null && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <div
+            className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-mono",
+              unrealized >= 0 ? "text-bullish border-bullish/40 bg-bullish/10" : "text-bearish border-bearish/40 bg-bearish/10",
+              isSimulating && "ring-1 ring-warning/40")}
+            title={isSimulating
+              ? `Simulated P&L at ${simOffsetPct > 0 ? "+" : ""}${simOffsetPct}% spot move. Real P&L: ${unrealizedReal != null ? fmtUsd(unrealizedReal) : "—"}.`
+              : "Estimated from intrinsic value only — real option value is usually higher because of time value."}
+          >
+            {isSimulating ? "Sim P&L" : "Unrealized (est.)"}: {fmtUsd(unrealized)}
+            {unrealizedPct != null && <span className="opacity-80">({unrealizedPct >= 0 ? "+" : ""}{unrealizedPct.toFixed(0)}%)</span>}
+          </div>
+          {isSimulating && simDelta != null && (
+            <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border",
+              simDelta >= 0 ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5")}
+              title="Change vs. real-spot P&L">
+              Δ {fmtUsd(simDelta)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Simulate price move — paper trades only · slider */}
+      {p.is_paper && p.status === "open" && realSpot != null && (
+        <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-2.5">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-[10px] uppercase tracking-widest text-warning flex items-center gap-1">
+              <FlaskConical className="h-3 w-3" /> Simulate price move
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                "font-mono text-[11px] tabular-nums px-1.5 py-0.5 rounded border",
+                simOffsetPct === 0
+                  ? "text-muted-foreground border-border"
+                  : simOffsetPct > 0
+                    ? "text-bullish border-bullish/40 bg-bullish/10"
+                    : "text-bearish border-bearish/40 bg-bearish/10",
+              )}>
+                {simOffsetPct > 0 ? "+" : ""}{simOffsetPct.toFixed(1)}%
+              </span>
+              {isSimulating && (
+                <button
+                  onClick={() => setSimOffsetPct(0)}
+                  className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                >
+                  reset
+                </button>
+              )}
+            </div>
+          </div>
+          <Slider
+            value={[simOffsetPct]}
+            min={-20}
+            max={20}
+            step={0.5}
+            onValueChange={(v) => setSimOffsetPct(+v[0].toFixed(1))}
+            className="my-1"
+          />
+          <div className="flex justify-between text-[9px] font-mono text-muted-foreground mt-1">
+            <span>−20%</span><span>−10%</span><span className="opacity-60">0</span><span>+10%</span><span>+20%</span>
           </div>
           {(worstCase != null || bestCase != null) && (
-            <div className="mt-1.5 flex items-center justify-between gap-2 rounded border border-border/60 bg-background/40 px-2 py-1 text-[10px] font-mono">
+            <div className="mt-2 flex items-center justify-between gap-2 rounded border border-border/60 bg-background/40 px-2 py-1 text-[10px] font-mono">
               <span className="flex items-center gap-1">
                 <span className="text-muted-foreground uppercase tracking-wider text-[9px]">Worst −10%</span>
                 <span className={cn(worstCase != null && worstCase >= 0 ? "text-bullish" : "text-bearish")}>
@@ -487,8 +489,8 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
               </span>
             </div>
           )}
-          <div className="text-[9px] text-muted-foreground mt-1 leading-tight">
-            Adjusts P&amp;L estimate &amp; moneyness only — Nova's verdict still uses real spot.
+          <div className="text-[9px] text-muted-foreground mt-1.5 leading-tight">
+            Drag to project P&amp;L at any underlying move — Nova's verdict still uses real spot.
           </div>
         </div>
       )}
