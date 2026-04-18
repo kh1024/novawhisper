@@ -110,6 +110,15 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   const marketCap = q.marketCap ?? (meta as any)?.marketCap;
   const r = rng(q.symbol);
 
+  // ── Extended-hours awareness ───────────────────────────────────────────
+  // During pre/post sessions, fold the extended-hours move into the working
+  // changePct so RSI, EMA distance, timing, IVR, and the NOVA verdict all
+  // reflect the gap that's actually forming. The displayed price stays the
+  // last regular-session close (q.price) — the badge in TickerPrice surfaces
+  // the extended price separately.
+  const extPct = (q.session === "pre" || q.session === "post") ? (q.extendedChangePct ?? 0) : 0;
+  const effectiveChangePct = q.changePct + extPct;
+
   // Real
   const avgVolume = estimateAvgVolume(q.symbol, marketCap);
   const relVolume = q.volume > 0 ? +(q.volume / avgVolume).toFixed(2) : 0;
