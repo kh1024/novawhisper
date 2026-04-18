@@ -169,9 +169,10 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         subs,
-        sort,
-        posts: posts.sort((a, b) => b.score - a.score).slice(0, 60),
-        tickers: ranked.slice(0, 30),
+        sorts,
+        postCount: dedup.length,
+        posts: posts.sort((a, b) => b.score - a.score).slice(0, 80),
+        tickers: ranked.slice(0, 40),
         fetchedAt: new Date().toISOString(),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
