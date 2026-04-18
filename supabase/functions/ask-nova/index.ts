@@ -11,17 +11,24 @@ interface NovaContext {
   status?: string;
   budget?: number;       // USD the user has to spend
   model?: string;        // override AI model
-  riskProfile?: "safe" | "mild" | "aggressive"; // user default risk tilt
+  riskProfile?: "safe" | "mild" | "aggressive";
   topPicks?: Array<{
     type: string;
     strike: number;
     expiration: string;
     dte: number;
+    bid?: number;
+    ask?: number;
     mid: number;
+    last?: number;
+    spreadPct?: number;
+    volume?: number;
+    openInterest?: number;
     annualized: number;
     score: number;
     delta: number | null;
     iv: number | null;
+    theta?: number | null;
   }>;
 }
 
