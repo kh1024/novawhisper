@@ -11,8 +11,9 @@ import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useEffect, useMemo } from "react";
-import { useSettings } from "@/lib/settings";
+import { useSettings, BROKER_PRESETS, type AppSettings } from "@/lib/settings";
 import { dispatchVerdictTransitions } from "@/lib/webhook";
+import { feeOneSide, feeRoundTrip } from "@/lib/fees";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -34,7 +35,7 @@ function statusClass(s: Verdict["status"]) {
  * this is a CONSERVATIVE floor (real value ≥ intrinsic because of time value).
  * For long puts, same. For shorts (credit), it's an upper bound on what's owed.
  */
-function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undefined): number | null {
+function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undefined, settings: AppSettings): number | null {
   if (spot == null || p.entry_premium == null) return null;
   const strike = Number(p.strike);
   const isCall = p.option_type.includes("call");
@@ -44,13 +45,16 @@ function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undef
   else if (isPut) intrinsic = Math.max(0, strike - spot);
   else return null;
   const sign = p.direction === "long" ? 1 : -1;
-  return sign * (intrinsic - Number(p.entry_premium)) * p.contracts * 100;
+  const gross = sign * (intrinsic - Number(p.entry_premium)) * p.contracts * 100;
+  // Subtract entry fees (already paid) + projected exit fees.
+  return gross - feeRoundTrip(settings, p.contracts);
 }
 
-function realizedPnl(p: PortfolioPosition): number | null {
+function realizedPnl(p: PortfolioPosition, settings: AppSettings): number | null {
   if (p.entry_premium == null || p.close_premium == null) return null;
   const sign = p.direction === "long" ? 1 : -1;
-  return sign * (Number(p.close_premium) - Number(p.entry_premium)) * p.contracts * 100;
+  const gross = sign * (Number(p.close_premium) - Number(p.entry_premium)) * p.contracts * 100;
+  return gross - feeRoundTrip(settings, p.contracts);
 }
 
 function fmtUsd(n: number) {
@@ -82,23 +86,27 @@ export default function Portfolio() {
   const totals = useMemo(() => {
     const openCount = open.length;
     let realized = 0;
+    let feesPaid = 0;
     for (const p of closed) {
-      const r = realizedPnl(p);
+      const r = realizedPnl(p, settings);
       if (r != null) realized += r;
+      feesPaid += feeRoundTrip(settings, p.contracts);
     }
     let unrealized = 0;
     let unrealizedKnown = false;
     let costBasis = 0;
     for (const p of open) {
       const spot = quoteMap.get(p.symbol)?.price ?? null;
-      const u = estimateUnrealizedPnl(p, spot);
+      const u = estimateUnrealizedPnl(p, spot, settings);
       if (u != null) { unrealized += u; unrealizedKnown = true; }
       if (p.entry_premium != null && p.direction === "long") {
         costBasis += Number(p.entry_premium) * p.contracts * 100;
       }
+      // Entry fee already paid on open positions.
+      feesPaid += feeOneSide(settings, p.contracts);
     }
-    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis };
-  }, [open, closed, quoteMap]);
+    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis, feesPaid };
+  }, [open, closed, quoteMap, settings]);
 
   return (
     <div className="space-y-6 p-6">
@@ -129,11 +137,12 @@ export default function Portfolio() {
               {fmtUsd(totals.realized)}
             </div>
           </div>
-          <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total P&amp;L</div>
+          <div className="rounded-md border border-border bg-surface/40 px-3 py-2" title={`Net of broker + regulatory fees (${BROKER_PRESETS.find(b => b.value === settings.brokerPreset)?.label ?? "Custom"} preset). Fees so far: $${totals.feesPaid.toFixed(2)}`}>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Total P&amp;L (net)</div>
             <div className={cn("font-mono text-lg font-semibold", totals.total >= 0 ? "text-bullish" : "text-bearish")}>
               {fmtUsd(totals.total)}
             </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">−${totals.feesPaid.toFixed(2)} fees</div>
           </div>
           <Button size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["portfolio-verdict"] }); verdictQ.refetch(); }} disabled={verdictQ.isFetching || open.length === 0}>
             <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", verdictQ.isFetching && "animate-spin")} />
@@ -157,7 +166,7 @@ export default function Portfolio() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {open.map((p) => (
-                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} />
+                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} />
               ))}
             </div>
           )}
@@ -167,7 +176,7 @@ export default function Portfolio() {
             <Card className="p-6 text-sm text-muted-foreground">No closed positions yet.</Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {closed.map((p) => <PositionCard key={p.id} p={p} />)}
+              {closed.map((p) => <PositionCard key={p.id} p={p} settings={settings} />)}
             </div>
           )}
         </TabsContent>
@@ -176,7 +185,7 @@ export default function Portfolio() {
   );
 }
 
-function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Verdict; spot?: number }) {
+function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const isCall = p.option_type.includes("call");
@@ -190,10 +199,11 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
     : null;
   const distance = spot != null ? ((spot - Number(p.strike)) / Number(p.strike)) * 100 : null;
 
-  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null) : null;
+  const unrealized = p.status === "open" ? estimateUnrealizedPnl(p, spot ?? null, settings) : null;
   const unrealizedPct = unrealized != null && p.entry_premium != null && p.direction === "long"
     ? (unrealized / (Number(p.entry_premium) * p.contracts * 100)) * 100
     : null;
+  const roundTripFee = feeRoundTrip(settings, p.contracts);
 
   return (
     <Card className="p-4">
@@ -270,11 +280,15 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
         </div>
       ) : (
         <div className="mt-3 flex items-center justify-between text-[11px] text-muted-foreground">
-          {p.close_premium != null && p.entry_premium != null && (
-            <span className={cn("font-mono", (Number(p.close_premium) - Number(p.entry_premium)) * (p.direction === "long" ? 1 : -1) >= 0 ? "text-bullish" : "text-bearish")}>
-              P&amp;L: {((Number(p.close_premium) - Number(p.entry_premium)) * (p.direction === "long" ? 1 : -1) * p.contracts * 100).toFixed(0)} USD
-            </span>
-          )}
+          {(() => {
+            const r = realizedPnl(p, settings);
+            if (r == null) return <span />;
+            return (
+              <span className={cn("font-mono", r >= 0 ? "text-bullish" : "text-bearish")} title={`Net of $${roundTripFee.toFixed(2)} round-trip fees`}>
+                P&amp;L: {fmtUsd(r)} <span className="opacity-60">(net)</span>
+              </span>
+            );
+          })()}
           <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground" onClick={() => del.mutate(p.id)}>
             <Trash2 className="mr-1 h-3 w-3" /> Delete
           </Button>

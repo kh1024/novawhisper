@@ -18,7 +18,15 @@ export interface AppSettings {
   webhookUrl: string;         // Make.com / n8n / Slack incoming webhook
   webhookEnabled: boolean;    // master toggle
   webhookOnWait: boolean;     // also fire on new WAIT signals
+  // Trading fees applied to P&L. Defaults match Robinhood retail options:
+  // $0 commission + ~$0.03/contract regulatory pass-through (ORF + OCC + SEC + FINRA TAF, round-tripped).
+  brokerPreset: BrokerPreset;
+  feePerContract: number;     // per contract, per side (entry & exit each charged)
+  feePerTrade: number;        // flat per trade, per side
+  regulatoryFeePerContract: number; // ORF/OCC/SEC pass-through, per side
 }
+
+export type BrokerPreset = "robinhood" | "webull" | "schwab" | "ibkr" | "tastytrade" | "custom";
 
 const KEY = "nova_settings";
 const DEFAULTS: AppSettings = {
@@ -29,7 +37,20 @@ const DEFAULTS: AppSettings = {
   webhookUrl: "",
   webhookEnabled: false,
   webhookOnWait: false,
+  brokerPreset: "robinhood",
+  feePerContract: 0,
+  feePerTrade: 0,
+  regulatoryFeePerContract: 0.03,
 };
+
+export const BROKER_PRESETS: { value: BrokerPreset; label: string; feePerContract: number; feePerTrade: number; regulatoryFeePerContract: number; hint: string }[] = [
+  { value: "robinhood", label: "Robinhood",  feePerContract: 0,    feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "$0 commission + ~$0.03/contract regulatory pass-through." },
+  { value: "webull",    label: "Webull",     feePerContract: 0,    feePerTrade: 0,    regulatoryFeePerContract: 0.05, hint: "$0 commission + ~$0.05/contract regulatory." },
+  { value: "schwab",    label: "Schwab",     feePerContract: 0.65, feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "$0.65/contract + regulatory pass-through." },
+  { value: "ibkr",      label: "IBKR Lite",  feePerContract: 0.65, feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "Tiered: $0.65/contract typical retail." },
+  { value: "tastytrade",label: "tastytrade", feePerContract: 1.00, feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "$1/contract open, $0 close (capped)." },
+  { value: "custom",    label: "Custom",     feePerContract: 0,    feePerTrade: 0,    regulatoryFeePerContract: 0,    hint: "Set your own values below." },
+];
 
 function read(): AppSettings {
   if (typeof window === "undefined") return DEFAULTS;
