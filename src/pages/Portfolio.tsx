@@ -182,6 +182,43 @@ export default function Portfolio() {
         </div>
       </div>
 
+      {/* Book filter — Real / Paper / All */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Book:</span>
+        {([
+          { id: "all" as const, label: `All (${allPositions.length})` },
+          { id: "real" as const, label: `Real (${realCount})` },
+          { id: "paper" as const, label: `Paper (${paperCount})`, sim: true },
+        ]).map((b) => (
+          <button
+            key={b.id}
+            onClick={() => setBook(b.id)}
+            className={cn(
+              "text-[11px] px-2.5 py-1 rounded border transition-colors flex items-center gap-1",
+              book === b.id
+                ? b.sim
+                  ? "border-warning bg-warning/15 text-warning"
+                  : "border-primary bg-primary/15 text-primary"
+                : "border-border text-muted-foreground hover:bg-surface",
+            )}
+          >
+            {b.sim && <FlaskConical className="h-2.5 w-2.5" />}
+            {b.label}
+          </button>
+        ))}
+        {settings.paperMode && paperCount === 0 && (
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-[11px] border-warning/50 text-warning hover:bg-warning/10 ml-auto gap-1"
+            onClick={seedSamples}
+            disabled={addPos.isPending}
+          >
+            <Sparkles className="h-3 w-3" />
+            {addPos.isPending ? "Seeding…" : "Seed sample paper trades"}
+          </Button>
+        )}
+      </div>
+
       <Tabs defaultValue="open">
         <TabsList>
           <TabsTrigger value="open">Open ({open.length})</TabsTrigger>
@@ -191,8 +228,27 @@ export default function Portfolio() {
           {isLoading ? (
             <div className="grid gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40" />)}</div>
           ) : open.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-muted-foreground">
-              No open positions yet. Hit <span className="font-semibold text-foreground">Save</span> on any Web Pick, Planning pick, or Top Opportunity to start tracking.
+            <Card className="p-8 text-center text-sm text-muted-foreground space-y-3">
+              <p>
+                {book === "paper"
+                  ? "No paper trades yet. Turn on Simulation in Settings, then Save any pick — or seed samples below."
+                  : book === "real"
+                  ? "No real trades yet. Make sure Simulation Mode is OFF when you Save."
+                  : "No open positions yet. Hit "}
+                {book === "all" && <span className="font-semibold text-foreground">Save</span>}
+                {book === "all" && " on any Web Pick, Planning pick, or Top Opportunity to start tracking."}
+              </p>
+              {settings.paperMode && (
+                <Button
+                  size="sm" variant="outline"
+                  className="border-warning/50 text-warning hover:bg-warning/10 gap-1"
+                  onClick={seedSamples}
+                  disabled={addPos.isPending}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {addPos.isPending ? "Seeding…" : "Seed 5 sample paper trades"}
+                </Button>
+              )}
             </Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
