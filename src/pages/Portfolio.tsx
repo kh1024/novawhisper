@@ -358,6 +358,7 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
     ? estimateUnrealizedPnl(p, realSpot * 0.9, settings) : null;
   const bestCase = p.is_paper && p.status === "open" && realSpot != null
     ? estimateUnrealizedPnl(p, realSpot * 1.1, settings) : null;
+  const roundTripFee = feeRoundTrip(settings, p.contracts);
 
   return (
     <Card className="p-4">
