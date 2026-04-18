@@ -64,8 +64,8 @@ export function useLiveQuotes(symbols?: string[], opts?: { refetchMs?: number })
   return useQuery({
     queryKey: ["live-quotes", list.join(",")],
     queryFn: () => fetchQuotes(list),
-    refetchInterval: opts?.refetchMs ?? 60_000, // 60s default — respects free-tier limits
-    staleTime: 30_000,
+    refetchInterval: opts?.refetchMs ?? 3 * 60_000, // 3 min — respects free-tier limits + server cache
+    staleTime: 2 * 60_000,
   });
 }
 
