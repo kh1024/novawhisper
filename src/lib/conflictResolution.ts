@@ -70,6 +70,8 @@ export interface CrlOutput {
 
 const VALUATION_OVERSHOOT_PCT = 15;   // spot > intrinsic × 1.15 ⇒ Risk Alert
 const EMA_OVERSHOOT_PCT = 15;         // spot > 8-EMA × 1.15 ⇒ NO-GO
+const PREMIUM_STOP_PCT = 30;          // option premium drop ≥30% ⇒ hard stop
+const HIGH_PREMIUM_IVP = 75;          // IV percentile > 75 ⇒ overpaying
 
 export function runConflictResolution(input: CrlInputs): CrlOutput {
   const {
@@ -77,6 +79,7 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     delta, theta, iv, dte,
     isLong, isCall,
     intrinsicValue, unrealizedPnl,
+    sma200, ivPercentile, beforeOpeningRange, entryPremium, currentPremium,
   } = input;
 
   const emaDistancePct =
@@ -90,12 +93,29 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
   const valuationAlert = computeValuationAlert(spot, intrinsicValue ?? null);
   if (valuationAlert.triggered && valuationAlert.message) flags.push(valuationAlert.message);
 
+  // High Premium / IV Percentile (orthogonal)
+  const highPremium = ivPercentile != null && ivPercentile > HIGH_PREMIUM_IVP;
+  if (highPremium) flags.push(`High Premium (IVP ${ivPercentile}% > ${HIGH_PREMIUM_IVP})`);
+
+  // Trend Gate — block CALL ideas when price < 200-SMA
+  const trendGateBroken = !!(isCall && spot != null && sma200 != null && spot < sma200);
+
+  // Premium hard stop — open longs only
+  let premiumStopTriggered = false;
+  let premiumDropPct: number | null = null;
+  if (isLong && entryPremium != null && entryPremium > 0 && currentPremium != null) {
+    premiumDropPct = ((currentPremium - entryPremium) / entryPremium) * 100;
+    if (premiumDropPct <= -PREMIUM_STOP_PCT) premiumStopTriggered = true;
+  }
+
   // Stop-loss check (long calls breaking down, long puts breaking up)
   let stopLossTriggered = false;
   if (isLong && spot != null && ema8 != null) {
     if (isCall && spot < ema8) stopLossTriggered = true;
     if (!isCall && spot > ema8) stopLossTriggered = true;
   }
+
+  const openingRange = !!beforeOpeningRange;
 
   const build = (
     verdict: CrlVerdict,
@@ -110,10 +130,32 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     stopLossTriggered: overrides.stopLossTriggered ?? stopLossTriggered,
     flags,
     valuationAlert,
+    trendGateBroken,
+    highPremium,
+    openingRange,
+    premiumStopTriggered,
   });
 
+  // ── Hard Stop-Loss (overrides EMA / everything else for open longs) ──
+  if (premiumStopTriggered) {
+    flags.push(`Hard stop −${Math.abs(premiumDropPct!).toFixed(0)}% premium`);
+    return build(
+      "EXIT",
+      `Premium dropped ${premiumDropPct!.toFixed(0)}% from entry $${entryPremium!.toFixed(2)} → $${currentPremium!.toFixed(2)}. Hard stop hit — sell at loss now.`,
+      { stopLossTriggered: true },
+    );
+  }
+
+  // ── Trend Gate — block CALL suggestions when price is below 200-SMA ──
+  if (trendGateBroken) {
+    flags.push("Trend Gate: below 200-SMA");
+    return build(
+      "NO",
+      `Price $${spot!.toFixed(2)} is below 200-SMA $${sma200!.toFixed(2)} — long-term trend broken. No calls until support reclaims.`,
+    );
+  }
+
   // ── Trap a: Early Exit on losing trade with steep theta + tiny DTE ──
-  // "Don't marry a losing trade" — sell now for a 30% loss instead of 100% at expiry.
   if (
     unrealizedPnl != null && unrealizedPnl < 0 &&
     theta != null && theta < -0.5 &&
@@ -165,9 +207,17 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     );
   }
 
-  // ── GO Signal ──
+  // ── GO Signal (with Opening Range filter) ──
   if (highMomentum && rsi != null && rsi >= 40 && rsi <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
+    if (openingRange) {
+      flags.push("Opening Range Testing (before 10:30 AM ET)");
+      return build(
+        "WAIT",
+        `Opening Range Testing — first hour is noisy, wait for 10:30 AM ET to confirm the breakout (RSI ${rsi.toFixed(0)}, 3+ day streak).`,
+        { stopLossTriggered: false },
+      );
+    }
     return build(
       "GO",
       `3+ day streak with RSI ${rsi.toFixed(0)} — fresh momentum, not exhausted. Clean entry.`,
