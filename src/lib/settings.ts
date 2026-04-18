@@ -10,6 +10,23 @@ export type AiModel =
   | "openai/gpt-5-mini"
   | "openai/gpt-5";
 
+// ─── Trader profile (drives the Strategy Builder) ───────────────────────────
+export type RiskTolerance = "low" | "medium" | "high";
+export type Horizon = "intraday" | "swing" | "position";
+export type Outlook = "bullish" | "slightly_bullish" | "neutral" | "slightly_bearish" | "bearish" | "uncertain";
+export type EventBias = "earnings" | "macro" | "none";
+export type AccountSize = "small" | "medium" | "large";
+
+export interface TraderProfile {
+  risk: RiskTolerance;
+  horizon: Horizon;
+  outlook: Outlook;
+  event: EventBias;
+  account: AccountSize;
+  // Heuristic IV stance — user picks how rich premium feels right now.
+  ivStance: "low" | "average" | "high";
+}
+
 export interface AppSettings {
   refreshMs: number;          // quote polling interval
   tickerSymbols: string[];    // symbols shown in the top tape
@@ -25,6 +42,8 @@ export interface AppSettings {
   feePerTrade: number;        // flat per trade, per side
   regulatoryFeePerContract: number; // ORF/OCC/SEC pass-through, per side
   paperMode: boolean;         // when true, new saves are tagged is_paper=true
+  // Trader profile — used by /strategy to tailor suggestions.
+  traderProfile: TraderProfile;
 }
 
 export type BrokerPreset = "robinhood" | "webull" | "schwab" | "ibkr" | "tastytrade" | "custom";
@@ -43,6 +62,14 @@ const DEFAULTS: AppSettings = {
   feePerTrade: 0,
   regulatoryFeePerContract: 0.08,
   paperMode: false,
+  traderProfile: {
+    risk: "medium",
+    horizon: "swing",
+    outlook: "slightly_bullish",
+    event: "none",
+    account: "small",
+    ivStance: "average",
+  },
 };
 
 export const BROKER_PRESETS: { value: BrokerPreset; label: string; feePerContract: number; feePerTrade: number; regulatoryFeePerContract: number; hint: string }[] = [
