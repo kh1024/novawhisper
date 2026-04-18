@@ -8,9 +8,17 @@ import type { Verdict } from "./portfolioVerdict";
 const STATE_KEY = "nova_webhook_last_state";
 const LOG_KEY = "nova_webhook_log";
 
-type Signal = "GO" | "WAIT" | "EXIT";
+type Signal = "GO" | "WAIT" | "EXIT" | "NO";
 
 function verdictToSignal(v: Verdict): Signal {
+  // Prefer the deterministic CRL verdict if present
+  if (v.crl) {
+    if (v.crl.stopLossTriggered) return "EXIT";
+    if (v.crl.verdict === "GO") return "GO";
+    if (v.crl.verdict === "EXIT") return "EXIT";
+    if (v.crl.verdict === "NO") return "NO";
+    if (v.crl.verdict === "WAIT") return "WAIT";
+  }
   if (v.action === "cut" || v.action === "take_profit") return "EXIT";
   if (v.status === "winning" || v.status === "running fine") return "GO";
   return "WAIT";
