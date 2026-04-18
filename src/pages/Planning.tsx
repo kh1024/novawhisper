@@ -1,7 +1,7 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
 import { useState } from "react";
-import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePlanning, type PlanningPick, type SourceTicker } from "@/lib/planning";
+import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -119,11 +120,16 @@ export default function Planning() {
           </div>
 
           {/* Sources tabs */}
-          <Tabs defaultValue="youtube" className="mt-2">
+          <Tabs defaultValue="webpicks" className="mt-2">
             <TabsList>
+              <TabsTrigger value="webpicks"><Globe className="mr-1.5 h-3.5 w-3.5" /> Web Picks</TabsTrigger>
               <TabsTrigger value="youtube" disabled={!includeYouTube || !data?.sources?.youtube}><Youtube className="mr-1.5 h-3.5 w-3.5" /> YouTube</TabsTrigger>
               <TabsTrigger value="quotes"><Flame className="mr-1.5 h-3.5 w-3.5" /> Quotes</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="webpicks" className="mt-3">
+              <WebPicksPanel />
+            </TabsContent>
 
             <TabsContent value="youtube" className="mt-3">
               {data?.sources?.youtube ? (
@@ -252,3 +258,100 @@ function TickerRow({ t }: { t: SourceTicker }) {
     </div>
   );
 }
+
+function WebPicksPanel() {
+  const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
+  const qc = useQueryClient();
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-72 w-full" />)}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="border-bearish/40 bg-bearish/5 p-4 text-sm text-bearish">
+        Couldn't scrape options ideas: {(error as Error).message}.
+        <Button variant="outline" size="sm" className="ml-3" onClick={() => refetch()}>Retry</Button>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Live web scout · Firecrawl + Nova</div>
+          <p className="mt-0.5 text-sm text-foreground/90">{data?.marketRead}</p>
+        </div>
+        <Button size="sm" variant="secondary" onClick={() => { qc.invalidateQueries({ queryKey: ["options-scout"] }); refetch(); }} disabled={isFetching}>
+          <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", isFetching && "animate-spin")} />
+          Re-scrape
+        </Button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={data?.safe ?? []} />
+        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={data?.mild ?? []} />
+        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={data?.aggressive ?? []} />
+      </div>
+
+      {data?.sources && data.sources.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
+          <span className="uppercase tracking-widest">Sources scraped:</span>
+          {data.sources.map((s) => (
+            <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded border border-border/60 px-1.5 py-0.5 hover:text-foreground">
+              {s.name} <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone: "bullish" | "neutral" | "bearish"; icon: React.ReactNode; blurb: string; picks: ScoutPick[] }) {
+  const toneClass =
+    tone === "bullish" ? "border-bullish/40 bg-bullish/5" :
+    tone === "bearish" ? "border-bearish/40 bg-bearish/5" :
+    "border-border bg-surface/40";
+  const chipClass =
+    tone === "bullish" ? "text-bullish bg-bullish/10 border-bullish/40" :
+    tone === "bearish" ? "text-bearish bg-bearish/10 border-bearish/40" :
+    "text-foreground bg-muted/40 border-border";
+  return (
+    <Card className={cn("p-3", toneClass)}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-widest", chipClass)}>
+            {icon} {title}
+          </span>
+          <span className="text-[10px] text-muted-foreground">{blurb}</span>
+        </div>
+        <span className="text-[10px] text-muted-foreground">{picks.length}</span>
+      </div>
+      <div className="mt-3 space-y-2">
+        {picks.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">No ideas in this bucket right now.</div>
+        ) : picks.map((p, i) => (
+          <div key={i} className="rounded-md border border-border/60 bg-background/40 p-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-sm font-semibold">{p.symbol}</span>
+              <Badge variant="outline" className="text-[10px]">{p.strategy}</Badge>
+            </div>
+            <p className="mt-1.5 text-xs text-foreground/90">{p.thesis}</p>
+            <div className="mt-2 space-y-1 text-[11px]">
+              <div><span className="text-muted-foreground">Entry: </span><span className="text-foreground/80">{p.entry}</span></div>
+              <div><span className="text-muted-foreground">Risk: </span><span className="text-foreground/80">{p.risk}</span></div>
+              <div className="text-[10px] text-muted-foreground italic">via {p.source}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
