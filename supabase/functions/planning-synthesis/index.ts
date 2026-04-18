@@ -35,18 +35,18 @@ Deno.serve(async (req) => {
 
     // 1) Pull all sources in parallel
     const [reddit, youtube] = await Promise.all([
-      invoke("reddit-pulse", { sort: "hot", limit: 30 }),
+      invoke("reddit-pulse", { sort: ["hot", "rising"], limit: 40 }),
       includeYouTube ? invoke("youtube-chatter", { query: ytQuery, maxVideos: 8, commentsPerVideo: 5 }) : Promise.resolve(null),
     ]);
 
     const redditTickers: SourceTicker[] = reddit?.tickers ?? [];
     const ytTickers: SourceTicker[] = youtube?.tickers ?? [];
 
-    // Union of ticker universe (top 25 across both sources)
+    // Union of ticker universe (top 30 across both sources)
     const universe = new Set<string>();
-    for (const t of redditTickers.slice(0, 20)) universe.add(t.symbol);
-    for (const t of ytTickers.slice(0, 20)) universe.add(t.symbol);
-    const symbols = [...universe].slice(0, 25);
+    for (const t of redditTickers.slice(0, 30)) universe.add(t.symbol);
+    for (const t of ytTickers.slice(0, 25)) universe.add(t.symbol);
+    const symbols = [...universe].slice(0, 35);
 
     // 2) Pull our verified quotes for that universe
     const quotesData = symbols.length ? await invoke("quotes-fetch", { symbols }) : null;
