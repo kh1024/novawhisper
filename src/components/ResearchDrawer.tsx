@@ -345,7 +345,8 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                       </div>
                       <div className="mono text-lg font-semibold w-10 text-right">{score}</div>
                     </Card>
-                  ))}
+                    );
+                  })}
                 </TabsContent>
 
                 <TabsContent value="sym" className="mt-4 space-y-2">
