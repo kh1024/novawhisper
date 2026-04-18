@@ -161,20 +161,60 @@ Deno.serve(async (req) => {
     const riskProfile = ctx.riskProfile ?? "mild";
     const model = ctx.model && ctx.model.includes("/") ? ctx.model : "google/gemini-3-flash-preview";
 
-    const userPrompt = `Ticker: ${ctx.symbol}${ctx.name ? ` (${ctx.name})` : ""}
-Sector: ${ctx.sector ?? "—"}
-Price: $${ctx.price?.toFixed(2) ?? "—"} | Change: ${ctx.changePct?.toFixed(2) ?? "—"}% | Verification: ${ctx.status ?? "—"}
-USER BUDGET: $${budget.toFixed(0)} (max spend per trade — each contract = mid × 100)
-USER RISK PROFILE: ${riskProfile.toUpperCase()} — emphasize this bucket in your Bottom Line.
+    const structuredInput = {
+      ticker: ctx.symbol,
+      name: ctx.name ?? null,
+      sector: ctx.sector ?? null,
+      underlying_price: ctx.price ?? null,
+      timestamp: new Date().toISOString(),
+      market_session: (() => {
+        const ny = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const day = ny.getDay();
+        if (day === 0 || day === 6) return "closed";
+        const m = ny.getHours() * 60 + ny.getMinutes();
+        if (m >= 9 * 60 + 30 && m < 16 * 60) return "regular";
+        if (m >= 4 * 60 && m < 9 * 60 + 30) return "pre-market";
+        if (m >= 16 * 60 && m < 20 * 60) return "after-hours";
+        return "closed";
+      })(),
+      data_verification_status: ctx.status ?? null,
+      price_context: {
+        daily_change: ctx.change ?? null,
+        daily_change_pct: ctx.changePct ?? null,
+        trend: typeof ctx.changePct === "number"
+          ? ctx.changePct < -1 ? "pullback" : ctx.changePct > 1 ? "rally" : "flat"
+          : null,
+      },
+      user_budget: budget,
+      user_risk_profile: riskProfile,
+      contracts: (ctx.topPicks ?? []).map((p) => ({
+        type: p.type,
+        strike: p.strike,
+        expiry: p.expiration,
+        dte: p.dte,
+        bid: p.bid ?? null,
+        ask: p.ask ?? null,
+        mid: p.mid,
+        last: p.last ?? null,
+        spread_pct: p.spreadPct ?? null,
+        delta: p.delta,
+        iv: p.iv,
+        theta: p.theta ?? null,
+        volume: p.volume ?? null,
+        open_interest: p.openInterest ?? null,
+        cost_per_contract_usd: +(p.mid * 100).toFixed(2),
+        annualized_pct: p.annualized,
+        internal_score: p.score,
+      })),
+    };
 
-Top scored option picks (live):
-${(ctx.topPicks ?? []).map((p, i) => {
-  const cost = p.mid * 100;
-  const affords = Math.floor(budget / cost);
-  return `${i + 1}. ${p.type.toUpperCase()} $${p.strike} exp ${p.expiration} (${p.dte}d) — mid $${p.mid.toFixed(2)}, cost/contract $${cost.toFixed(0)}, budget affords ${affords}x, ann ${p.annualized.toFixed(1)}%, score ${p.score}${p.delta != null ? `, Δ${p.delta.toFixed(2)}` : ""}${p.iv != null ? `, IV ${(p.iv * 100).toFixed(0)}%` : ""}`;
-}).join("\n") || "(no live option contracts available)"}
+    const userPrompt = `Evaluate this options trade idea. Apply the 8 internal self-checks, then run STEPS 1–7, then output the required format. Use ONLY the data below — do not invent prices, news, or contracts.
 
-Write the analyst note now — strictly enforce the budget filter.`;
+\`\`\`json
+${JSON.stringify(structuredInput, null, 2)}
+\`\`\`
+
+If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
