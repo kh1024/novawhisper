@@ -1,5 +1,5 @@
 // Portfolio — saved options positions with live underlying + Nova's honest take.
-import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical, Sparkles } from "lucide-react";
+import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical, Sparkles, Play, Pause } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
