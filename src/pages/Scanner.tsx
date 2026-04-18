@@ -21,6 +21,33 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
+import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+
+// Build a sensible default options contract from a scanner row so the user can
+// save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
+// option type follows the row's bias (bullish → call, bearish → put,
+// neutral/reversal → call by default).
+function deriveContractFromRow(r: SetupRow) {
+  const optionType = r.bias === "bearish" ? "put" : "call";
+  // ATM-ish: round to nearest dollar (or nearest $5 for stocks > $100).
+  const step = r.price >= 100 ? 5 : 1;
+  const strike = Math.max(step, Math.round(r.price / step) * step);
+  // Next Friday at least 28 days out.
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + 28);
+  while (d.getUTCDay() !== 5) d.setUTCDate(d.getUTCDate() + 1);
+  const expiry = d.toISOString().slice(0, 10);
+  return {
+    symbol: r.symbol,
+    optionType,
+    direction: "long",
+    strike,
+    expiry,
+    entryUnderlying: r.price,
+    thesis: r.crl?.reason || `${r.bias} setup · score ${r.setupScore}`,
+    source: "scanner" as const,
+  };
+}
 
 type View = "table" | "cards";
 
@@ -366,14 +393,17 @@ export default function Scanner() {
                             </span>
                           </td>
                           <td className="px-3 py-3">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7"
-                              onClick={(e) => { e.stopPropagation(); setOpenSymbol(r.symbol); }}
-                            >
-                              Open
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <SaveToPortfolioButton {...deriveContractFromRow(r)} size="xs" />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7"
+                                onClick={(e) => { e.stopPropagation(); setOpenSymbol(r.symbol); }}
+                              >
+                                Open
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                         {isOpen && (
@@ -534,10 +564,11 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <div className="flex justify-between"><span className="text-muted-foreground">Earnings</span><span>{row.earningsInDays != null ? `${row.earningsInDays}d` : "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Data quality</span><span className={scoreColor(row.dataQuality)}>{row.dataQuality}</span></div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={onOpen} className="flex-1" size="sm">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={onOpen} className="flex-1 min-w-[140px]" size="sm">
             Open full research →
           </Button>
+          <SaveToPortfolioButton {...deriveContractFromRow(row)} size="sm" />
           <Button asChild variant="outline" size="sm" className="gap-1.5">
             <a
               href={`https://robinhood.com/options/chains/${encodeURIComponent(row.symbol)}`}
@@ -596,6 +627,10 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <AlertTriangle className="h-3 w-3 flex-shrink-0 mt-0.5" />{row.warnings[0]}
         </div>
       )}
+
+      <div className="flex justify-end pt-1" onClick={(e) => e.stopPropagation()}>
+        <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
+      </div>
     </Card>
   );
 }
