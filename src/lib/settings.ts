@@ -42,6 +42,7 @@ const DEFAULTS: AppSettings = {
   feePerContract: 0,
   feePerTrade: 0,
   regulatoryFeePerContract: 0.03,
+  paperMode: false,
 };
 
 export const BROKER_PRESETS: { value: BrokerPreset; label: string; feePerContract: number; feePerTrade: number; regulatoryFeePerContract: number; hint: string }[] = [

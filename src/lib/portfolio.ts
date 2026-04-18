@@ -35,6 +35,7 @@ export interface PortfolioPosition {
   close_premium: number | null;
   closed_at: string | null;
   notes: string | null;
+  is_paper: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -51,6 +52,7 @@ export interface NewPosition {
   entryUnderlying?: number | null;
   thesis?: string | null;
   source?: string | null;
+  isPaper?: boolean;
 }
 
 export function usePortfolio() {
@@ -88,13 +90,14 @@ export function useAddPosition() {
         entry_underlying: p.entryUnderlying ?? null,
         thesis: p.thesis ?? null,
         source: p.source ?? null,
+        is_paper: p.isPaper ?? false,
       };
       const { error } = await supabase.from("portfolio_positions" as never).insert(row as never);
       if (error) throw error;
     },
     onSuccess: (_d, p) => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
-      toast({ title: "Saved to portfolio", description: `${p.symbol} $${p.strike} ${p.optionType.toUpperCase()} · ${p.expiry}` });
+      toast({ title: p.isPaper ? "Saved as paper trade" : "Saved to portfolio", description: `${p.symbol} $${p.strike} ${p.optionType.toUpperCase()} · ${p.expiry}` });
     },
     onError: (e: Error) => toast({ title: "Couldn't save", description: e.message, variant: "destructive" }),
   });
