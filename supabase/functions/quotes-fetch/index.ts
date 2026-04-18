@@ -23,21 +23,27 @@ interface VerifiedQuote {
 async function fetchMassive(symbol: string): Promise<{ price: number; change: number; changePct: number; volume: number } | null> {
   if (!MASSIVE_KEY) return null;
   try {
-    // Massive endpoint convention — adjust if your Massive plan exposes a different path.
-    const url = `https://api.massive.io/v1/quote?symbol=${encodeURIComponent(symbol)}&apikey=${MASSIVE_KEY}`;
-    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    // Single Ticker Snapshot — bundles last trade + day aggregates + prev day close.
+    const url = `https://api.massive.com/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(symbol)}`;
+    const r = await fetch(url, {
+      headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
+    });
     if (!r.ok) {
-      console.warn(`[massive] ${symbol} HTTP ${r.status}`);
+      console.warn(`[massive] ${symbol} HTTP ${r.status}: ${await r.text().catch(() => "")}`);
       return null;
     }
     const d = await r.json();
-    const price = Number(d.price ?? d.last ?? d.close);
-    if (!isFinite(price)) return null;
+    const t = d.ticker ?? d.results ?? {};
+    const price = Number(t.lastTrade?.p ?? t.day?.c ?? t.min?.c);
+    const prev = Number(t.prevDay?.c);
+    if (!isFinite(price) || price === 0) return null;
+    const change = isFinite(prev) && prev > 0 ? price - prev : Number(t.todaysChange ?? 0);
+    const changePct = isFinite(prev) && prev > 0 ? (change / prev) * 100 : Number(t.todaysChangePerc ?? 0);
     return {
       price,
-      change: Number(d.change ?? 0),
-      changePct: Number(d.changePct ?? d.change_pct ?? 0),
-      volume: Number(d.volume ?? 0),
+      change: +change.toFixed(4),
+      changePct: +changePct.toFixed(4),
+      volume: Number(t.day?.v ?? 0),
     };
   } catch (e) {
     console.error(`[massive] ${symbol}`, e);
