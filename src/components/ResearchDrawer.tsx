@@ -15,6 +15,7 @@ import ReactMarkdown from "react-markdown";
 import { useBudget } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
 import { NovaVerdictCard, type NovaCard } from "@/components/NovaVerdictCard";
+import { useEventRiskSignals } from "@/lib/sentimentSignals";
 
 type Props = {
   symbol: string | null;
