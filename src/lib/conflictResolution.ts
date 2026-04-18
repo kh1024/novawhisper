@@ -1,23 +1,23 @@
 // Conflict Resolution Layer (CRL)
 // Pure logic — given technicals + Greeks (+ optional fundamental anchor),
 // returns GO / WAIT / NO + reasoning, risk badge, stop-loss flag, and an
-// orthogonal "Risk Alert" badge for valuation overshoots. Used by both
-// Portfolio (real Greeks via options-fetch) and Scanner.
+// orthogonal "Risk Alert" badge for valuation overshoots.
 //
-// Rules (current product spec):
-//   1. Momentum Check     — 3+ day winning streak ⇒ "High Momentum".
-//   2. Trap Filters
-//      a. RSI > 70                       ⇒ downgrade GO → WAIT (Technical Overextension)
-//      b. DTE < 5  AND  theta < -0.50    ⇒ NO   (Mathematical Trap / Time Decay)
-//   3. GO Signal          — High momentum AND RSI ∈ [40,60] (fresh breakout).
-//   4. Stop-loss          — long & price breaks 8-EMA ⇒ EXIT (sell at loss).
-//   5. Risk Alert (orthogonal, fires on top of any verdict including Safe):
-//      spot > intrinsicValue × 1.15      ⇒ flag "Overvalued vs intrinsic"
-//
-// Risk badge (orthogonal to verdict):
-//   - Safe       — ITM (|delta| ≥ 0.65) AND |theta| < 0.30
-//   - Aggressive — OTM (|delta| < 0.35) OR  IV ≥ 0.60 (60%)
-//   - Mild       — everything else (near-the-money)
+// Expert Audit rules (current product spec):
+//   1. Risk classification (deterministic from Greeks + RSI)
+//      - Safe       — |Δ| > 0.80 AND |Θ| < 0.15 AND RSI < 60   (deep ITM, stock-replacement)
+//      - Mild       — near-ATM (|Δ| 0.40–0.60), |Θ| 0.20–0.40, RSI 60–70
+//      - Aggressive — |Δ| < 0.35 OR |Θ| > 0.50 OR RSI > 70 OR IV ≥ 0.60
+//   2. Trap filters (override verdict, evaluated in order)
+//      a. Early Exit (losing trade)  — open position AND unrealizedPnl < 0
+//                                       AND theta < -0.50 AND DTE < 2  ⇒ EXIT (sell at loss)
+//      b. Mathematical Trap          — DTE < 5 AND theta < -0.50       ⇒ NO
+//      c. EMA Overshoot              — spot > 8-EMA × 1.15              ⇒ NO-GO until EMA retouch
+//      d. Technical Overextension    — RSI > 70                         ⇒ WAIT (no chasing the peak)
+//      e. Stop-loss                  — long & price breaks 8-EMA        ⇒ EXIT
+//   3. GO Signal — High momentum (3+ up-days) AND RSI ∈ [40, 60].
+//   4. Risk Alert (orthogonal — fires on top of any verdict including Safe):
+//        spot > intrinsicValue × 1.15  ⇒ flag "Overvalued vs intrinsic"
 
 export type CrlVerdict = "GO" | "WAIT" | "NO" | "EXIT" | "NEUTRAL";
 export type RiskBadge = "Safe" | "Mild" | "Aggressive";
@@ -35,48 +35,57 @@ export interface CrlInputs {
   dte: number | null;                  // days to expiry
   // Position direction
   isLong: boolean;
-  isCall: boolean;                     // for stop-loss direction
-  // Fundamental anchor (optional) — used for "Overvalued" risk alert.
+  isCall: boolean;
+  // Optional context for live positions only
+  unrealizedPnl?: number | null;       // dollars; negative = losing — used for early-exit rule
   intrinsicValue?: number | null;      // analyst / model fair-value estimate
 }
 
 export interface CrlOutput {
   verdict: CrlVerdict;
-  reason: string;                      // one-liner explaining the call
+  reason: string;
   highMomentum: boolean;
   emaDistancePct: number | null;       // (spot - ema8) / ema8 * 100
   riskBadge: RiskBadge | null;
-  stopLossTriggered: boolean;          // long & price broke below 8-EMA
-  flags: string[];                     // bullet flags for UI
-  // Valuation overshoot — fires independently of verdict, even on "Safe" calls.
+  stopLossTriggered: boolean;
+  flags: string[];
   valuationAlert: {
     triggered: boolean;
     intrinsicValue: number | null;
-    premiumPct: number | null;         // (spot / intrinsic - 1) * 100
+    premiumPct: number | null;
     message: string | null;
   };
 }
 
-const VALUATION_OVERSHOOT_PCT = 15; // spot > intrinsic × 1.15 ⇒ alert
+const VALUATION_OVERSHOOT_PCT = 15;   // spot > intrinsic × 1.15 ⇒ Risk Alert
+const EMA_OVERSHOOT_PCT = 15;         // spot > 8-EMA × 1.15 ⇒ NO-GO
 
 export function runConflictResolution(input: CrlInputs): CrlOutput {
-  const { rsi, ema8, spot, winningStreakDays, delta, theta, iv, dte, isLong, isCall, intrinsicValue } = input;
+  const {
+    rsi, ema8, spot, winningStreakDays,
+    delta, theta, iv, dte,
+    isLong, isCall,
+    intrinsicValue, unrealizedPnl,
+  } = input;
 
   const emaDistancePct =
     ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
   const highMomentum = (winningStreakDays ?? 0) >= 3;
   const flags: string[] = [];
   if (highMomentum) flags.push("High momentum (3+ day streak)");
-  const riskBadge = classifyRisk({ delta, theta, iv });
+  const riskBadge = classifyRisk({ delta, theta, iv, rsi });
 
-  // ── Risk Alert: spot is materially above intrinsic value ──
-  // Fires independently of verdict — even a "Safe" call gets flagged.
+  // Risk Alert (orthogonal — fires on top of any verdict)
   const valuationAlert = computeValuationAlert(spot, intrinsicValue ?? null);
-  if (valuationAlert.triggered && valuationAlert.message) {
-    flags.push(valuationAlert.message);
+  if (valuationAlert.triggered && valuationAlert.message) flags.push(valuationAlert.message);
+
+  // Stop-loss check (long calls breaking down, long puts breaking up)
+  let stopLossTriggered = false;
+  if (isLong && spot != null && ema8 != null) {
+    if (isCall && spot < ema8) stopLossTriggered = true;
+    if (!isCall && spot > ema8) stopLossTriggered = true;
   }
 
-  // Helper to build a result with the shared fields baked in.
   const build = (
     verdict: CrlVerdict,
     reason: string,
@@ -92,15 +101,22 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     valuationAlert,
   });
 
-  // ── Stop-loss check (long calls only — bearish stop is symmetric for puts) ──
-  let stopLossTriggered = false;
-  if (isLong && spot != null && ema8 != null) {
-    if (isCall && spot < ema8) stopLossTriggered = true;
-    if (!isCall && spot > ema8) stopLossTriggered = true; // long put, price above 8-EMA
+  // ── Trap a: Early Exit on losing trade with steep theta + tiny DTE ──
+  // "Don't marry a losing trade" — sell now for a 30% loss instead of 100% at expiry.
+  if (
+    unrealizedPnl != null && unrealizedPnl < 0 &&
+    theta != null && theta < -0.5 &&
+    dte != null && dte < 2
+  ) {
+    flags.push("Sell at loss (losing + theta bleed + ≤2 DTE)");
+    return build(
+      "EXIT",
+      `Losing trade with theta ${theta.toFixed(2)} and only ${dte}d left — paying $${Math.abs(theta * 100).toFixed(0)}/contract/day to hope. Cut now, don't ride to zero.`,
+      { stopLossTriggered: true },
+    );
   }
 
-  // ── Trap filter 1: Mathematical Trap (Time Decay) ──
-  // Spec: DTE < 5  AND  theta < -0.50  ⇒  NO
+  // ── Trap b: Mathematical Trap (DTE < 5 AND theta < -0.50) ──
   if (theta != null && dte != null && theta < -0.5 && dte < 5) {
     flags.push("Mathematical trap (time decay)");
     return build(
@@ -109,18 +125,26 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     );
   }
 
-  // ── Trap filter 2: Technical Overextension ──
-  // Spec: RSI > 70 alone ⇒ downgrade GO → WAIT (no EMA-distance gate).
+  // ── Trap c: EMA Overshoot (spot > 8-EMA × 1.15) ──
+  if (emaDistancePct != null && emaDistancePct > EMA_OVERSHOOT_PCT) {
+    flags.push(`EMA overshoot (+${emaDistancePct.toFixed(1)}% vs 8-EMA)`);
+    return build(
+      "NO",
+      `Price is ${emaDistancePct.toFixed(1)}% above 8-EMA $${ema8?.toFixed(2)} — too stretched. NO-GO until it retouches the EMA.`,
+    );
+  }
+
+  // ── Trap d: Technical Overextension (RSI > 70) ──
   if (rsi != null && rsi > 70) {
     flags.push("Overextended (RSI > 70)");
     const dist = emaDistancePct != null ? ` and ${emaDistancePct.toFixed(1)}% vs 8-EMA` : "";
     return build(
       "WAIT",
-      `RSI ${rsi.toFixed(0)}${dist} — technical overextension. Wait for a pullback before entering.`,
+      `RSI ${rsi.toFixed(0)}${dist} — chasing the peak. Wait for a pullback before entering.`,
     );
   }
 
-  // ── Stop-loss EXIT (long position broke key level) ──
+  // ── Trap e: Stop-loss EXIT (long position broke key level) ──
   if (stopLossTriggered) {
     flags.push("Broke 8-EMA — sell at loss");
     return build(
@@ -130,7 +154,7 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     );
   }
 
-  // ── GO Signal: high momentum + fresh RSI ──
+  // ── GO Signal ──
   if (highMomentum && rsi != null && rsi >= 40 && rsi <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
     return build(
@@ -140,7 +164,7 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
     );
   }
 
-  // ── Default: NEUTRAL with the most useful reason we can give ──
+  // ── Defaults ──
   if (highMomentum && rsi != null && rsi > 60) {
     flags.push("Momentum hot but RSI extended");
     return build("WAIT", `Momentum is up but RSI ${rsi.toFixed(0)} is hot — wait for a cooldown before chasing.`);
@@ -148,7 +172,6 @@ export function runConflictResolution(input: CrlInputs): CrlOutput {
   if (!highMomentum && rsi != null && rsi < 40) {
     return build("WAIT", `Weak streak and RSI ${rsi.toFixed(0)} — no edge here, sit it out.`);
   }
-
   return build("NEUTRAL", "No conflict — but no clean GO signal either.");
 }
 
@@ -167,16 +190,35 @@ function computeValuationAlert(spot: number | null, intrinsic: number | null): C
     message: `Risk Alert: trading ${premiumPct.toFixed(1)}% above intrinsic ($${intrinsic.toFixed(2)})`,
   };
 }
+
+// Expert risk classification — combines Greeks AND RSI.
+// Safe       — deep ITM stock-replacement: |Δ|>0.80, |Θ|<0.15, RSI<60
+// Aggressive — far OTM / hot IV / overbought: |Δ|<0.35 OR |Θ|>0.50 OR RSI>70 OR IV≥0.60
+// Mild       — everything else (typically near-ATM with moderate Greeks).
 function classifyRisk({
-  delta, theta, iv,
-}: { delta: number | null; theta: number | null; iv: number | null }): RiskBadge | null {
-  if (delta == null && theta == null && iv == null) return null;
+  delta, theta, iv, rsi,
+}: {
+  delta: number | null; theta: number | null; iv: number | null; rsi: number | null;
+}): RiskBadge | null {
+  if (delta == null && theta == null && iv == null && rsi == null) return null;
   const aDelta = delta != null ? Math.abs(delta) : null;
   const aTheta = theta != null ? Math.abs(theta) : null;
-  // Aggressive — far OTM or expensive IV
-  if ((aDelta != null && aDelta < 0.35) || (iv != null && iv >= 0.6)) return "Aggressive";
-  // Safe — ITM with modest theta
-  if (aDelta != null && aDelta >= 0.65 && (aTheta == null || aTheta < 0.3)) return "Safe";
+
+  // Aggressive — any single hot signal is enough.
+  if (
+    (aDelta != null && aDelta < 0.35) ||
+    (aTheta != null && aTheta > 0.5) ||
+    (iv != null && iv >= 0.6) ||
+    (rsi != null && rsi > 70)
+  ) return "Aggressive";
+
+  // Safe — needs the full deep-ITM profile.
+  if (
+    aDelta != null && aDelta > 0.8 &&
+    aTheta != null && aTheta < 0.15 &&
+    (rsi == null || rsi < 60)
+  ) return "Safe";
+
   return "Mild";
 }
 
