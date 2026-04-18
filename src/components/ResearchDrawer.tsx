@@ -288,20 +288,21 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         ))}
                       </div>
                     </div>
-                    {novaLoading && !novaText && (
+                    {novaLoading && !novaCard && (
                       <div className="space-y-2">
-                        <Skeleton className="h-3 w-full" />
-                        <Skeleton className="h-3 w-[92%]" />
-                        <Skeleton className="h-3 w-[78%]" />
-                        <Skeleton className="h-3 w-[85%]" />
+                        <Skeleton className="h-24 w-full rounded-lg" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
                       </div>
                     )}
-                    {novaText && (
+                    {novaCard && (
+                      <NovaVerdictCard card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }} />
+                    )}
+                    {!novaLoading && !novaCard && novaText && (
                       <div className="text-sm text-foreground/90 leading-relaxed space-y-2 [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1.5 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-surface/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_em]:text-muted-foreground [&_em]:not-italic">
                         <ReactMarkdown>{novaText}</ReactMarkdown>
                       </div>
                     )}
-                    {!novaLoading && !novaText && q && (
+                    {!novaLoading && !novaCard && !novaText && q && (
                       <div className="text-xs text-muted-foreground">Click Regenerate to ask Nova.</div>
                     )}
                   </Card>
