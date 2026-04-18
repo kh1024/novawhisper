@@ -150,6 +150,12 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">{p.symbol}</span>
                     <TickerPrice symbol={p.symbol} showChange />
+                    <span
+                      title="NOVA — Nova's verdict engine reconciling technicals, Greeks & risk"
+                      className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/40"
+                    >
+                      NOVA
+                    </span>
                     <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
                       {p.strategy.replace("-", " ")}
                     </Badge>
