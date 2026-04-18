@@ -108,21 +108,8 @@ export default function Planning() {
         </div>
       ) : (
         <>
-          {/* AI Picks grid */}
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-              <Flame className="h-3.5 w-3.5" /> AI Picks · next session
-            </div>
-            {picks.length === 0 ? (
-              <Card className="p-6 text-sm text-muted-foreground">
-                No synthesized picks yet. Try Re-synthesize, or check that the YOUTUBE_API_KEY is valid.
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {picks.map((p) => <PickCard key={p.symbol} pick={p} />)}
-              </div>
-            )}
-          </div>
+          {/* AI Picks grid — fixed slots: 3 Safe + 2 Mild + 1 Aggressive */}
+          <SlottedPicks picks={picks} />
 
           {/* Sources tabs */}
           <Tabs defaultValue="webpicks" className="mt-2">
