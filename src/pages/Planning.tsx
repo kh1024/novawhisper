@@ -417,7 +417,7 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
             <div className="mt-2 space-y-1 text-[11px]">
               <div><span className="text-muted-foreground">Risk: </span><span className="text-foreground/80">{p.risk}</span></div>
               <div className="flex items-center justify-between gap-2">
-                <div className="text-[10px] text-muted-foreground italic truncate">via {p.source}</div>
+                <SourceBadge source={p.source} />
                 <SaveToPortfolioButton
                   size="xs"
                   symbol={p.symbol}
@@ -496,3 +496,33 @@ function HistoryPanel() {
     </div>
   );
 }
+
+function SourceBadge({ source }: { source?: string | null }) {
+  if (!source) return <span className="text-[10px] text-muted-foreground italic">unknown source</span>;
+  let domain = source;
+  let href: string | null = null;
+  try {
+    const u = new URL(source.startsWith("http") ? source : `https://${source}`);
+    domain = u.hostname.replace(/^www\./, "");
+    href = u.href;
+  } catch {
+    domain = source.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  }
+  const className = "inline-flex max-w-[60%] items-center gap-1 truncate rounded border border-border/60 bg-muted/30 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground hover:text-foreground hover:border-border";
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={className} onClick={(e) => e.stopPropagation()}>
+        <Globe className="h-2.5 w-2.5 shrink-0" />
+        <span className="truncate">{domain}</span>
+        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+      </a>
+    );
+  }
+  return (
+    <span className={className}>
+      <Globe className="h-2.5 w-2.5 shrink-0" />
+      <span className="truncate">{domain}</span>
+    </span>
+  );
+}
+
