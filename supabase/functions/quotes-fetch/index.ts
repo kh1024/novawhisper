@@ -1,5 +1,6 @@
-// Verified stock quotes via Finnhub + Alpha Vantage + Massive (3-source consensus).
-// Strategy: in-memory cache (30s TTL) + per-source backoff to survive free-tier limits.
+// Verified stock quotes via Finnhub + Alpha Vantage + Massive + Yahoo + Stooq.
+// Yahoo & Stooq are free/unmetered and used as ETF-friendly fallbacks so we
+// rarely show "No data" even when the keyed providers get rate-limited.
 // Status: verified (2+ sources within 0.25%) · close (<1%) · mismatch (≥1%) · stale (only 1 src) · unavailable.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
@@ -7,7 +8,7 @@ const ALPHA_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 
-type SourceName = "finnhub" | "alpha-vantage" | "massive";
+type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq";
 
 interface SourceQuote {
   source: SourceName;
@@ -36,10 +37,14 @@ const QUOTE_TTL_MS = 30_000;
 const FINNHUB_TTL_MS = 30_000;
 const MASSIVE_TTL_MS = 30_000;
 const ALPHA_TTL_MS = 60 * 60_000; // Alpha free is 25/day
+const YAHOO_TTL_MS = 30_000;
+const STOOQ_TTL_MS = 60_000;
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const massiveCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const yahooCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const stooqCache = new Map<string, { q: SourceQuote | null; at: number }>();
 
 let alphaChain: Promise<unknown> = Promise.resolve();
 function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
@@ -121,10 +126,6 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
   });
 }
 
-// Massive previous-day aggregate (works on free/basic plans).
-// GET /v2/aggs/ticker/{SYMBOL}/prev → { results: [{ o,h,l,c,v }] }
-// We use prevDay close as the "Massive price" for cross-checking. It's a 1-day-old
-// reference but if Finnhub's intraday is way off Massive's prev-close, we flag it.
 async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
   if (!MASSIVE_KEY) return null;
   const cached = massiveCache.get(symbol);
@@ -165,19 +166,107 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
   }
 }
 
-// Pick consensus from up to 3 sources. "Freshest accuracy wins":
-// - If 2+ sources agree within 0.25% → verified, use their average via the first one.
-// - If 2+ within 1% → close.
-// - If sources disagree by ≥1% → mismatch (use median price).
-// - If only 1 source → stale.
-function verify(symbol: string, finn: SourceQuote | null, alpha: SourceQuote | null, mass: SourceQuote | null): VerifiedQuote {
+// ── Yahoo Finance (free, no key, very reliable for ETFs) ──
+// One batched call returns up to ~50 symbols at once.
+async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuote>> {
+  const out = new Map<string, SourceQuote>();
+  if (symbols.length === 0) return out;
+  try {
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
+    const r = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; NovaTerminal/1.0)",
+        Accept: "application/json",
+      },
+    });
+    if (!r.ok) {
+      console.warn(`[yahoo] batch HTTP ${r.status}`);
+      return out;
+    }
+    const d = await r.json();
+    const rows: Array<{
+      symbol: string;
+      regularMarketPrice?: number;
+      regularMarketChange?: number;
+      regularMarketChangePercent?: number;
+      regularMarketVolume?: number;
+    }> = d?.quoteResponse?.result ?? [];
+    for (const row of rows) {
+      const price = Number(row.regularMarketPrice);
+      if (!isFinite(price) || price <= 0) continue;
+      out.set(row.symbol.toUpperCase(), {
+        source: "yahoo",
+        price,
+        change: Number(row.regularMarketChange ?? 0),
+        changePct: Number(row.regularMarketChangePercent ?? 0),
+        volume: Number(row.regularMarketVolume ?? 0),
+      });
+    }
+  } catch (e) {
+    console.error("[yahoo] batch error", e);
+  }
+  return out;
+}
+
+async function fetchYahooSingle(symbol: string): Promise<SourceQuote | null> {
+  const cached = yahooCache.get(symbol);
+  if (cached && Date.now() - cached.at < YAHOO_TTL_MS) return cached.q;
+  const map = await fetchYahooBatch([symbol]);
+  const q = map.get(symbol) ?? null;
+  yahooCache.set(symbol, { q, at: Date.now() });
+  return q;
+}
+
+// ── Stooq (free CSV, no key; reliable for ETFs/index ETFs) ──
+async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
+  const cached = stooqCache.get(symbol);
+  if (cached && Date.now() - cached.at < STOOQ_TTL_MS) return cached.q;
+  try {
+    const variants = [`${symbol.toLowerCase()}.us`, symbol.toLowerCase()];
+    for (const sym of variants) {
+      const url = `https://stooq.com/q/l/?s=${encodeURIComponent(sym)}&f=sd2t2ohlcv&h&e=csv`;
+      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 NovaTerminal" } });
+      if (!r.ok) continue;
+      const text = (await r.text()).trim();
+      const lines = text.split(/\r?\n/);
+      if (lines.length < 2) continue;
+      const cols = lines[1].split(",");
+      const open = Number(cols[3]);
+      const close = Number(cols[6]);
+      const volume = Number(cols[7]);
+      if (!isFinite(close) || close <= 0) continue;
+      const change = isFinite(open) ? close - open : 0;
+      const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
+      const q: SourceQuote = { source: "stooq", price: close, change, changePct, volume: isFinite(volume) ? volume : 0 };
+      stooqCache.set(symbol, { q, at: Date.now() });
+      return q;
+    }
+    stooqCache.set(symbol, { q: null, at: Date.now() });
+    return null;
+  } catch (e) {
+    console.error(`[stooq] ${symbol}`, e);
+    return cached?.q ?? null;
+  }
+}
+
+// Pick consensus from up to 5 sources.
+function verify(
+  symbol: string,
+  finn: SourceQuote | null,
+  alpha: SourceQuote | null,
+  mass: SourceQuote | null,
+  yahoo: SourceQuote | null,
+  stooq: SourceQuote | null,
+): VerifiedQuote {
   const now = new Date().toISOString();
   const sources: Record<SourceName, number | null> = {
     finnhub: finn?.price ?? null,
     "alpha-vantage": alpha?.price ?? null,
     massive: mass?.price ?? null,
+    yahoo: yahoo?.price ?? null,
+    stooq: stooq?.price ?? null,
   };
-  const live = [finn, alpha, mass].filter((x): x is SourceQuote => !!x && x.price > 0);
+  const live = [finn, alpha, mass, yahoo, stooq].filter((x): x is SourceQuote => !!x && x.price > 0);
   if (live.length === 0) {
     return {
       symbol, price: 0, change: 0, changePct: 0, volume: 0,
@@ -193,13 +282,12 @@ function verify(symbol: string, finn: SourceQuote | null, alpha: SourceQuote | n
       diffPct: null, updatedAt: now,
     };
   }
-  // 2 or 3 sources: compute max pairwise diff %
   const prices = live.map((s) => s.price);
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const diff = ((maxP - minP) / minP) * 100;
-  // Prefer Massive (real-time) > Finnhub > Alpha when ≥2 sources agree.
-  const order: SourceName[] = ["massive", "finnhub", "alpha-vantage"];
+  // Prefer real-time intraday: Yahoo > Finnhub > Massive > Stooq > Alpha.
+  const order: SourceName[] = ["yahoo", "finnhub", "massive", "stooq", "alpha-vantage"];
   const chosen = order.map((n) => live.find((s) => s.source === n)).find(Boolean) ?? live[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
@@ -216,16 +304,23 @@ function verify(symbol: string, finn: SourceQuote | null, alpha: SourceQuote | n
   };
 }
 
-async function getQuote(sym: string, verifyWithAlpha: boolean): Promise<VerifiedQuote> {
+async function getQuote(
+  sym: string,
+  verifyWithAlpha: boolean,
+  yahooMap: Map<string, SourceQuote>,
+): Promise<VerifiedQuote> {
   const cached = quoteCache.get(sym);
   if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.quote;
-  // Fan out to all 3 in parallel. Massive is the new primary cross-check.
-  const [finn, mass, alpha] = await Promise.all([
+  const yahooFromBatch = yahooMap.get(sym) ?? null;
+  if (yahooFromBatch) yahooCache.set(sym, { q: yahooFromBatch, at: Date.now() });
+  const [finn, mass, alpha, stooq] = await Promise.all([
     fetchFinnhub(sym),
     fetchMassive(sym),
     verifyWithAlpha ? fetchAlpha(sym) : Promise.resolve(alphaCache.get(sym)?.q ?? null),
+    fetchStooq(sym),
   ]);
-  const v = verify(sym, finn, alpha, mass);
+  const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
+  const v = verify(sym, finn, alpha, mass, yahoo, stooq);
   quoteCache.set(sym, { quote: v, at: Date.now() });
   return v;
 }
@@ -254,7 +349,10 @@ Deno.serve(async (req) => {
 
     const useAlpha = verifyAll || symbols.length === 1;
 
-    const results = await Promise.all(symbols.map((sym) => getQuote(sym, useAlpha)));
+    // One Yahoo batch call covers all symbols at once — much faster than per-symbol.
+    const yahooMap = await fetchYahooBatch(symbols);
+
+    const results = await Promise.all(symbols.map((sym) => getQuote(sym, useAlpha, yahooMap)));
     return new Response(JSON.stringify({ quotes: results, fetchedAt: new Date().toISOString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
