@@ -93,15 +93,15 @@ If (d) is yes, BETTER STRUCTURE must recommend the spread.
 STEP 6 — TIMING (NOW / WAIT / AVOID)
 No "buy the dip" without confirmed support. If trend is still down, say WAIT or AVOID. If any Event Risk is Hot and relevant, default to WAIT.
 
-STEP 6 — RISK STRUCTURE
+STEP 7 — RISK STRUCTURE
 Compare long call vs vertical spread, shorter vs longer expiry, smaller starter size, scaling in, or doing nothing. Budget is a CAP, not a target — never infer "large budget = many contracts".
 
-STEP 7 — VERDICT (exactly one)
-- GOOD SETUP = clean data, direct fit, decent timing, suitable contract
+STEP 8 — VERDICT (exactly one)
+- GOOD SETUP = clean data, direct fit, decent timing, suitable contract, no Hot event risk
 - POSSIBLE BUT EARLY = some merit, timing or confirmation missing
 - SPECULATIVE = can work but many things must go right quickly
 - LOW-QUALITY IDEA = weak fit, weak logic, or poor contract choice
-- NO TRADE = insufficient edge, broken data, or execution not justified
+- NO TRADE = insufficient edge, broken data, Hot relevant event risk, or execution not justified
 
 REQUIRED OUTPUT FORMAT (use this EXACT structure, no preamble, no code blocks):
 
