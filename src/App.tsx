@@ -15,6 +15,7 @@ import Planning from "./pages/Planning";
 import Patterns from "./pages/Patterns";
 import Market from "./pages/Market";
 import Settings from "./pages/Settings";
+import Strategy from "./pages/Strategy";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/journal" element={<Journal />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/planning" element={<Planning />} />
+            <Route path="/strategy" element={<Strategy />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<NotFound />} />

@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui/card";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
 import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
 import { toast } from "sonner";
@@ -73,6 +75,41 @@ export default function Settings() {
           </span>
         )}
       </div>
+
+      {/* ───────────── Trader profile ───────────── */}
+      <Card className="glass-card p-6 space-y-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Compass className="h-4 w-4 text-primary" /> Trader profile
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md">
+              Drives the Strategy Builder. Tell Nova your risk, horizon and outlook and we'll match the right
+              option structures (credit spreads, iron condors, debit spreads, straddles, 0-DTE…).
+            </p>
+          </div>
+          <Button asChild size="sm" variant="outline">
+            <Link to="/strategy">
+              Open Strategy Builder <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-[11px]">
+          {[
+            ["Risk",      settings.traderProfile.risk],
+            ["Horizon",   settings.traderProfile.horizon],
+            ["Outlook",   settings.traderProfile.outlook.replace("_", " ")],
+            ["Catalyst",  settings.traderProfile.event],
+            ["Account",   settings.traderProfile.account],
+            ["IV stance", settings.traderProfile.ivStance],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-md border border-border/60 bg-surface/40 px-2.5 py-1.5">
+              <div className="text-[9px] uppercase tracking-widest text-muted-foreground">{k}</div>
+              <div className="font-medium capitalize text-foreground/90">{v}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       {/* ───────────── Budget ───────────── */}
       <Card className="glass-card p-6 space-y-4">
