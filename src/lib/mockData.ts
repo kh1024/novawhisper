@@ -19,7 +19,7 @@ export type Quote = {
   updatedAt?: string;
 };
 
-export type Pick = {
+export type OptionPick = {
   id: string;
   symbol: string;
   strategy: "covered-call" | "csp" | "long-call" | "long-put" | "wheel" | "leaps";
@@ -54,7 +54,7 @@ const seed = (s: string) => {
   };
 };
 
-const universe: Array<Pick<Quote, "symbol" | "name" | "sector" | "marketCap"> & { base: number }> = [
+const universe: Array<OptionPick<Quote, "symbol" | "name" | "sector" | "marketCap"> & { base: number }> = [
   { symbol: "SPY", name: "SPDR S&P 500 ETF", sector: "ETF", base: 478 },
   { symbol: "QQQ", name: "Invesco QQQ Trust", sector: "ETF", base: 425 },
   { symbol: "DIA", name: "SPDR Dow Jones ETF", sector: "ETF", base: 384 },
@@ -112,7 +112,7 @@ export function getMockQuotes(): Quote[] {
   });
 }
 
-const STRATS: Pick["strategy"][] = ["covered-call", "csp", "long-call", "long-put", "wheel", "leaps"];
+const STRATS: OptionPick["strategy"][] = ["covered-call", "csp", "long-call", "long-put", "wheel", "leaps"];
 const REASONS = [
   "Premium-selling candidate: IV elevated vs realized vol.",
   "Bullish trend: above 20/50 EMA, MACD positive.",
@@ -122,9 +122,9 @@ const REASONS = [
   "LEAPS opportunity: cheap vol, structural uptrend.",
 ];
 
-export function getMockPicks(count = 60): Pick[] {
+export function getMockPicks(count = 60): OptionPick[] {
   const quotes = getMockQuotes();
-  const picks: Pick[] = [];
+  const picks: OptionPick[] = [];
   quotes.forEach((q) => {
     const r = seed(q.symbol + "p");
     const n = 2 + Math.floor(r() * 3);
@@ -138,8 +138,8 @@ export function getMockPicks(count = 60): Pick[] {
       const premiumPct = +((premium / strike) * 100).toFixed(2);
       const annualized = +((premiumPct * 365) / dte).toFixed(1);
       const score = Math.floor(45 + r() * 55);
-      const confidence: Pick["confidence"] = score > 80 ? "A" : score > 65 ? "B" : "C";
-      const riskBucket: Pick["riskBucket"] = score > 75 ? "safe" : score > 60 ? "mild" : "aggressive";
+      const confidence: OptionPick["confidence"] = score > 80 ? "A" : score > 65 ? "B" : "C";
+      const riskBucket: OptionPick["riskBucket"] = score > 75 ? "safe" : score > 60 ? "mild" : "aggressive";
       picks.push({
         id: `${q.symbol}-${i}-${dte}`,
         symbol: q.symbol,
