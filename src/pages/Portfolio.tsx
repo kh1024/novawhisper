@@ -283,3 +283,52 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
     </Card>
   );
 }
+
+// ── Conflict Resolution Layer chip ─────────────────────────────────────────
+function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?: Verdict["metrics"] }) {
+  const verdictStyle: Record<typeof crl.verdict, string> = {
+    GO:      "bg-bullish/15 text-bullish border-bullish/40",
+    EXIT:    "bg-bearish/20 text-bearish border-bearish/50",
+    NO:      "bg-bearish/15 text-bearish border-bearish/40",
+    WAIT:    "bg-warning/15 text-warning border-warning/40",
+    NEUTRAL: "bg-muted/30 text-muted-foreground border-border",
+  };
+  const riskStyle: Record<string, string> = {
+    Safe: "bg-bullish/10 text-bullish border-bullish/30",
+    Mild: "bg-warning/10 text-warning border-warning/30",
+    Aggressive: "bg-bearish/10 text-bearish border-bearish/30",
+  };
+  return (
+    <div className="mt-3 rounded-md border border-border/60 bg-surface/30 p-2.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className={cn("text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border", verdictStyle[crl.verdict])}>
+          {crl.verdict}
+        </span>
+        {crl.riskBadge && (
+          <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded border", riskStyle[crl.riskBadge])}>
+            Risk: {crl.riskBadge}
+          </span>
+        )}
+        {crl.stopLossTriggered && (
+          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/20 text-bearish border-bearish/50 animate-pulse">
+            🚨 SELL AT LOSS
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-foreground/85 leading-snug">
+        <span className="text-muted-foreground">Reasoning · </span>{crl.reason}
+      </p>
+      {metrics && (
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-mono text-muted-foreground pt-1 border-t border-border/40">
+          {metrics.rsi14 != null && <span>RSI {metrics.rsi14.toFixed(0)}</span>}
+          {metrics.ema8 != null && <span>8-EMA ${metrics.ema8.toFixed(2)}</span>}
+          {crl.emaDistancePct != null && <span className={crl.emaDistancePct >= 0 ? "text-bullish" : "text-bearish"}>{crl.emaDistancePct >= 0 ? "+" : ""}{crl.emaDistancePct.toFixed(1)}% vs 8-EMA</span>}
+          {metrics.delta != null && <span>Δ {metrics.delta.toFixed(2)}</span>}
+          {metrics.theta != null && <span>Θ {metrics.theta.toFixed(2)}</span>}
+          {metrics.iv != null && <span>IV {(metrics.iv * 100).toFixed(0)}%</span>}
+          {metrics.dte != null && <span>{metrics.dte}d DTE</span>}
+        </div>
+      )}
+    </div>
+  );
+}
