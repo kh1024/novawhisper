@@ -17,7 +17,10 @@ const SUBS_DEFAULT = [
   "swingtrading",
   "pennystocks",
 ];
-const UA = "NovaTerminal/1.0 (planning aggregator)";
+// Reddit started 403'ing the standard www.reddit.com/.json from server IPs.
+// Use old.reddit.com (still allows unauthenticated JSON) and a realistic UA.
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const HOSTS = ["https://old.reddit.com", "https://www.reddit.com", "https://api.reddit.com"];
 
 const POS = ["calls", "moon", "rip", "squeeze", "breakout", "buy", "long", "bull", "beat", "raise", "rally", "pump"];
 const NEG = ["puts", "dump", "crash", "drop", "bear", "short", "miss", "warn", "tank", "sell", "downgrade"];
@@ -78,15 +81,28 @@ interface RedditChild {
 }
 
 async function fetchSub(sub: string, sort: string, limit: number) {
-  const url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${limit}&t=day`;
-  const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
-  if (!r.ok) {
-    console.warn(`[reddit] ${sub}/${sort} ${r.status}`);
-    return [];
+  for (const host of HOSTS) {
+    const url = `${host}/r/${sub}/${sort}.json?limit=${limit}&t=day&raw_json=1`;
+    try {
+      const r = await fetch(url, {
+        headers: {
+          "User-Agent": UA,
+          Accept: "application/json,text/html;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      });
+      if (!r.ok) {
+        console.warn(`[reddit] ${host} ${sub}/${sort} ${r.status}`);
+        continue;
+      }
+      const j = await r.json();
+      const children: RedditChild[] = j?.data?.children ?? [];
+      return children.filter((c) => !c.data.stickied).map((c) => c.data);
+    } catch (e) {
+      console.warn(`[reddit] ${host} ${sub}/${sort} fetch error`, e);
+    }
   }
-  const j = await r.json();
-  const children: RedditChild[] = j?.data?.children ?? [];
-  return children.filter((c) => !c.data.stickied).map((c) => c.data);
+  return [];
 }
 
 Deno.serve(async (req) => {
