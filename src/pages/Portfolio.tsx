@@ -86,9 +86,11 @@ export default function Portfolio() {
   const totals = useMemo(() => {
     const openCount = open.length;
     let realized = 0;
+    let feesPaid = 0;
     for (const p of closed) {
       const r = realizedPnl(p, settings);
       if (r != null) realized += r;
+      feesPaid += feeRoundTrip(settings, p.contracts);
     }
     let unrealized = 0;
     let unrealizedKnown = false;
@@ -100,9 +102,11 @@ export default function Portfolio() {
       if (p.entry_premium != null && p.direction === "long") {
         costBasis += Number(p.entry_premium) * p.contracts * 100;
       }
+      // Entry fee already paid on open positions.
+      feesPaid += feeOneSide(settings, p.contracts);
     }
-    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis };
-  }, [open, closed, quoteMap]);
+    return { openCount, realized, unrealized, unrealizedKnown, total: realized + unrealized, costBasis, feesPaid };
+  }, [open, closed, quoteMap, settings]);
 
   return (
     <div className="space-y-6 p-6">
