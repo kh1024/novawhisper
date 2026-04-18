@@ -1,19 +1,21 @@
 // Portfolio — saved options positions with live underlying + Nova's honest take.
-import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical } from "lucide-react";
+import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePortfolio, useClosePosition, useDeletePosition, type PortfolioPosition } from "@/lib/portfolio";
+import { usePortfolio, useClosePosition, useDeletePosition, useAddPosition, type PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSettings, BROKER_PRESETS, type AppSettings } from "@/lib/settings";
 import { dispatchVerdictTransitions } from "@/lib/webhook";
 import { feeOneSide, feeRoundTrip } from "@/lib/fees";
+import { buildSamplePaperTrades } from "@/lib/seedPaperTrades";
+import { toast } from "@/hooks/use-toast";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -62,10 +64,39 @@ function fmtUsd(n: number) {
   return `${s}$${Math.abs(n).toFixed(0)}`;
 }
 
+type BookFilter = "all" | "real" | "paper";
+
 export default function Portfolio() {
-  const { data: positions = [], isLoading } = usePortfolio();
+  const { data: allPositions = [], isLoading } = usePortfolio();
+  const [settingsForFilter] = useSettings();
+  // Default to PAPER view when SIM mode is on so users actually see their sim trades.
+  const [book, setBook] = useState<BookFilter>(settingsForFilter.paperMode ? "paper" : "all");
+  const positions = useMemo(() => {
+    if (book === "all") return allPositions;
+    if (book === "paper") return allPositions.filter((p) => p.is_paper);
+    return allPositions.filter((p) => !p.is_paper);
+  }, [allPositions, book]);
   const open = useMemo(() => positions.filter((p) => p.status === "open"), [positions]);
   const closed = useMemo(() => positions.filter((p) => p.status !== "open"), [positions]);
+  const paperCount = allPositions.filter((p) => p.is_paper).length;
+  const realCount = allPositions.length - paperCount;
+  const addPos = useAddPosition();
+
+  const seedSamples = () => {
+    const samples = buildSamplePaperTrades();
+    let done = 0;
+    samples.forEach((s) =>
+      addPos.mutate(s, {
+        onSuccess: () => {
+          done++;
+          if (done === samples.length) {
+            toast({ title: "Simulation seeded", description: `${samples.length} sample paper trades added.` });
+            setBook("paper");
+          }
+        },
+      }),
+    );
+  };
   const verdictQ = useVerdicts(open);
   const verdictMap = new Map((verdictQ.data?.verdicts ?? []).map((v) => [v.id, v]));
   const quoteMap = new Map((verdictQ.data?.quotes ?? []).map((q) => [q.symbol, q]));
@@ -151,6 +182,43 @@ export default function Portfolio() {
         </div>
       </div>
 
+      {/* Book filter — Real / Paper / All */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Book:</span>
+        {([
+          { id: "all" as const, label: `All (${allPositions.length})` },
+          { id: "real" as const, label: `Real (${realCount})` },
+          { id: "paper" as const, label: `Paper (${paperCount})`, sim: true },
+        ]).map((b) => (
+          <button
+            key={b.id}
+            onClick={() => setBook(b.id)}
+            className={cn(
+              "text-[11px] px-2.5 py-1 rounded border transition-colors flex items-center gap-1",
+              book === b.id
+                ? b.sim
+                  ? "border-warning bg-warning/15 text-warning"
+                  : "border-primary bg-primary/15 text-primary"
+                : "border-border text-muted-foreground hover:bg-surface",
+            )}
+          >
+            {b.sim && <FlaskConical className="h-2.5 w-2.5" />}
+            {b.label}
+          </button>
+        ))}
+        {settings.paperMode && paperCount === 0 && (
+          <Button
+            size="sm" variant="outline"
+            className="h-7 text-[11px] border-warning/50 text-warning hover:bg-warning/10 ml-auto gap-1"
+            onClick={seedSamples}
+            disabled={addPos.isPending}
+          >
+            <Sparkles className="h-3 w-3" />
+            {addPos.isPending ? "Seeding…" : "Seed sample paper trades"}
+          </Button>
+        )}
+      </div>
+
       <Tabs defaultValue="open">
         <TabsList>
           <TabsTrigger value="open">Open ({open.length})</TabsTrigger>
@@ -160,8 +228,27 @@ export default function Portfolio() {
           {isLoading ? (
             <div className="grid gap-3 md:grid-cols-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40" />)}</div>
           ) : open.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-muted-foreground">
-              No open positions yet. Hit <span className="font-semibold text-foreground">Save</span> on any Web Pick, Planning pick, or Top Opportunity to start tracking.
+            <Card className="p-8 text-center text-sm text-muted-foreground space-y-3">
+              <p>
+                {book === "paper"
+                  ? "No paper trades yet. Turn on Simulation in Settings, then Save any pick — or seed samples below."
+                  : book === "real"
+                  ? "No real trades yet. Make sure Simulation Mode is OFF when you Save."
+                  : "No open positions yet. Hit "}
+                {book === "all" && <span className="font-semibold text-foreground">Save</span>}
+                {book === "all" && " on any Web Pick, Planning pick, or Top Opportunity to start tracking."}
+              </p>
+              {settings.paperMode && (
+                <Button
+                  size="sm" variant="outline"
+                  className="border-warning/50 text-warning hover:bg-warning/10 gap-1"
+                  onClick={seedSamples}
+                  disabled={addPos.isPending}
+                >
+                  <Sparkles className="h-3 w-3" />
+                  {addPos.isPending ? "Seeding…" : "Seed 5 sample paper trades"}
+                </Button>
+              )}
             </Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
