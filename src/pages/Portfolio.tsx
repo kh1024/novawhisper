@@ -302,7 +302,7 @@ export default function Portfolio() {
   );
 }
 
-function PositionCard({ p, verdict, spot, settings, autoSim = false }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings; autoSim?: boolean }) {
+function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings; autoSim?: boolean; onSimChange?: (id: string, pct: number) => void }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const isCall = p.option_type.includes("call");
