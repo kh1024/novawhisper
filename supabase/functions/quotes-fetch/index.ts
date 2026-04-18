@@ -276,9 +276,10 @@ function verify(
   }
   if (live.length === 1) {
     const src = live[0];
+    // ONE good source is still good data — don't punish ETFs / off-hours quotes.
     return {
       symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
-      sources, consensusSource: src.source, status: "stale",
+      sources, consensusSource: src.source, status: "verified",
       diffPct: null, updatedAt: now,
     };
   }
@@ -321,6 +322,17 @@ async function getQuote(
   ]);
   const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
   const v = verify(sym, finn, alpha, mass, yahoo, stooq);
+  // If every provider failed this round but we have a previous good price, keep
+  // serving it (marked stale) instead of returning "unavailable" / no data.
+  if (v.status === "unavailable" && cached?.quote && cached.quote.price > 0) {
+    const stale: VerifiedQuote = {
+      ...cached.quote,
+      status: "stale",
+      updatedAt: cached.quote.updatedAt,
+      error: "Live providers timed out — showing last known price.",
+    };
+    return stale;
+  }
   quoteCache.set(sym, { quote: v, at: Date.now() });
   return v;
 }

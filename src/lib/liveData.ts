@@ -1,5 +1,5 @@
 // Live data hooks: typed wrappers around the quotes-fetch + options-fetch edge functions.
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TICKER_UNIVERSE } from "./mockData";
 import { useSettings } from "./settings";
@@ -70,6 +70,11 @@ export function useLiveQuotes(symbols?: string[], opts?: { refetchMs?: number })
     queryFn: () => fetchQuotes(list),
     refetchInterval: interval,
     staleTime: Math.max(1_000, Math.floor(interval / 2)),
+    // Never blank out — keep the last good payload visible while refetching or
+    // if a provider hiccups, and auto-retry transient failures.
+    placeholderData: keepPreviousData,
+    retry: 3,
+    retryDelay: (i) => Math.min(8_000, 1_000 * 2 ** i),
   });
 }
 
@@ -97,16 +102,19 @@ export function useOptionsChain(underlying: string | null, limit = 150) {
     enabled: !!underlying,
     refetchInterval: 90_000,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    retry: 3,
+    retryDelay: (i) => Math.min(8_000, 1_000 * 2 ** i),
   });
 }
 
 /** Plain-English status pill: clear for non-experts. */
 export function statusMeta(s: QuoteStatus) {
   switch (s) {
-    case "verified": return { label: "✓ Good", cls: "pill-bullish", tip: "Two providers agree within 0.25% — high confidence." };
+    case "verified": return { label: "✓ Live", cls: "pill-bullish", tip: "Live price confirmed by one or more providers." };
     case "close":    return { label: "≈ OK",   cls: "pill-neutral", tip: "Two providers within 1% — minor lag possible." };
     case "mismatch": return { label: "⚠ Check", cls: "pill-bearish", tip: "Providers disagree by 1%+. Cross-check before trading." };
-    case "stale":    return { label: "1 source", cls: "pill-neutral", tip: "Only one provider responded. May be slightly delayed." };
+    case "stale":    return { label: "↻ Last known", cls: "pill-neutral", tip: "Live providers timed out — showing the most recent price we received." };
     case "unavailable": return { label: "No data", cls: "pill-bearish", tip: "No providers returned a quote for this symbol." };
   }
 }
@@ -142,5 +150,8 @@ export function useNews(opts?: { symbol?: string | null; category?: string; limi
     queryFn: () => fetchNews({ symbol, category, limit, sources }),
     refetchInterval: opts?.refetchMs ?? 5 * 60_000, // 5 min
     staleTime: 2 * 60_000,
+    placeholderData: keepPreviousData,
+    retry: 3,
+    retryDelay: (i) => Math.min(8_000, 1_000 * 2 ** i),
   });
 }
