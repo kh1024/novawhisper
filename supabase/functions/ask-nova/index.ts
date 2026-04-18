@@ -228,6 +228,64 @@ If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.`;
           { role: "system", content: SYSTEM },
           { role: "user", content: userPrompt },
         ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "submit_trade_review",
+              description: "Submit the structured trade review. Always call this exactly once.",
+              parameters: {
+                type: "object",
+                properties: {
+                  verdict: {
+                    type: "string",
+                    enum: ["GOOD SETUP", "POSSIBLE BUT EARLY", "SPECULATIVE", "LOW-QUALITY IDEA", "NO TRADE"],
+                  },
+                  action: {
+                    type: "string",
+                    enum: ["BUY", "WAIT", "SKIP"],
+                    description: "BUY = enter now. WAIT = thesis OK but conditions not met. SKIP = do not trade.",
+                  },
+                  one_line_reason: {
+                    type: "string",
+                    description: "≤ 90 chars. The single most important reason for the action. Plain English, no jargon.",
+                  },
+                  data_quality: { type: "string", enum: ["PASS", "PARTIAL", "FAIL"] },
+                  fit_score: { type: "integer", minimum: 1, maximum: 5 },
+                  confidence: { type: "string", enum: ["Low", "Medium", "High"] },
+                  best_contract: {
+                    type: ["object", "null"],
+                    description: "The single best contract to act on. NULL if action is SKIP or no contract qualifies.",
+                    properties: {
+                      type: { type: "string", enum: ["call", "put"] },
+                      strike: { type: "number" },
+                      expiry: { type: "string" },
+                      mid: { type: "number" },
+                      cost_per_contract_usd: { type: "number" },
+                      stop_price: { type: ["number", "null"], description: "Underlying invalidation price." },
+                      max_size_contracts: { type: "integer", minimum: 0, description: "Prudent size given budget — NOT budget/cost." },
+                    },
+                    required: ["type", "strike", "expiry", "mid", "cost_per_contract_usd"],
+                  },
+                  better_structure: {
+                    type: ["string", "null"],
+                    description: "If a spread / longer expiry / smaller size is better, describe it in one line. Else null.",
+                  },
+                  full_analysis_md: {
+                    type: "string",
+                    description: "The full markdown analysis using the required output format from the system prompt.",
+                  },
+                },
+                required: [
+                  "verdict", "action", "one_line_reason", "data_quality",
+                  "fit_score", "confidence", "full_analysis_md",
+                ],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "submit_trade_review" } },
       }),
     });
 
@@ -248,9 +306,20 @@ If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.`;
     }
 
     const data = await resp.json();
-    const text: string = data?.choices?.[0]?.message?.content ?? "";
+    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+    let card: Record<string, unknown> | null = null;
+    let explanation = "";
+    if (toolCall?.function?.arguments) {
+      try {
+        card = JSON.parse(toolCall.function.arguments);
+        explanation = (card?.full_analysis_md as string) ?? "";
+      } catch (e) {
+        console.error("Failed to parse Nova tool args", e);
+      }
+    }
+    if (!card) explanation = data?.choices?.[0]?.message?.content ?? "";
 
-    return new Response(JSON.stringify({ explanation: text, symbol: ctx.symbol }), {
+    return new Response(JSON.stringify({ card, explanation, symbol: ctx.symbol }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

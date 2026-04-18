@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { useBudget } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
+import { NovaVerdictCard, type NovaCard } from "@/components/NovaVerdictCard";
 
 type Props = {
   symbol: string | null;
@@ -97,6 +98,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   // Ask Nova AI explanation
   const [novaText, setNovaText] = useState<string>("");
+  const [novaCard, setNovaCard] = useState<NovaCard | null>(null);
   const [novaLoading, setNovaLoading] = useState(false);
   const [budget, setBudget] = useBudget();
   const [settings] = useSettings();
@@ -105,6 +107,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
     if (!symbol || !q) return;
     setNovaLoading(true);
     setNovaText("");
+    setNovaCard(null);
     try {
       const { data, error } = await supabase.functions.invoke("ask-nova", {
         body: {
@@ -139,6 +142,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
         },
       });
       if (error) throw error;
+      setNovaCard((data?.card as NovaCard) ?? null);
       setNovaText(data?.explanation ?? "");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to reach Nova";
@@ -150,7 +154,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   // Auto-generate Nova when drawer opens with live data ready
   useEffect(() => {
-    if (symbol && q && !novaText && !novaLoading) {
+    if (symbol && q && !novaText && !novaCard && !novaLoading) {
       generateNova();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,6 +163,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   // Reset Nova when symbol changes
   useEffect(() => {
     setNovaText("");
+    setNovaCard(null);
   }, [symbol]);
 
   const status = q ? statusMeta(q.status) : null;
@@ -283,20 +288,21 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         ))}
                       </div>
                     </div>
-                    {novaLoading && !novaText && (
+                    {novaLoading && !novaCard && (
                       <div className="space-y-2">
-                        <Skeleton className="h-3 w-full" />
-                        <Skeleton className="h-3 w-[92%]" />
-                        <Skeleton className="h-3 w-[78%]" />
-                        <Skeleton className="h-3 w-[85%]" />
+                        <Skeleton className="h-24 w-full rounded-lg" />
+                        <Skeleton className="h-16 w-full rounded-lg" />
                       </div>
                     )}
-                    {novaText && (
+                    {novaCard && (
+                      <NovaVerdictCard card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }} />
+                    )}
+                    {!novaLoading && !novaCard && novaText && (
                       <div className="text-sm text-foreground/90 leading-relaxed space-y-2 [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1.5 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-surface/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_em]:text-muted-foreground [&_em]:not-italic">
                         <ReactMarkdown>{novaText}</ReactMarkdown>
                       </div>
                     )}
-                    {!novaLoading && !novaText && q && (
+                    {!novaLoading && !novaCard && !novaText && q && (
                       <div className="text-xs text-muted-foreground">Click Regenerate to ask Nova.</div>
                     )}
                   </Card>
