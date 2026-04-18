@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePortfolio, useClosePosition, useDeletePosition, type PortfolioPosition } from "@/lib/portfolio";
+import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,7 @@ function PositionCard({ p, verdict, spot }: { p: PortfolioPosition; verdict?: Ve
         <div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-lg font-semibold">{p.symbol}</span>
+            <TickerPrice symbol={p.symbol} price={spot ?? null} showChange />
             <Badge variant="outline" className="text-[10px] capitalize">{p.status}</Badge>
             {moneyness && <Badge variant="secondary" className="text-[10px]">{moneyness}</Badge>}
           </div>
