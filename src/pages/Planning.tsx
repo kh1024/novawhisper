@@ -1,7 +1,7 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
 import { useState } from "react";
-import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePlanning, type PlanningPick, type SourceTicker } from "@/lib/planning";
+import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
