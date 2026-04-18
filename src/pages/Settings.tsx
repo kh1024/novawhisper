@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui/card";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2 } from "lucide-react";
+import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
+import { toast } from "sonner";
 import { useBudget } from "@/lib/budget";
 import { useState, useEffect } from "react";
 import {
@@ -321,6 +323,129 @@ export default function Settings() {
             {activeTickerSet.size} of {TICKER_UNIVERSE.length} symbols streaming.
           </div>
         </div>
+      </Card>
+
+      {/* ───────────── Webhook alerts (Make.com / n8n / Slack) ───────────── */}
+      <Card className="glass-card p-6 space-y-5">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Webhook className="h-4 w-4 text-primary" /> Webhook alerts (WAIT → GO)
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+            Paste a Make.com, n8n, Zapier, or Slack incoming webhook URL. Nova will POST a JSON
+            payload whenever a portfolio position flips from <span className="font-mono">WAIT</span>{" "}
+            to <span className="font-mono">GO</span> or <span className="font-mono">EXIT</span>.
+            Wire it from there to your phone, Slack, SMS — anything.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Webhook URL</div>
+          <div className="flex gap-2 flex-wrap">
+            <input
+              type="url"
+              placeholder="https://hook.eu2.make.com/..."
+              value={settings.webhookUrl}
+              onChange={(e) => updateSettings({ webhookUrl: e.target.value })}
+              onBlur={flashSaved}
+              className="flex-1 min-w-[280px] h-10 px-3 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              disabled={!settings.webhookUrl}
+              onClick={async () => {
+                const r = await sendTestWebhook(settings.webhookUrl);
+                if (r.ok) toast.success("Test sent — check your endpoint.");
+                else toast.error(`Webhook failed: ${r.error ?? "unknown"}`);
+              }}
+              className="h-10 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+            >
+              <Send className="h-3.5 w-3.5" /> Test
+            </button>
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-2 pt-2 border-t border-border/40">
+          <button
+            onClick={() => { updateSettings({ webhookEnabled: !settings.webhookEnabled }); flashSaved(); }}
+            className={`text-left p-3 rounded-lg border transition-all ${
+              settings.webhookEnabled ? "border-primary bg-primary/10" : "border-border bg-surface/30 hover:border-primary/40"
+            }`}
+          >
+            <div className="text-sm font-medium flex items-center gap-2">
+              {settings.webhookEnabled ? "Enabled" : "Disabled"}
+              {settings.webhookEnabled && <Check className="h-3.5 w-3.5 text-primary" />}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">Master switch for sending alerts.</div>
+          </button>
+          <button
+            onClick={() => { updateSettings({ webhookOnWait: !settings.webhookOnWait }); flashSaved(); }}
+            className={`text-left p-3 rounded-lg border transition-all ${
+              settings.webhookOnWait ? "border-primary bg-primary/10" : "border-border bg-surface/30 hover:border-primary/40"
+            }`}
+          >
+            <div className="text-sm font-medium flex items-center gap-2">
+              Also alert on new WAIT
+              {settings.webhookOnWait && <Check className="h-3.5 w-3.5 text-primary" />}
+            </div>
+            <div className="text-[11px] text-muted-foreground mt-0.5">More noise — fuller audit trail.</div>
+          </button>
+        </div>
+
+        {(() => {
+          const log = readWebhookLog();
+          if (log.length === 0) return (
+            <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3">
+              No alerts sent yet. Save a position on the Portfolio page, then watch verdicts flip.
+            </div>
+          );
+          return (
+            <div className="space-y-2 pt-2 border-t border-border/40">
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Recent alerts ({log.length})</div>
+                <button
+                  onClick={() => clearWebhookLog()}
+                  className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                >
+                  <Trash2 className="h-3 w-3" /> Clear
+                </button>
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {log.slice(0, 10).map((e, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[11px] font-mono p-2 rounded border border-border/60 bg-surface/30">
+                    <span className={e.ok ? "text-bullish" : "text-bearish"}>{e.ok ? "✓" : "✗"}</span>
+                    <span className="text-muted-foreground">{new Date(e.at).toLocaleTimeString()}</span>
+                    <span className="font-semibold">{e.symbol}</span>
+                    <span className="text-muted-foreground">{e.from} → {e.to}</span>
+                    {e.error && <span className="text-bearish truncate">{e.error}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        <details className="text-[11px] text-muted-foreground border-t border-border/40 pt-3">
+          <summary className="cursor-pointer hover:text-foreground">Payload format & setup tips</summary>
+          <div className="mt-2 space-y-2">
+            <div>POST JSON body shape:</div>
+            <pre className="bg-background border border-border rounded p-2 overflow-x-auto text-[10px]">{`{
+  "event": "nova_verdict_transition",
+  "symbol": "AAPL",
+  "positionId": "uuid",
+  "from": "WAIT",
+  "to": "GO",
+  "status": "winning",
+  "action": "hold",
+  "verdict": "Support held at 10:35 — momentum confirmed.",
+  "text": "🟢 GO — AAPL\\n...",
+  "at": "2025-01-15T15:35:00.000Z"
+}`}</pre>
+            <div>
+              <strong>Make.com / n8n:</strong> create a "Webhook" trigger, copy the URL here.
+              Add a Slack/Telegram/Pushover step downstream and map the <code>text</code> field.
+            </div>
+          </div>
+        </details>
       </Card>
     </div>
   );
