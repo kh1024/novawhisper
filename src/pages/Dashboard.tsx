@@ -186,43 +186,68 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        {/* Right column */}
-        <div className="space-y-6">
-          <Card className="glass-card p-5">
-            <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-neutral" /> Event Watch
-            </h2>
-            <div className="space-y-2">
-              {UPCOMING_EVENTS.map((e) => (
-                <div key={e.label} className="flex items-center justify-between p-2 rounded-md border border-border/60">
-                  <div>
-                    <div className="text-sm">{e.label}</div>
-                    <div className="text-[11px] text-muted-foreground">{e.when}</div>
+        {/* Right column — drag to reorder */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+              Drag the grip to reorder widgets
+            </span>
+            <button
+              onClick={() => { window.localStorage.removeItem(RIGHT_COL_STORAGE_KEY); window.location.reload(); }}
+              title="Reset widget order"
+              className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          </div>
+          <SortableList
+            storageKey={RIGHT_COL_STORAGE_KEY}
+            className="space-y-6"
+            items={[
+              { id: "events", node: (
+                <Card className="glass-card p-5">
+                  <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-neutral" /> Event Watch
+                  </h2>
+                  <div className="space-y-2">
+                    {UPCOMING_EVENTS.map((e) => (
+                      <div key={e.label} className="flex items-center justify-between p-2 rounded-md border border-border/60">
+                        <div>
+                          <div className="text-sm">{e.label}</div>
+                          <div className="text-[11px] text-muted-foreground">{e.when}</div>
+                        </div>
+                        <span className={`pill ${e.risk === "high" ? "pill-bearish" : "pill-neutral"} capitalize`}>
+                          {e.risk}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <span className={`pill ${e.risk === "high" ? "pill-bearish" : "pill-neutral"} capitalize`}>
-                    {e.risk}
-                  </span>
+                </Card>
+              )},
+              { id: "ai-summary", node: (
+                <Card className="glass-card p-5">
+                  <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" /> AI Summary of the Day
+                  </h2>
+                  <p className="text-sm text-foreground/80 leading-relaxed">
+                    Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
+                  </p>
+                </Card>
+              )},
+              { id: "tips", node: <TipsRotator /> },
+              { id: "playbook", node: <PlaybookCard onPick={setOpenSymbol} /> },
+              { id: "news", node: <NewsFeed limit={8} title="Reuters News" sources={["reuters"]} sourceLabel="via Reuters" /> },
+              { id: "sectors", node: <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} /> },
+            ]}
+            renderItem={(item, handle) => (
+              <div className="relative group">
+                <div className="absolute -left-1 top-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {handle}
                 </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="glass-card p-5">
-            <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> AI Summary of the Day
-            </h2>
-            <p className="text-sm text-foreground/80 leading-relaxed">
-              Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
-            </p>
-          </Card>
-
-          <TipsRotator />
-
-          <PlaybookCard onPick={setOpenSymbol} />
-
-          <NewsFeed limit={8} title="Reuters News" sources={["reuters"]} sourceLabel="via Reuters" />
-
-          <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} />
+                {item.node}
+              </div>
+            )}
+          />
         </div>
       </div>
 
