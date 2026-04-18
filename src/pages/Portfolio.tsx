@@ -87,8 +87,8 @@ export default function Portfolio() {
   // Per-position sim offset reported up from each card so portfolio totals
   // can reflect the simulated underlying.
   const [simOffsets, setSimOffsets] = useState<Record<string, number>>({});
-  const reportSimOffset = (id: string, pct: number) =>
-    setSimOffsets((cur) => (cur[id] === pct ? cur : { ...cur, [id]: pct }));
+  const reportSimOffset = useCallback((id: string, pct: number) =>
+    setSimOffsets((cur) => (cur[id] === pct ? cur : { ...cur, [id]: pct })), []);
 
   const seedSamples = () => {
     const samples = buildSamplePaperTrades();
