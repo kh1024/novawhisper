@@ -1,5 +1,5 @@
 // Portfolio — saved options positions with live underlying + Nova's honest take.
-import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock } from "lucide-react";
+import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -213,6 +213,11 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
             <span className="font-mono text-lg font-semibold">{p.symbol}</span>
             <TickerPrice symbol={p.symbol} price={spot ?? null} showChange />
             <Badge variant="outline" className="text-[10px] capitalize">{p.status}</Badge>
+            {p.is_paper && (
+              <Badge variant="outline" className="text-[10px] border-warning/40 bg-warning/10 text-warning gap-1">
+                <FlaskConical className="h-2.5 w-2.5" /> SIM
+              </Badge>
+            )}
             {moneyness && <Badge variant="secondary" className="text-[10px]">{moneyness}</Badge>}
           </div>
           <div className={cn("mt-1 font-mono text-sm font-semibold", tone)}>
