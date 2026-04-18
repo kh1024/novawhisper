@@ -122,6 +122,25 @@ export default function Scanner() {
     });
   }, [rows, filters]);
 
+  // Fire webhook for any NEW scanner row whose CRL verdict is GO.
+  // Dedupe key includes the date so the same GO re-fires once per trading day.
+  const [settings] = useSettings();
+  useEffect(() => {
+    const goRows = rows.filter((r) => r.crl?.verdict === "GO");
+    if (goRows.length === 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    dispatchPickAlerts({
+      settings,
+      picks: goRows.map((r) => ({
+        key: `scanner:${today}:${r.symbol}`,
+        symbol: r.symbol,
+        source: "scanner",
+        reason: r.crl?.reasoning ?? `Setup score ${r.setupScore} · ${r.bias}`,
+        risk: r.crl?.risk,
+      })),
+    });
+  }, [rows, settings]);
+
   const counts = useMemo(() => ({
     now: rows.filter((r) => r.readiness === "NOW").length,
     wait: rows.filter((r) => r.readiness === "WAIT").length,
