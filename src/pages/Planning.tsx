@@ -597,7 +597,14 @@ function WebPicksPanel() {
   );
 }
 
-function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone: "bullish" | "neutral" | "bearish"; icon: React.ReactNode; blurb: string; picks: ScoutPick[] }) {
+function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus }: {
+  title: string;
+  tone: "bullish" | "neutral" | "bearish";
+  icon: React.ReactNode;
+  blurb: string;
+  picks: ScoutPick[];
+  expiryStatus?: Map<string, PickStatus>;
+}) {
   const toneClass =
     tone === "bullish" ? "border-bullish/40 bg-bullish/5" :
     tone === "bearish" ? "border-bearish/40 bg-bearish/5" :
@@ -620,8 +627,10 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
       <div className="mt-3 space-y-2">
         {picks.length === 0 ? (
           <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">No ideas in this bucket right now.</div>
-        ) : picks.map((p, i) => (
-          <div key={i} className="rounded-md border border-border/60 bg-background/40 p-2.5">
+        ) : picks.map((p, i) => {
+          const exp = expiryStatus?.get(pickKey(p));
+          return (
+          <div key={i} className={cn("rounded-md border border-border/60 bg-background/40 p-2.5", exp?.isStale && "opacity-70")}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="font-mono text-sm font-semibold">{p.symbol}</span>
