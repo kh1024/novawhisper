@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
       topPost?: { title: string; url: string; score: number; comments: number; sub: string };
     }>();
 
-    const posts = all.map((p) => {
+    const posts = dedup.map((p) => {
       const text = `${p.title} ${p.selftext ?? ""}`;
       const ts = extractTickers(text);
       const sent = sentimentOf(text);
