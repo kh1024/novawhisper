@@ -1,6 +1,6 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target, History } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { TickerPrice } from "@/components/TickerPrice";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/lib/settings";
+import { dispatchPickAlerts } from "@/lib/webhook";
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
@@ -328,6 +330,35 @@ function TickerRow({ t }: { t: SourceTicker }) {
 function WebPicksPanel() {
   const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
   const qc = useQueryClient();
+  const [settings] = useSettings();
+
+  // Fire a GO webhook for each fresh pick the scout returns.
+  // Dedupe key includes contract identity so re-scrapes don't re-spam, but a
+  // genuinely new pick (different strike / expiry / symbol) still alerts.
+  useEffect(() => {
+    if (!data) return;
+    const all: { tier: "safe" | "mild" | "aggressive"; pick: ScoutPick }[] = [
+      ...(data.safe ?? []).map((p) => ({ tier: "safe" as const, pick: p })),
+      ...(data.mild ?? []).map((p) => ({ tier: "mild" as const, pick: p })),
+      ...(data.aggressive ?? []).map((p) => ({ tier: "aggressive" as const, pick: p })),
+    ];
+    if (all.length === 0) return;
+    dispatchPickAlerts({
+      settings,
+      picks: all.map(({ tier, pick: p }) => ({
+        key: `webpick:${p.symbol}:${p.strategy}:${p.optionType}:${p.strike}:${p.strikeShort ?? "_"}:${p.expiry}`,
+        symbol: p.symbol,
+        source: "web-pick",
+        reason: p.thesis,
+        strategy: p.strategy,
+        optionType: p.optionType,
+        direction: p.direction,
+        strike: p.strike,
+        expiry: p.expiry,
+        risk: tier,
+      })),
+    });
+  }, [data, settings]);
 
   if (isLoading) {
     return (

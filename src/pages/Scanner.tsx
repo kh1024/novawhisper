@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
+import { useSettings } from "@/lib/settings";
+import { dispatchPickAlerts } from "@/lib/webhook";
 
 type View = "table" | "cards";
 
@@ -119,6 +121,25 @@ export default function Scanner() {
       return true;
     });
   }, [rows, filters]);
+
+  // Fire webhook for any NEW scanner row whose CRL verdict is GO.
+  // Dedupe key includes the date so the same GO re-fires once per trading day.
+  const [settings] = useSettings();
+  useEffect(() => {
+    const goRows = rows.filter((r) => r.crl?.verdict === "GO");
+    if (goRows.length === 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    dispatchPickAlerts({
+      settings,
+      picks: goRows.map((r) => ({
+        key: `scanner:${today}:${r.symbol}`,
+        symbol: r.symbol,
+        source: "scanner",
+        reason: r.crl?.reason ?? `Setup score ${r.setupScore} · ${r.bias}`,
+        risk: r.crl?.riskBadge,
+      })),
+    });
+  }, [rows, settings]);
 
   const counts = useMemo(() => ({
     now: rows.filter((r) => r.readiness === "NOW").length,
