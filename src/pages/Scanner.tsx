@@ -393,14 +393,17 @@ export default function Scanner() {
                             </span>
                           </td>
                           <td className="px-3 py-3">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7"
-                              onClick={(e) => { e.stopPropagation(); setOpenSymbol(r.symbol); }}
-                            >
-                              Open
-                            </Button>
+                            <div className="flex items-center gap-1.5">
+                              <SaveToPortfolioButton {...deriveContractFromRow(r)} size="xs" />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7"
+                                onClick={(e) => { e.stopPropagation(); setOpenSymbol(r.symbol); }}
+                              >
+                                Open
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                         {isOpen && (
