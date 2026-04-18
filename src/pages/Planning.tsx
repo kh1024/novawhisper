@@ -1,6 +1,6 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target, History, AlertTriangle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
+import { useLiveQuotes } from "@/lib/liveData";
+import { usePickExpiration, type PickInputs, type PickStatus } from "@/lib/pickExpiration";
+import { PickExpiryChips } from "@/components/PickExpiryChips";
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
@@ -476,26 +479,55 @@ function TickerRow({ t }: { t: SourceTicker }) {
   );
 }
 
+function pickKey(p: ScoutPick): string {
+  return `webpick:${p.symbol}:${p.strategy}:${p.optionType}:${p.strike}:${p.strikeShort ?? "_"}:${p.expiry}`;
+}
+
 function WebPicksPanel() {
   const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
   const qc = useQueryClient();
   const [settings] = useSettings();
 
-  // Fire a GO webhook for each fresh pick the scout returns.
-  // Dedupe key includes contract identity so re-scrapes don't re-spam, but a
-  // genuinely new pick (different strike / expiry / symbol) still alerts.
-  useEffect(() => {
-    if (!data) return;
-    const all: { tier: "safe" | "mild" | "aggressive"; pick: ScoutPick }[] = [
+  // Collect every pick across tiers + their stable keys so the expiration
+  // engine has a single flat list to chew on.
+  const allPicks = useMemo(() => {
+    if (!data) return [] as { tier: "safe" | "mild" | "aggressive"; pick: ScoutPick }[];
+    return [
       ...(data.safe ?? []).map((p) => ({ tier: "safe" as const, pick: p })),
       ...(data.mild ?? []).map((p) => ({ tier: "mild" as const, pick: p })),
       ...(data.aggressive ?? []).map((p) => ({ tier: "aggressive" as const, pick: p })),
     ];
-    if (all.length === 0) return;
+  }, [data]);
+
+  // Pull live quotes so the engine can compute price-drift since the pick was
+  // first surfaced (the playAt baseline is captured per-pick on first sight).
+  const symbols = useMemo(() => Array.from(new Set(allPicks.map((x) => x.pick.symbol))), [allPicks]);
+  const { data: quotes = [] } = useLiveQuotes(symbols.length ? symbols : undefined, { refetchMs: 60_000 });
+  const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
+
+  const expiryInputs = useMemo<PickInputs[]>(() => allPicks.map(({ pick: p }) => ({
+    key: pickKey(p),
+    price: quoteMap.get(p.symbol)?.price ?? p.playAt ?? null,
+    rsi: null,             // scout doesn't surface RSI yet — RSI flip is no-op here
+    verdict: null,
+    theta: null,
+    confidence: null,
+  })), [allPicks, quoteMap]);
+  const expiryStatus = usePickExpiration(expiryInputs);
+
+  // Fire a GO webhook for each fresh pick the scout returns. Skip stale or
+  // timed-out picks so we don't push old setups to the webhook.
+  useEffect(() => {
+    if (allPicks.length === 0) return;
+    const live = allPicks.filter(({ pick }) => {
+      const s = expiryStatus.get(pickKey(pick));
+      return !(s?.isStale || s?.isTimedOut);
+    });
+    if (live.length === 0) return;
     dispatchPickAlerts({
       settings,
-      picks: all.map(({ tier, pick: p }) => ({
-        key: `webpick:${p.symbol}:${p.strategy}:${p.optionType}:${p.strike}:${p.strikeShort ?? "_"}:${p.expiry}`,
+      picks: live.map(({ tier, pick: p }) => ({
+        key: pickKey(p),
         symbol: p.symbol,
         source: "web-pick",
         reason: p.thesis,
@@ -507,7 +539,7 @@ function WebPicksPanel() {
         risk: tier,
       })),
     });
-  }, [data, settings]);
+  }, [allPicks, settings, expiryStatus]);
 
   if (isLoading) {
     return (
@@ -526,6 +558,12 @@ function WebPicksPanel() {
     );
   }
 
+  // Hide timed-out picks per tier.
+  const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
+    const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
+    return (src ?? []).filter((p) => !expiryStatus.get(pickKey(p))?.isTimedOut);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -540,9 +578,9 @@ function WebPicksPanel() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={data?.safe ?? []} />
-        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={data?.mild ?? []} />
-        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={data?.aggressive ?? []} />
+        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={tierPicks("safe")} expiryStatus={expiryStatus} />
+        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={tierPicks("mild")} expiryStatus={expiryStatus} />
+        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={tierPicks("aggressive")} expiryStatus={expiryStatus} />
       </div>
 
       {data?.sources && data.sources.length > 0 && (
@@ -559,7 +597,14 @@ function WebPicksPanel() {
   );
 }
 
-function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone: "bullish" | "neutral" | "bearish"; icon: React.ReactNode; blurb: string; picks: ScoutPick[] }) {
+function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus }: {
+  title: string;
+  tone: "bullish" | "neutral" | "bearish";
+  icon: React.ReactNode;
+  blurb: string;
+  picks: ScoutPick[];
+  expiryStatus?: Map<string, PickStatus>;
+}) {
   const toneClass =
     tone === "bullish" ? "border-bullish/40 bg-bullish/5" :
     tone === "bearish" ? "border-bearish/40 bg-bearish/5" :
@@ -582,8 +627,10 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
       <div className="mt-3 space-y-2">
         {picks.length === 0 ? (
           <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">No ideas in this bucket right now.</div>
-        ) : picks.map((p, i) => (
-          <div key={i} className="rounded-md border border-border/60 bg-background/40 p-2.5">
+        ) : picks.map((p, i) => {
+          const exp = expiryStatus?.get(pickKey(p));
+          return (
+          <div key={i} className={cn("rounded-md border border-border/60 bg-background/40 p-2.5", exp?.isStale && "opacity-70")}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="font-mono text-sm font-semibold">{p.symbol}</span>
@@ -619,9 +666,13 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
                   source="web-pick"
                 />
               </div>
+              {exp && (exp.isStale || exp.rsiFlipped || exp.thetaAccelerating) && (
+                <div className="mt-1.5"><PickExpiryChips status={exp} compact /></div>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
