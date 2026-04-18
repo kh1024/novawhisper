@@ -1,5 +1,5 @@
 // Portfolio — saved options positions with live underlying + Nova's honest take.
-import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical, Sparkles } from "lucide-react";
+import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical, Sparkles, Play, Pause } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +81,9 @@ export default function Portfolio() {
   const paperCount = allPositions.filter((p) => p.is_paper).length;
   const realCount = allPositions.length - paperCount;
   const addPos = useAddPosition();
+  // Auto-cycle paper prices: random walk applied to every paper card every ~2s.
+  // Paper trades only — real positions are never affected.
+  const [autoSim, setAutoSim] = useState(false);
 
   const seedSamples = () => {
     const samples = buildSamplePaperTrades();
@@ -253,7 +256,7 @@ export default function Portfolio() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {open.map((p) => (
-                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} />
+                <PositionCard key={p.id} p={p} verdict={verdictMap.get(p.id)} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={autoSim} />
               ))}
             </div>
           )}
@@ -263,7 +266,7 @@ export default function Portfolio() {
             <Card className="p-6 text-sm text-muted-foreground">No closed positions yet.</Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {closed.map((p) => <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} settings={settings} />)}
+              {closed.map((p) => <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} settings={settings} autoSim={false} />)}
             </div>
           )}
         </TabsContent>
@@ -272,7 +275,7 @@ export default function Portfolio() {
   );
 }
 
-function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings }) {
+function PositionCard({ p, verdict, spot, settings, autoSim = false }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings; autoSim?: boolean }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const isCall = p.option_type.includes("call");
@@ -281,10 +284,25 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
   const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
 
-  // Per-card simulated spot override (paper trades only). Lets users bump the
-  // underlying ±5% / ±10% to see how P&L and moneyness react. Real spot is
-  // untouched; we just compute against `effectiveSpot`.
+  // Per-card simulated spot override (paper trades only). Manual chips set a
+  // fixed offset; auto-cycle drives a random-walk offset every 2s.
   const [simOffsetPct, setSimOffsetPct] = useState(0);
+
+  // Random-walk auto-cycle: only runs for open paper trades when parent toggles autoSim.
+  useEffect(() => {
+    if (!autoSim || !p.is_paper || p.status !== "open") return;
+    const id = setInterval(() => {
+      setSimOffsetPct((cur) => {
+        // Mean-reverting random walk in [-10, +10]
+        const drift = -cur * 0.08; // pull back toward 0
+        const shock = (Math.random() - 0.5) * 1.6; // ±0.8% per tick
+        const next = cur + drift + shock;
+        return Math.max(-10, Math.min(10, +next.toFixed(2)));
+      });
+    }, 2000);
+    return () => clearInterval(id);
+  }, [autoSim, p.is_paper, p.status]);
+
   const realSpot = spot ?? null;
   const effectiveSpot = realSpot != null && simOffsetPct !== 0
     ? realSpot * (1 + simOffsetPct / 100)
