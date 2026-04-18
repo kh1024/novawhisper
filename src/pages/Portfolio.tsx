@@ -35,7 +35,7 @@ function statusClass(s: Verdict["status"]) {
  * this is a CONSERVATIVE floor (real value ≥ intrinsic because of time value).
  * For long puts, same. For shorts (credit), it's an upper bound on what's owed.
  */
-function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undefined): number | null {
+function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undefined, settings: AppSettings): number | null {
   if (spot == null || p.entry_premium == null) return null;
   const strike = Number(p.strike);
   const isCall = p.option_type.includes("call");
@@ -45,13 +45,16 @@ function estimateUnrealizedPnl(p: PortfolioPosition, spot: number | null | undef
   else if (isPut) intrinsic = Math.max(0, strike - spot);
   else return null;
   const sign = p.direction === "long" ? 1 : -1;
-  return sign * (intrinsic - Number(p.entry_premium)) * p.contracts * 100;
+  const gross = sign * (intrinsic - Number(p.entry_premium)) * p.contracts * 100;
+  // Subtract entry fees (already paid) + projected exit fees.
+  return gross - feeRoundTrip(settings, p.contracts);
 }
 
-function realizedPnl(p: PortfolioPosition): number | null {
+function realizedPnl(p: PortfolioPosition, settings: AppSettings): number | null {
   if (p.entry_premium == null || p.close_premium == null) return null;
   const sign = p.direction === "long" ? 1 : -1;
-  return sign * (Number(p.close_premium) - Number(p.entry_premium)) * p.contracts * 100;
+  const gross = sign * (Number(p.close_premium) - Number(p.entry_premium)) * p.contracts * 100;
+  return gross - feeRoundTrip(settings, p.contracts);
 }
 
 function fmtUsd(n: number) {
