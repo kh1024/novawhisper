@@ -4,7 +4,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, FileText, Youtube, TrendingUp, Newspaper, RefreshCw, Loader2 } from "lucide-react";
+import { Sparkles, FileText, Youtube, TrendingUp, Newspaper, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useMemo, useState } from "react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useLiveQuotes, useOptionsChain, statusMeta, type OptionContract } from "@/lib/liveData";
@@ -92,6 +93,13 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
     [chain, q]
   );
 
+  // Detect stale option data: chain loaded with contracts but every mid/last is 0
+  const optionsStale = useMemo(() => {
+    if (!chain || chainLoading) return false;
+    if (!chain.contracts || chain.contracts.length === 0) return false;
+    return chain.contracts.every((c) => (c.mid ?? 0) <= 0 && (c.last ?? 0) <= 0);
+  }, [chain, chainLoading]);
+
   const series = useMemo(
     () => (symbol && q ? genSeries(symbol, q.price) : []),
     [symbol, q]
@@ -107,6 +115,10 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   const generateNova = async () => {
     if (!symbol || !q) return;
+    if (optionsStale) {
+      toast.error("Option quotes look stale — skipping Nova until live data returns.");
+      return;
+    }
     setNovaLoading(true);
     setNovaText("");
     setNovaCard(null);
@@ -162,13 +174,13 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
     }
   };
 
-  // Auto-generate Nova when drawer opens with live data ready
+  // Auto-generate Nova when drawer opens with live data ready (skip if stale)
   useEffect(() => {
-    if (symbol && q && !novaText && !novaCard && !novaLoading) {
+    if (symbol && q && !optionsStale && !novaText && !novaCard && !novaLoading) {
       generateNova();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, q?.symbol, topPicks.length]);
+  }, [symbol, q?.symbol, topPicks.length, optionsStale]);
 
   // Reset Nova when symbol changes
   useEffect(() => {
@@ -211,6 +223,15 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
             </SheetHeader>
 
             <div className="p-6 space-y-5">
+              {optionsStale && (
+                <Alert variant="destructive" className="border-warning/50 bg-warning/10 text-warning">
+                  <AlertTriangle className="h-4 w-4 !text-warning" />
+                  <AlertTitle className="text-warning">Stale option data</AlertTitle>
+                  <AlertDescription className="text-warning/90">
+                    Every contract in the chain has a $0 mid/last. Skipping Nova — these prices aren't tradeable. Try again during market hours or once the feed refreshes.
+                  </AlertDescription>
+                </Alert>
+              )}
               {/* Chart */}
               <Card className="glass-card p-4">
                 <div className="text-xs text-muted-foreground mb-2">Price (60d, anchored to live spot)</div>
