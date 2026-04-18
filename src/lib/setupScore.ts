@@ -265,7 +265,8 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   dataQuality = clamp(dataQuality);
 
   // ── Conflict Resolution Layer (estimated for scanner) ──
-  const fakeStreak = q.changePct > 1.5 && emaDist20 > 0 ? 3 : q.changePct > 0.5 && emaDist20 > 0 ? 2 : 0;
+  // Use effectiveChangePct so pre/post gaps influence streak detection.
+  const fakeStreak = effectiveChangePct > 1.5 && emaDist20 > 0 ? 3 : effectiveChangePct > 0.5 && emaDist20 > 0 ? 2 : 0;
   const synEma8 = q.price > 0 && emaDist20 !== 0 ? q.price / (1 + emaDist20 / 100) : null;
   const crlOut = runConflictResolution({
     rsi, ema8: synEma8, spot: q.price, winningStreakDays: fakeStreak,
@@ -274,7 +275,7 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   });
 
   return {
-    symbol: q.symbol, name, sector, price: q.price, changePct: q.changePct,
+    symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
     ivRank, ivRankEst: true, atrPct, atrPctEst: true, rsi, rsiEst: true,
     emaDist20, emaDist50, emaEst: true,
