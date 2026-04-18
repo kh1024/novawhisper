@@ -1,5 +1,7 @@
-// Portfolio Verdict — pulls a live underlying quote for each open position and
-// asks Nova (Lovable AI) for an honest, plain-English verdict per position.
+// Portfolio Verdict — pulls live underlying, daily history (for RSI/EMA),
+// real Greeks per position, runs the Conflict Resolution Layer, and asks Nova
+// (Lovable AI) for a brutally honest plain-English verdict alongside the
+// deterministic GO/WAIT/NO/EXIT signal.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -21,31 +23,143 @@ interface InPosition {
 }
 
 interface Quote { symbol: string; price: number; changePct: number; status: string }
+interface History { symbol: string; closes: number[] }
+interface OptionContract {
+  type: string; strike: number; expiration: string; dte: number;
+  delta: number | null; theta: number | null; iv: number | null; mid: number;
+}
 
-async function fetchQuotes(symbols: string[]): Promise<Quote[]> {
-  if (!symbols.length) return [];
+// ── helpers ────────────────────────────────────────────────────────────────
+async function fetchJson<T>(path: string, body: unknown): Promise<T | null> {
   try {
-    const r = await fetch(`${SUPABASE_URL}/functions/v1/quotes-fetch`, {
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/${path}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
         apikey: SUPABASE_ANON_KEY,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ symbols }),
+      body: JSON.stringify(body),
     });
-    if (!r.ok) return [];
-    const j = await r.json();
-    return (j?.quotes ?? []) as Quote[];
+    if (!r.ok) return null;
+    return (await r.json()) as T;
   } catch (e) {
-    console.warn("[portfolio-verdict] quotes fetch failed", e);
-    return [];
+    console.warn(`[portfolio-verdict] ${path} failed`, e);
+    return null;
   }
 }
 
 function daysTo(expiry: string): number {
   const d = new Date(expiry + "T16:00:00Z").getTime();
   return Math.round((d - Date.now()) / 86_400_000);
+}
+function ema(closes: number[], period: number): number | null {
+  if (closes.length < period) return null;
+  const k = 2 / (period + 1);
+  let e = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < closes.length; i++) e = closes[i] * k + e * (1 - k);
+  return e;
+}
+function rsi(closes: number[], period = 14): number | null {
+  if (closes.length < period + 1) return null;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    avgGain = (avgGain * (period - 1) + Math.max(0, d)) / period;
+    avgLoss = (avgLoss * (period - 1) + Math.max(0, -d)) / period;
+  }
+  if (avgLoss === 0) return 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+function streak(closes: number[]): number {
+  let s = 0;
+  for (let i = closes.length - 1; i > 0; i--) {
+    if (closes[i] > closes[i - 1]) s++;
+    else break;
+  }
+  return s;
+}
+
+type CrlVerdict = "GO" | "WAIT" | "NO" | "EXIT" | "NEUTRAL";
+type RiskBadge = "Safe" | "Mild" | "Aggressive";
+interface CrlOutput {
+  verdict: CrlVerdict;
+  reason: string;
+  riskBadge: RiskBadge | null;
+  stopLossTriggered: boolean;
+  emaDistancePct: number | null;
+  highMomentum: boolean;
+  flags: string[];
+}
+
+function classifyRisk(delta: number | null, theta: number | null, iv: number | null): RiskBadge | null {
+  if (delta == null && theta == null && iv == null) return null;
+  const aD = delta != null ? Math.abs(delta) : null;
+  const aT = theta != null ? Math.abs(theta) : null;
+  if ((aD != null && aD < 0.35) || (iv != null && iv >= 0.6)) return "Aggressive";
+  if (aD != null && aD >= 0.65 && (aT == null || aT < 0.3)) return "Safe";
+  return "Mild";
+}
+
+function runCrl(args: {
+  rsi: number | null; ema8: number | null; spot: number | null;
+  winningStreak: number; delta: number | null; theta: number | null;
+  iv: number | null; dte: number | null; isLong: boolean; isCall: boolean;
+}): CrlOutput {
+  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall } = args;
+  const emaDistancePct = ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
+  const highMomentum = winningStreak >= 3;
+  const riskBadge = classifyRisk(delta, theta, iv);
+  const flags: string[] = [];
+  if (highMomentum) flags.push("High momentum (3+ day streak)");
+
+  let stopLoss = false;
+  if (isLong && spot != null && ema8 != null) {
+    if (isCall && spot < ema8) stopLoss = true;
+    if (!isCall && spot > ema8) stopLoss = true;
+  }
+
+  if (theta != null && dte != null && theta < -0.5 && dte < 4) {
+    flags.push("Time decay trap");
+    return { verdict: "NO", reason: `Theta ${theta.toFixed(2)} with only ${dte}d to expiry — premium melts faster than any move can recover.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  }
+  if (r != null && r > 70 && emaDistancePct != null && Math.abs(emaDistancePct) > 5) {
+    flags.push("Overextended (RSI > 70, > 5% from 8-EMA)");
+    return { verdict: "WAIT", reason: `RSI ${r.toFixed(0)} and ${emaDistancePct.toFixed(1)}% above 8-EMA — pullback risk outweighs the trend.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  }
+  if (stopLoss) {
+    flags.push("Broke 8-EMA — sell at loss");
+    return { verdict: "EXIT", reason: `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`, riskBadge, stopLossTriggered: true, emaDistancePct, highMomentum, flags };
+  }
+  if (highMomentum && r != null && r >= 40 && r <= 60) {
+    flags.push("Fresh breakout (RSI 40-60)");
+    return { verdict: "GO", reason: `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, riskBadge, stopLossTriggered: false, emaDistancePct, highMomentum, flags };
+  }
+  if (highMomentum && r != null && r > 60) {
+    return { verdict: "WAIT", reason: `Momentum is up but RSI ${r.toFixed(0)} is hot — wait for a cooldown.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  }
+  if (!highMomentum && r != null && r < 40) {
+    return { verdict: "WAIT", reason: `Weak streak and RSI ${r.toFixed(0)} — no edge here, sit it out.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  }
+  return { verdict: "NEUTRAL", reason: "No conflict — but no clean GO signal either.", riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+}
+
+// Match a position to its real option contract from a chain.
+function matchContract(chain: OptionContract[], strike: number, expiry: string, isCall: boolean): OptionContract | null {
+  const wanted = chain.filter((c) =>
+    c.expiration === expiry &&
+    (isCall ? c.type === "call" : c.type === "put")
+  );
+  if (!wanted.length) return null;
+  return wanted.reduce((best, c) =>
+    Math.abs(c.strike - strike) < Math.abs(best.strike - strike) ? c : best
+  );
 }
 
 Deno.serve(async (req) => {
@@ -58,34 +172,52 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ verdicts: [] }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     const symbols = [...new Set(positions.map((p) => p.symbol.toUpperCase()))];
-    const quotes = await fetchQuotes(symbols);
-    const qMap = new Map(quotes.map((q) => [q.symbol, q]));
 
-    // Pre-compute moneyness/DTE so the prompt is short and precise.
+    // ── Fetch quotes, daily history, and option chains in parallel ──
+    const [quotesResp, histResp, ...chainResps] = await Promise.all([
+      fetchJson<{ quotes: Quote[] }>("quotes-fetch", { symbols }),
+      fetchJson<{ histories: History[] }>("quotes-history", { symbols, lookbackDays: 30 }),
+      ...symbols.map((s) => fetchJson<{ contracts: OptionContract[] }>("options-fetch", { underlying: s, limit: 250 })),
+    ]);
+    const quotes = quotesResp?.quotes ?? [];
+    const qMap = new Map(quotes.map((q) => [q.symbol, q]));
+    const hMap = new Map((histResp?.histories ?? []).map((h) => [h.symbol, h.closes]));
+    const cMap = new Map<string, OptionContract[]>();
+    chainResps.forEach((c, i) => cMap.set(symbols[i], c?.contracts ?? []));
+
+    // ── Enrich + run CRL per position ──
     const enriched = positions.map((p) => {
-      const q = qMap.get(p.symbol.toUpperCase());
+      const sym = p.symbol.toUpperCase();
+      const q = qMap.get(sym);
       const dte = daysTo(p.expiry);
       const spot = q?.price ?? null;
       const isCall = p.optionType.includes("call");
-      const isPut = p.optionType.includes("put");
-      let moneyness: string | null = null;
-      if (spot != null) {
-        if (isCall) moneyness = spot > p.strike ? "ITM" : spot < p.strike ? "OTM" : "ATM";
-        else if (isPut) moneyness = spot < p.strike ? "ITM" : spot > p.strike ? "OTM" : "ATM";
-      }
-      const distancePct = spot != null ? ((spot - p.strike) / p.strike) * 100 : null;
-      return { ...p, spot, dte, moneyness, distancePct, dayChangePct: q?.changePct ?? null };
+      const closes = hMap.get(sym) ?? [];
+      const ema8 = ema(closes, 8);
+      const rsi14 = rsi(closes, 14);
+      const winningStreak = streak(closes);
+      const contract = matchContract(cMap.get(sym) ?? [], Number(p.strike), p.expiry, isCall);
+      const crl = runCrl({
+        rsi: rsi14, ema8, spot, winningStreak,
+        delta: contract?.delta ?? null,
+        theta: contract?.theta ?? null,
+        iv: contract?.iv ?? null,
+        dte, isLong: p.direction === "long", isCall,
+      });
+      return {
+        ...p, spot, dte, ema8, rsi14, winningStreak,
+        delta: contract?.delta ?? null,
+        theta: contract?.theta ?? null,
+        iv: contract?.iv ?? null,
+        currentMid: contract?.mid ?? null,
+        crl,
+        dayChangePct: q?.changePct ?? null,
+      };
     });
 
-    const systemPrompt = `You are Nova, a brutally honest options trading coach. Speak like a friend at the bar — straight, no fluff, no hedging your bets, plain English. No legal disclaimers.
-For each open position you receive:
-1) Decide one of: "winning", "bleeding", "in trouble", "expiring worthless", "running fine", "neutral".
-2) Give a 1-2 sentence verdict telling them exactly what's happening and what to do (hold / take profit / cut / roll). Be specific with the strike and DTE.
-3) Be honest — if it's a stupid trade, say so. If it's printing, say so.
-
-Never say "consult a financial advisor" or any disclaimer. Never use the word "synergy". Use the trader vocabulary: ITM/OTM, DTE, theta, IV crush, etc.`;
-
-    const userPrompt = `Open positions with live underlying:\n${JSON.stringify(enriched, null, 2)}`;
+    // ── Ask Nova for a plain-English verdict, fed with the CRL conclusion ──
+    const systemPrompt = `You are Nova, a brutally honest options coach. For each position you receive a deterministic Conflict Resolution Layer ("crl") result with verdict (GO/WAIT/NO/EXIT/NEUTRAL), reason, risk badge, and flags. Your job is to produce a 1-2 sentence verdict that respects the CRL — never contradict it. Speak like a friend at the bar. No disclaimers.`;
+    const userPrompt = `Open positions with live data + Conflict Resolution Layer output:\n${JSON.stringify(enriched, null, 2)}`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -100,7 +232,7 @@ Never say "consult a financial advisor" or any disclaimer. Never use the word "s
           type: "function",
           function: {
             name: "score_positions",
-            description: "Return one verdict per position id.",
+            description: "Return one verdict per position id, consistent with crl.verdict.",
             parameters: {
               type: "object",
               properties: {
@@ -111,7 +243,7 @@ Never say "consult a financial advisor" or any disclaimer. Never use the word "s
                     properties: {
                       id: { type: "string" },
                       status: { type: "string", enum: ["winning", "bleeding", "in trouble", "expiring worthless", "running fine", "neutral"] },
-                      verdict: { type: "string", description: "1-2 honest sentences." },
+                      verdict: { type: "string" },
                       action: { type: "string", enum: ["hold", "take_profit", "cut", "roll", "let_expire"] },
                     },
                     required: ["id", "status", "verdict", "action"],
@@ -127,22 +259,53 @@ Never say "consult a financial advisor" or any disclaimer. Never use the word "s
         tool_choice: { type: "function", function: { name: "score_positions" } },
       }),
     });
-    if (!aiResp.ok) {
-      if (aiResp.status === 429) return new Response(JSON.stringify({ error: "Rate limit on AI gateway." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (aiResp.status === 402) return new Response(JSON.stringify({ error: "AI credits exhausted. Add funds in Settings → Workspace → Usage." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      const t = await aiResp.text();
-      console.error("[portfolio-verdict] AI error", aiResp.status, t);
-      throw new Error(`AI gateway ${aiResp.status}`);
+
+    let novaVerdicts: Array<{ id: string; status: string; verdict: string; action: string }> = [];
+    if (aiResp.ok) {
+      const aiJson = await aiResp.json();
+      const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
+      if (toolCall?.function?.arguments) {
+        try { novaVerdicts = JSON.parse(toolCall.function.arguments).verdicts ?? []; }
+        catch (e) { console.error("[portfolio-verdict] parse failed", e); }
+      }
+    } else if (aiResp.status === 429) {
+      return new Response(JSON.stringify({ error: "Rate limit on AI gateway." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } else if (aiResp.status === 402) {
+      return new Response(JSON.stringify({ error: "AI credits exhausted." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    } else {
+      console.warn("[portfolio-verdict] AI gateway", aiResp.status);
     }
-    const aiJson = await aiResp.json();
-    const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
-    let parsed: { verdicts: unknown[] } = { verdicts: [] };
-    if (toolCall?.function?.arguments) {
-      try { parsed = JSON.parse(toolCall.function.arguments); }
-      catch (e) { console.error("[portfolio-verdict] parse failed", e); }
-    }
+
+    // ── Merge Nova text with CRL output ──
+    const novaMap = new Map(novaVerdicts.map((v) => [v.id, v]));
+    const verdicts = enriched.map((p) => {
+      const nova = novaMap.get(p.id);
+      return {
+        id: p.id,
+        // Nova's narrative
+        status: nova?.status ?? "neutral",
+        verdict: nova?.verdict ?? p.crl.reason,
+        action: nova?.action ?? (p.crl.verdict === "EXIT" ? "cut" : p.crl.verdict === "GO" ? "hold" : "hold"),
+        // CRL deterministic layer
+        crl: {
+          verdict: p.crl.verdict,
+          reason: p.crl.reason,
+          riskBadge: p.crl.riskBadge,
+          stopLossTriggered: p.crl.stopLossTriggered,
+          highMomentum: p.crl.highMomentum,
+          emaDistancePct: p.crl.emaDistancePct,
+          flags: p.crl.flags,
+        },
+        // Raw inputs (so UI can show "RSI 76 · 8-EMA 410.50")
+        metrics: {
+          rsi14: p.rsi14, ema8: p.ema8, winningStreak: p.winningStreak,
+          delta: p.delta, theta: p.theta, iv: p.iv, dte: p.dte, currentMid: p.currentMid,
+        },
+      };
+    });
+
     return new Response(
-      JSON.stringify({ verdicts: parsed.verdicts, quotes, fetchedAt: new Date().toISOString() }),
+      JSON.stringify({ verdicts, quotes, fetchedAt: new Date().toISOString() }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {

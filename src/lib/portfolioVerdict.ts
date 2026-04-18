@@ -1,12 +1,36 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { PortfolioPosition } from "./portfolio";
+import type { CrlVerdict, RiskBadge } from "./conflictResolution";
+
+export interface VerdictMetrics {
+  rsi14: number | null;
+  ema8: number | null;
+  winningStreak: number | null;
+  delta: number | null;
+  theta: number | null;
+  iv: number | null;
+  dte: number | null;
+  currentMid: number | null;
+}
+
+export interface VerdictCrl {
+  verdict: CrlVerdict;
+  reason: string;
+  riskBadge: RiskBadge | null;
+  stopLossTriggered: boolean;
+  highMomentum: boolean;
+  emaDistancePct: number | null;
+  flags: string[];
+}
 
 export interface Verdict {
   id: string;
   status: "winning" | "bleeding" | "in trouble" | "expiring worthless" | "running fine" | "neutral";
   verdict: string;
   action: "hold" | "take_profit" | "cut" | "roll" | "let_expire";
+  crl?: VerdictCrl;
+  metrics?: VerdictMetrics;
 }
 
 export interface VerdictResult {

@@ -8,9 +8,17 @@ import type { Verdict } from "./portfolioVerdict";
 const STATE_KEY = "nova_webhook_last_state";
 const LOG_KEY = "nova_webhook_log";
 
-type Signal = "GO" | "WAIT" | "EXIT";
+type Signal = "GO" | "WAIT" | "EXIT" | "NO";
 
 function verdictToSignal(v: Verdict): Signal {
+  // Prefer the deterministic CRL verdict if present
+  if (v.crl) {
+    if (v.crl.stopLossTriggered) return "EXIT";
+    if (v.crl.verdict === "GO") return "GO";
+    if (v.crl.verdict === "EXIT") return "EXIT";
+    if (v.crl.verdict === "NO") return "NO";
+    if (v.crl.verdict === "WAIT") return "WAIT";
+  }
   if (v.action === "cut" || v.action === "take_profit") return "EXIT";
   if (v.status === "winning" || v.status === "running fine") return "GO";
   return "WAIT";
@@ -82,7 +90,7 @@ export async function dispatchVerdictTransitions({ settings, verdicts, positions
     // First-ever sighting: only alert if it's a GO/EXIT (or WAIT when opted in)
     const isFirstSighting = prev === undefined;
     const shouldFire =
-      sig === "GO" || sig === "EXIT" ||
+      sig === "GO" || sig === "EXIT" || sig === "NO" ||
       (sig === "WAIT" && settings.webhookOnWait && !isFirstSighting);
     if (!shouldFire) continue;
     if (isFirstSighting && sig === "WAIT") continue;
@@ -90,7 +98,8 @@ export async function dispatchVerdictTransitions({ settings, verdicts, positions
     const symbol = symBy.get(v.id) ?? "?";
     const headline =
       sig === "GO"   ? `🟢 GO — ${symbol}` :
-      sig === "EXIT" ? `🚨 EXIT — ${symbol}` :
+      sig === "EXIT" ? `🚨 EXIT — ${symbol} (broke 8-EMA)` :
+      sig === "NO"   ? `⛔ NO — ${symbol} (time decay trap)` :
                        `⏳ WAIT — ${symbol}`;
     const payload = {
       event: "nova_verdict_transition",

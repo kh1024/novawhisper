@@ -5,6 +5,7 @@
 
 import { TICKER_UNIVERSE } from "./mockData";
 import type { VerifiedQuote } from "./liveData";
+import { runConflictResolution, type CrlVerdict, type RiskBadge } from "./conflictResolution";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
@@ -48,6 +49,12 @@ export interface SetupRow {
   whyWeak: string[];
   dataQuality: number;        // 0-100, drives confidence
   status: VerifiedQuote["status"] | "no-quote";
+  crl: {
+    verdict: CrlVerdict;
+    reason: string;
+    riskBadge: RiskBadge | null;
+    flags: string[];
+  };
 }
 
 // Cheap deterministic PRNG seeded by symbol. Stable across renders.
@@ -242,36 +249,29 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   if (q.status === "unavailable") dataQuality = 0;
   dataQuality = clamp(dataQuality);
 
+  // ── Conflict Resolution Layer (estimated for scanner) ──
+  const fakeStreak = q.changePct > 1.5 && emaDist20 > 0 ? 3 : q.changePct > 0.5 && emaDist20 > 0 ? 2 : 0;
+  const synEma8 = q.price > 0 && emaDist20 !== 0 ? q.price / (1 + emaDist20 / 100) : null;
+  const crlOut = runConflictResolution({
+    rsi, ema8: synEma8, spot: q.price, winningStreakDays: fakeStreak,
+    delta: null, theta: null, iv: null, dte: null,
+    isLong: bias !== "bearish", isCall: bias !== "bearish",
+  });
+
   return {
-    symbol: q.symbol,
-    name,
-    sector,
-    price: q.price,
-    changePct: q.changePct,
-    volume: q.volume,
-    avgVolume,
-    relVolume,
-    ivRank,
-    ivRankEst: true,
-    atrPct,
-    atrPctEst: true,
-    rsi,
-    rsiEst: true,
-    emaDist20,
-    emaDist50,
-    emaEst: true,
-    optionsLiquidity,
-    earningsInDays,
-    bias,
-    trendLabel,
-    setupScore,
-    breakdown,
-    readiness,
-    warnings,
-    whyValid,
-    whyWeak,
-    dataQuality,
+    symbol: q.symbol, name, sector, price: q.price, changePct: q.changePct,
+    volume: q.volume, avgVolume, relVolume,
+    ivRank, ivRankEst: true, atrPct, atrPctEst: true, rsi, rsiEst: true,
+    emaDist20, emaDist50, emaEst: true,
+    optionsLiquidity, earningsInDays, bias, trendLabel,
+    setupScore, breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
     status: q.status,
+    crl: {
+      verdict: crlOut.verdict,
+      reason: crlOut.reason,
+      riskBadge: crlOut.riskBadge,
+      flags: crlOut.flags,
+    },
   };
 }
 
