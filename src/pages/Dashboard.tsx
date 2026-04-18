@@ -187,23 +187,6 @@ export default function Dashboard() {
         <div className="space-y-6">
           <Card className="glass-card p-5">
             <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-primary" /> AI Summary of the Day
-            </h2>
-            <p className="text-sm text-foreground/80 leading-relaxed">
-              Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
-            </p>
-          </Card>
-
-          <TipsRotator />
-
-          <PlaybookCard onPick={setOpenSymbol} />
-
-          <NewsFeed limit={6} title="Market News" />
-
-          <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} />
-
-          <Card className="glass-card p-5">
-            <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-neutral" /> Event Watch
             </h2>
             <div className="space-y-2">
@@ -220,6 +203,23 @@ export default function Dashboard() {
               ))}
             </div>
           </Card>
+
+          <Card className="glass-card p-5">
+            <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> AI Summary of the Day
+            </h2>
+            <p className="text-sm text-foreground/80 leading-relaxed">
+              Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
+            </p>
+          </Card>
+
+          <TipsRotator />
+
+          <PlaybookCard onPick={setOpenSymbol} />
+
+          <NewsFeed limit={6} title="Market News" />
+
+          <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} />
         </div>
       </div>
 
