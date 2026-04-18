@@ -424,6 +424,8 @@ function ChartLinks({ symbol, className }: { symbol: string; className?: string 
     </div>
   );
 }
+
+function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Score breakdown */}
