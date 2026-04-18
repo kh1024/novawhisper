@@ -13,7 +13,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePlanning, type PlanningPick, type SourceTicker } from "@/lib/planning";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
-import { useWebPicksHistory, type HistoryRun } from "@/lib/webPicksHistory";
+import { useWebPicksHistory } from "@/lib/webPicksHistory";
+import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
