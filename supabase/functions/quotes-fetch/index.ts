@@ -8,6 +8,8 @@ const ALPHA_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 
+const BATCH_CONCURRENCY = 4;
+
 type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq";
 
 interface SourceQuote {
@@ -57,6 +59,35 @@ function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
   return next as Promise<T>;
 }
 
+async function mapWithConcurrency<T, R>(items: T[], limit: number, worker: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+
+  async function run() {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      out[index] = await worker(items[index], index);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => run());
+  await Promise.all(workers);
+  return out;
+}
+
+function keepPreviousOnBackoff(
+  cache: Map<string, { q: SourceQuote | null; at: number }>,
+  symbol: string,
+  cached: { q: SourceQuote | null; at: number } | undefined,
+  ttlMs: number,
+  backoffMs: number,
+) {
+  if (cached?.q) {
+    cache.set(symbol, { q: cached.q, at: Date.now() - ttlMs + backoffMs });
+  }
+}
+
 async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
   if (!FINNHUB_KEY) return null;
   const cached = finnhubCache.get(symbol);
@@ -66,19 +97,18 @@ async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
     const r = await fetch(url);
     if (r.status === 429) {
       console.warn(`[finnhub] ${symbol} 429 rate-limit — backing off 60s`);
-      const prev = cached?.q ?? null;
-      finnhubCache.set(symbol, { q: prev, at: Date.now() - FINNHUB_TTL_MS + 60_000 });
-      return prev;
+      keepPreviousOnBackoff(finnhubCache, symbol, cached, FINNHUB_TTL_MS, 60_000);
+      return cached?.q ?? null;
     }
     if (!r.ok) {
       console.warn(`[finnhub] ${symbol} HTTP ${r.status}`);
-      finnhubCache.set(symbol, { q: cached?.q ?? null, at: Date.now() - FINNHUB_TTL_MS + 30_000 });
+      keepPreviousOnBackoff(finnhubCache, symbol, cached, FINNHUB_TTL_MS, 30_000);
       return cached?.q ?? null;
     }
     const d = await r.json();
     const price = Number(d.c);
     if (!isFinite(price) || price === 0) {
-      finnhubCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
+      if (cached?.q) finnhubCache.set(symbol, { q: cached.q, at: Date.now() });
       return cached?.q ?? null;
     }
     const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0 };
@@ -137,13 +167,12 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
     });
     if (r.status === 429) {
       console.warn(`[massive] ${symbol} 429 rate-limit — backing off 60s`);
-      const prev = cached?.q ?? null;
-      massiveCache.set(symbol, { q: prev, at: Date.now() - MASSIVE_TTL_MS + 60_000 });
-      return prev;
+      keepPreviousOnBackoff(massiveCache, symbol, cached, MASSIVE_TTL_MS, 60_000);
+      return cached?.q ?? null;
     }
     if (!r.ok) {
       console.warn(`[massive] ${symbol} HTTP ${r.status}`);
-      massiveCache.set(symbol, { q: cached?.q ?? null, at: Date.now() - MASSIVE_TTL_MS + 30_000 });
+      keepPreviousOnBackoff(massiveCache, symbol, cached, MASSIVE_TTL_MS, 30_000);
       return cached?.q ?? null;
     }
     const d = await r.json();
@@ -151,7 +180,7 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
     const close = Number(row?.c);
     const open = Number(row?.o);
     if (!isFinite(close) || close === 0) {
-      massiveCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
+      if (cached?.q) massiveCache.set(symbol, { q: cached.q, at: Date.now() });
       return cached?.q ?? null;
     }
     const change = isFinite(open) ? close - open : 0;
@@ -357,14 +386,18 @@ Deno.serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (symbols.length > 30) symbols = symbols.slice(0, 30);
+
+    symbols = Array.from(new Set(symbols.map((x) => String(x).trim().toUpperCase()).filter(Boolean))).slice(0, 30);
 
     const useAlpha = verifyAll || symbols.length === 1;
 
     // One Yahoo batch call covers all symbols at once — much faster than per-symbol.
     const yahooMap = await fetchYahooBatch(symbols);
 
-    const results = await Promise.all(symbols.map((sym) => getQuote(sym, useAlpha, yahooMap)));
+    // Bulk requests were fanning out too many provider calls in parallel and
+    // hitting 429s, which surfaced as "No data" in the UI. Keep a small,
+    // stable concurrency here so ETF/watchlist screens stay populated.
+    const results = await mapWithConcurrency(symbols, BATCH_CONCURRENCY, (sym) => getQuote(sym, useAlpha, yahooMap));
     return new Response(JSON.stringify({ quotes: results, fetchedAt: new Date().toISOString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

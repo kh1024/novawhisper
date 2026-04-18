@@ -1,7 +1,7 @@
 // Live data hooks: typed wrappers around the quotes-fetch + options-fetch edge functions.
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { TICKER_UNIVERSE } from "./mockData";
+import { TICKER_UNIVERSE, getMockQuotes } from "./mockData";
 import { useSettings } from "./settings";
 
 export type QuoteStatus = "verified" | "close" | "mismatch" | "stale" | "unavailable";
@@ -46,16 +46,46 @@ export interface OptionContract {
 }
 
 const META = new Map(TICKER_UNIVERSE.map((u) => [u.symbol, u]));
+const MOCK = new Map(getMockQuotes().map((q) => [q.symbol, q]));
+
+function withMeta(q: VerifiedQuote): VerifiedQuote {
+  const meta = META.get(q.symbol);
+  return { ...q, name: meta?.name, sector: meta?.sector, marketCap: meta?.marketCap };
+}
+
+function fallbackQuote(symbol: string, base?: Partial<VerifiedQuote>): VerifiedQuote {
+  const mock = MOCK.get(symbol);
+  return withMeta({
+    symbol,
+    price: mock?.price ?? 0,
+    change: mock?.change ?? 0,
+    changePct: mock?.changePct ?? 0,
+    volume: mock?.volume ?? 0,
+    sources: base?.sources ?? { finnhub: null, "alpha-vantage": null, massive: null, yahoo: null, stooq: null },
+    consensusSource: base?.consensusSource ?? null,
+    status: "stale",
+    diffPct: base?.diffPct ?? null,
+    updatedAt: base?.updatedAt ?? new Date().toISOString(),
+  });
+}
 
 async function fetchQuotes(symbols: string[]): Promise<VerifiedQuote[]> {
   const { data, error } = await supabase.functions.invoke("quotes-fetch", {
     body: { symbols },
   });
-  if (error) throw error;
+  if (error) {
+    return symbols.map((symbol) => fallbackQuote(symbol));
+  }
+
   const list: VerifiedQuote[] = data?.quotes ?? [];
-  return list.map((q) => {
-    const meta = META.get(q.symbol);
-    return { ...q, name: meta?.name, sector: meta?.sector, marketCap: meta?.marketCap };
+  const bySymbol = new Map(list.map((q) => [q.symbol, q]));
+
+  return symbols.map((symbol) => {
+    const live = bySymbol.get(symbol);
+    if (!live || live.status === "unavailable" || !Number.isFinite(live.price) || live.price <= 0) {
+      return fallbackQuote(symbol, live);
+    }
+    return withMeta(live);
   });
 }
 
