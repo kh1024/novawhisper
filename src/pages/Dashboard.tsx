@@ -1,22 +1,32 @@
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, ShieldAlert } from "lucide-react";
+import { Activity, AlertTriangle, Flame, ShieldCheck, TrendingUp, Sparkles, Loader2, Info } from "lucide-react";
 import { getMockPicks, MARKET_REGIME, TOP_SECTORS, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { NewsFeed } from "@/components/NewsFeed";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
   show: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.04, duration: 0.4, ease: "easeOut" } }),
 };
 
+type RiskBucket = "safe" | "mild" | "aggressive";
+
 export default function Dashboard() {
   const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
-  const picks = useMemo(() => getMockPicks(20), []);
+  const allPicks = useMemo(() => getMockPicks(60), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
+  const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
+
+  const picks = useMemo(
+    () => allPicks.filter((p) => p.riskBucket === riskTab).slice(0, 6),
+    [allPicks, riskTab]
+  );
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
@@ -47,13 +57,36 @@ export default function Dashboard() {
 
       {/* ETF strip */}
       <Card className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="h-3 w-3" /> About prices
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-relaxed">
+                  Prices come from Finnhub + Alpha Vantage and may be delayed up to ~15 minutes vs. live brokerage feeds (e.g. Robinhood). Use for research, not order entry.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             {quotesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-            <span className="pill pill-bullish">
-              <ShieldAlert className="h-3 w-3" /> {verifiedCount}/{quotes.length} verified
-            </span>
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="pill pill-bullish cursor-help">
+                    <ShieldCheck className="h-3 w-3" /> {verifiedCount}/{quotes.length} good
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Two providers agree on the price (within 1%).
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <span>{etfs.length} ETFs</span>
           </div>
         </div>
@@ -65,20 +98,28 @@ export default function Dashboard() {
               const up = e.change >= 0;
               const meta = statusMeta(e.status);
               return (
-                <button
-                  key={e.symbol}
-                  onClick={() => setOpenSymbol(e.symbol)}
-                  className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-semibold">{e.symbol}</span>
-                    <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
-                      {up ? "+" : ""}{e.changePct.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
-                  <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
-                </button>
+                <TooltipProvider key={e.symbol} delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setOpenSymbol(e.symbol)}
+                        className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all w-full"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-semibold">{e.symbol}</span>
+                          <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
+                            {up ? "+" : ""}{e.changePct.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
+                        <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                      {meta.tip}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               );
             })}
           </div>
@@ -93,16 +134,19 @@ export default function Dashboard() {
               <Flame className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold tracking-wide">Top Opportunities Today</h2>
             </div>
-            <Tabs defaultValue="safe" className="w-auto">
+            <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
               <TabsList className="h-8 bg-surface/60">
-                <TabsTrigger value="safe" className="text-xs h-6">Safe</TabsTrigger>
-                <TabsTrigger value="mild" className="text-xs h-6">Mild</TabsTrigger>
-                <TabsTrigger value="aggressive" className="text-xs h-6">Aggressive</TabsTrigger>
+                <TabsTrigger value="safe" className="text-xs h-6">🟢 Safe</TabsTrigger>
+                <TabsTrigger value="mild" className="text-xs h-6">🟡 Mild</TabsTrigger>
+                <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
+          {picks.length === 0 && (
+            <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
+          )}
           <div className="space-y-2">
-            {picks.slice(0, 6).map((p) => (
+            {picks.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setOpenSymbol(p.symbol)}
@@ -146,6 +190,8 @@ export default function Dashboard() {
               Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
             </p>
           </Card>
+
+          <NewsFeed limit={6} title="Market News" />
 
           <Card className="glass-card p-5">
             <h2 className="text-sm font-semibold tracking-wide mb-3">Top Sectors</h2>
