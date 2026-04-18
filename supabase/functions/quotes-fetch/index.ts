@@ -1,4 +1,5 @@
-// Verified stock quotes via Finnhub (primary) + Alpha Vantage (verify).
+// Verified stock quotes via Finnhub (primary) + Alpha Vantage (verify, throttled).
+// Strategy: in-memory cache (2 min TTL) avoids hammering free-tier APIs.
 // Status: verified (within 0.25%) · close (<1%) · mismatch (≥1%) · stale (only 1 src) · unavailable.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
@@ -29,19 +30,47 @@ interface VerifiedQuote {
   error?: string;
 }
 
+// ── In-memory caches (per isolate; resets on cold start) ──
+const QUOTE_TTL_MS = 2 * 60_000; // 2 min — quotes are "live-ish" research feed, not order entry
+const ALPHA_TTL_MS = 10 * 60_000; // 10 min — Alpha free is 25 req/DAY, conserve aggressively
+const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
+const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
+
+// Alpha Vantage requires ≤1 req/sec; serialize with a queue
+let alphaChain: Promise<unknown> = Promise.resolve();
+function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
+  const next = alphaChain.then(async () => {
+    const out = await fn();
+    await new Promise((r) => setTimeout(r, 1100));
+    return out;
+  });
+  alphaChain = next.catch(() => undefined);
+  return next as Promise<T>;
+}
+
 async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
   if (!FINNHUB_KEY) return null;
+  const cached = finnhubCache.get(symbol);
+  if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.q;
   try {
     const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY}`;
     const r = await fetch(url);
     if (!r.ok) {
       console.warn(`[finnhub] ${symbol} HTTP ${r.status}`);
+      // Cache failure briefly to avoid retry storms
+      finnhubCache.set(symbol, { q: null, at: Date.now() - QUOTE_TTL_MS + 30_000 });
       return null;
     }
     const d = await r.json();
     const price = Number(d.c);
-    if (!isFinite(price) || price === 0) return null;
-    return { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0 };
+    if (!isFinite(price) || price === 0) {
+      finnhubCache.set(symbol, { q: null, at: Date.now() });
+      return null;
+    }
+    const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0 };
+    finnhubCache.set(symbol, { q, at: Date.now() });
+    return q;
   } catch (e) {
     console.error(`[finnhub] ${symbol}`, e);
     return null;
@@ -50,28 +79,39 @@ async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
 
 async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
   if (!ALPHA_KEY) return null;
-  try {
-    const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${ALPHA_KEY}`;
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const d = await r.json();
-    const q = d["Global Quote"] ?? {};
-    const price = Number(q["05. price"]);
-    if (!isFinite(price) || price === 0) {
-      if (d.Note || d.Information) console.warn(`[alpha] ${symbol} ${d.Note ?? d.Information}`);
+  const cached = alphaCache.get(symbol);
+  if (cached && Date.now() - cached.at < ALPHA_TTL_MS) return cached.q;
+  return throttleAlpha(async () => {
+    try {
+      const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${ALPHA_KEY}`;
+      const r = await fetch(url);
+      if (!r.ok) {
+        alphaCache.set(symbol, { q: null, at: Date.now() });
+        return null;
+      }
+      const d = await r.json();
+      const q = d["Global Quote"] ?? {};
+      const price = Number(q["05. price"]);
+      if (!isFinite(price) || price === 0) {
+        if (d.Note || d.Information) console.warn(`[alpha] ${symbol} ${d.Note ?? d.Information}`);
+        // Long cache on quota-exhausted to stop retry loops
+        alphaCache.set(symbol, { q: null, at: Date.now() });
+        return null;
+      }
+      const out: SourceQuote = {
+        source: "alpha-vantage",
+        price,
+        change: Number(q["09. change"] ?? 0),
+        changePct: Number(String(q["10. change percent"] ?? "0%").replace("%", "")),
+        volume: Number(q["06. volume"] ?? 0),
+      };
+      alphaCache.set(symbol, { q: out, at: Date.now() });
+      return out;
+    } catch (e) {
+      console.error(`[alpha] ${symbol}`, e);
       return null;
     }
-    return {
-      source: "alpha-vantage",
-      price,
-      change: Number(q["09. change"] ?? 0),
-      changePct: Number(String(q["10. change percent"] ?? "0%").replace("%", "")),
-      volume: Number(q["06. volume"] ?? 0),
-    };
-  } catch (e) {
-    console.error(`[alpha] ${symbol}`, e);
-    return null;
-  }
+  });
 }
 
 function verify(symbol: string, primary: SourceQuote | null, secondary: SourceQuote | null): VerifiedQuote {
@@ -108,17 +148,30 @@ function verify(symbol: string, primary: SourceQuote | null, secondary: SourceQu
   };
 }
 
+async function getQuote(sym: string, verifyWithAlpha: boolean): Promise<VerifiedQuote> {
+  const cached = quoteCache.get(sym);
+  if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.quote;
+  const finn = await fetchFinnhub(sym);
+  const alpha = verifyWithAlpha ? await fetchAlpha(sym) : (alphaCache.get(sym)?.q ?? null);
+  const v = verify(sym, finn, alpha);
+  quoteCache.set(sym, { quote: v, at: Date.now() });
+  return v;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
     let symbols: string[] = [];
+    let verifyAll = false;
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       symbols = Array.isArray(body.symbols) ? body.symbols : [];
+      verifyAll = body.verify === true;
     } else {
       const u = new URL(req.url);
       const s = u.searchParams.get("symbols");
       symbols = s ? s.split(",").map((x) => x.trim().toUpperCase()).filter(Boolean) : [];
+      verifyAll = u.searchParams.get("verify") === "1";
     }
     if (symbols.length === 0) {
       return new Response(JSON.stringify({ error: "symbols required" }), {
@@ -127,12 +180,10 @@ Deno.serve(async (req) => {
     }
     if (symbols.length > 30) symbols = symbols.slice(0, 30);
 
-    const results = await Promise.all(
-      symbols.map(async (sym) => {
-        const [p, s] = await Promise.all([fetchFinnhub(sym), fetchAlpha(sym)]);
-        return verify(sym, p, s);
-      })
-    );
+    // Verify with Alpha only when explicitly requested OR for tiny single-symbol requests (drawer use case).
+    const useAlpha = verifyAll || symbols.length === 1;
+
+    const results = await Promise.all(symbols.map((sym) => getQuote(sym, useAlpha)));
     return new Response(JSON.stringify({ quotes: results, fetchedAt: new Date().toISOString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
