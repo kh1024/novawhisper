@@ -74,9 +74,16 @@ Deno.serve(async (req) => {
 - MILD: moderate-risk directional plays (vertical spreads, 30-45 DTE single-leg on liquid names with a clear catalyst).
 - AGGRESSIVE: high-risk/high-reward (0DTE-7DTE, naked single-leg on momentum names, earnings straddles, unusual-activity follow-the-whale).
 
-For each pick: ticker, strategy, thesis (1 sentence grounded in the actual article content), entry idea (concrete strikes/expiry/direction), key risk. Pick 2-3 per bucket. ONLY use tickers that explicitly appear in the article text. Cite the source URL or domain.`;
+CRITICAL — every pick MUST include concrete, tradeable numbers:
+- exact strike price (number, USD)
+- expiry date (YYYY-MM-DD, pick a real upcoming Friday or monthly expiry)
+- option type (call / put / spread / straddle etc.) and direction (long / short)
+- "play at" underlying price — the spot level at which the trade makes sense to enter
+- a premium estimate range
 
-    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by intended risk tier):\n\n${context}\n\nReturn three buckets via the tool.`;
+Do NOT return vague entries like "buy calls if it breaks out". If you don't have enough info to pick a strike and expiry, drop the idea. Pick 2-3 per bucket. Only use tickers that explicitly appear in the article text. Today's date is ${new Date().toISOString().slice(0, 10)} — choose expiries in the future.`;
+
+    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by intended risk tier):\n\n${context}\n\nReturn three buckets via the tool with concrete strikes, expiries, and play-at prices for every pick.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
