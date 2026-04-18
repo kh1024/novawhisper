@@ -60,6 +60,11 @@ function ema(closes: number[], period: number): number | null {
   for (let i = period; i < closes.length; i++) e = closes[i] * k + e * (1 - k);
   return e;
 }
+function sma(closes: number[], period: number): number | null {
+  if (closes.length < period) return null;
+  const slice = closes.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
 function rsi(closes: number[], period = 14): number | null {
   if (closes.length < period + 1) return null;
   let gains = 0, losses = 0;
@@ -84,6 +89,44 @@ function streak(closes: number[]): number {
     else break;
   }
   return s;
+}
+// Realized volatility over last `period` daily closes, annualized (252).
+function realizedVolAnnualized(closes: number[], period = 30): number | null {
+  if (closes.length < period + 1) return null;
+  const slice = closes.slice(-(period + 1));
+  const rets: number[] = [];
+  for (let i = 1; i < slice.length; i++) {
+    const r = Math.log(slice[i] / slice[i - 1]);
+    if (Number.isFinite(r)) rets.push(r);
+  }
+  if (rets.length < 5) return null;
+  const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+  const variance = rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length;
+  return Math.sqrt(variance) * Math.sqrt(252);
+}
+// IV Percentile estimate: where current IV sits between 0.5×RV and 2.5×RV
+// (a common rule-of-thumb band when historical IV series isn't available).
+function ivPercentileEstimate(iv: number | null, rv: number | null): number | null {
+  if (iv == null || rv == null || rv <= 0) return null;
+  const lo = rv * 0.5, hi = rv * 2.5;
+  const pct = ((iv - lo) / (hi - lo)) * 100;
+  return Math.max(0, Math.min(100, +pct.toFixed(0)));
+}
+// Is "now" before 10:30 AM US-Eastern on a weekday? (Opening-range window.)
+function beforeOpeningRange(now = new Date()): boolean {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => fmt.find((p) => p.type === t)?.value ?? "";
+  const wd = get("weekday");
+  if (wd === "Sat" || wd === "Sun") return false;
+  const h = Number(get("hour"));
+  const m = Number(get("minute"));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return false;
+  // Market opens 09:30 ET. "Opening range" = 09:30–10:30. We only force WAIT
+  // during that window itself (not pre-market, not after 10:30).
+  const minutes = h * 60 + m;
+  return minutes >= 9 * 60 + 30 && minutes < 10 * 60 + 30;
 }
 
 type CrlVerdict = "GO" | "WAIT" | "NO" | "EXIT" | "NEUTRAL";
