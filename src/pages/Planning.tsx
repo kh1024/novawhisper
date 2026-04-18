@@ -384,8 +384,17 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
               <Badge variant="outline" className="text-[10px]">{p.strategy}</Badge>
             </div>
             <p className="mt-1.5 text-xs text-foreground/90">{p.thesis}</p>
+            <OptionContract
+              symbol={p.symbol}
+              optionType={p.optionType}
+              direction={p.direction}
+              strike={p.strike}
+              strikeShort={p.strikeShort}
+              expiry={p.expiry}
+              playAt={p.playAt}
+              premiumEstimate={p.premiumEstimate}
+            />
             <div className="mt-2 space-y-1 text-[11px]">
-              <div><span className="text-muted-foreground">Entry: </span><span className="text-foreground/80">{p.entry}</span></div>
               <div><span className="text-muted-foreground">Risk: </span><span className="text-foreground/80">{p.risk}</span></div>
               <div className="text-[10px] text-muted-foreground italic">via {p.source}</div>
             </div>
