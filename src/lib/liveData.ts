@@ -96,13 +96,46 @@ export function useOptionsChain(underlying: string | null, limit = 150) {
   });
 }
 
-/** Status pill color/label helper. */
+/** Plain-English status pill: clear for non-experts. */
 export function statusMeta(s: QuoteStatus) {
   switch (s) {
-    case "verified": return { label: "Verified", cls: "pill-bullish" };
-    case "close": return { label: "Close", cls: "pill-neutral" };
-    case "mismatch": return { label: "Mismatch", cls: "pill-bearish" };
-    case "stale": return { label: "Single-src", cls: "pill-neutral" };
-    case "unavailable": return { label: "No data", cls: "pill-bearish" };
+    case "verified": return { label: "✓ Good", cls: "pill-bullish", tip: "Two providers agree within 0.25% — high confidence." };
+    case "close":    return { label: "≈ OK",   cls: "pill-neutral", tip: "Two providers within 1% — minor lag possible." };
+    case "mismatch": return { label: "⚠ Check", cls: "pill-bearish", tip: "Providers disagree by 1%+. Cross-check before trading." };
+    case "stale":    return { label: "1 source", cls: "pill-neutral", tip: "Only one provider responded. May be slightly delayed." };
+    case "unavailable": return { label: "No data", cls: "pill-bearish", tip: "No providers returned a quote for this symbol." };
   }
+}
+
+// ──────────── News ────────────
+
+export interface NewsItem {
+  id: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image: string;
+  publishedAt: string;
+  related: string;
+  category: string;
+}
+
+async function fetchNews(params: { symbol?: string | null; category?: string; limit?: number }): Promise<NewsItem[]> {
+  const { data, error } = await supabase.functions.invoke("news-fetch", { body: params });
+  if (error) throw error;
+  return (data?.items ?? []) as NewsItem[];
+}
+
+/** General market news (or company news when symbol provided). */
+export function useNews(opts?: { symbol?: string | null; category?: string; limit?: number; refetchMs?: number }) {
+  const symbol = opts?.symbol ?? null;
+  const category = opts?.category ?? "general";
+  const limit = opts?.limit ?? 12;
+  return useQuery({
+    queryKey: ["news", symbol ?? "_general", category, limit],
+    queryFn: () => fetchNews({ symbol, category, limit }),
+    refetchInterval: opts?.refetchMs ?? 5 * 60_000, // 5 min
+    staleTime: 2 * 60_000,
+  });
 }
