@@ -15,6 +15,9 @@ export interface AppSettings {
   tickerSymbols: string[];    // symbols shown in the top tape
   aiModel: AiModel;
   riskProfile: RiskProfile;
+  webhookUrl: string;         // Make.com / n8n / Slack incoming webhook
+  webhookEnabled: boolean;    // master toggle
+  webhookOnWait: boolean;     // also fire on new WAIT signals
 }
 
 const KEY = "nova_settings";
@@ -23,6 +26,9 @@ const DEFAULTS: AppSettings = {
   tickerSymbols: [],           // empty = use full universe
   aiModel: "google/gemini-3-flash-preview",
   riskProfile: "mild",
+  webhookUrl: "",
+  webhookEnabled: false,
+  webhookOnWait: false,
 };
 
 function read(): AppSettings {

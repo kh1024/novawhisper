@@ -10,7 +10,9 @@ import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useSettings } from "@/lib/settings";
+import { dispatchVerdictTransitions } from "@/lib/webhook";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -64,6 +66,18 @@ export default function Portfolio() {
   const verdictMap = new Map((verdictQ.data?.verdicts ?? []).map((v) => [v.id, v]));
   const quoteMap = new Map((verdictQ.data?.quotes ?? []).map((q) => [q.symbol, q]));
   const qc = useQueryClient();
+  const [settings] = useSettings();
+
+  // Fire webhook on WAIT→GO/EXIT transitions whenever fresh verdicts arrive.
+  useEffect(() => {
+    const verdicts = verdictQ.data?.verdicts;
+    if (!verdicts || verdicts.length === 0) return;
+    dispatchVerdictTransitions({
+      settings,
+      verdicts,
+      positions: open.map((p) => ({ id: p.id, symbol: p.symbol })),
+    });
+  }, [verdictQ.data, settings, open]);
 
   const totals = useMemo(() => {
     const openCount = open.length;
