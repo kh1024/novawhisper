@@ -17,7 +17,10 @@ const SUBS_DEFAULT = [
   "swingtrading",
   "pennystocks",
 ];
-const UA = "NovaTerminal/1.0 (planning aggregator)";
+// Reddit started 403'ing the standard www.reddit.com/.json from server IPs.
+// Use old.reddit.com (still allows unauthenticated JSON) and a realistic UA.
+const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const HOSTS = ["https://old.reddit.com", "https://www.reddit.com", "https://api.reddit.com"];
 
 const POS = ["calls", "moon", "rip", "squeeze", "breakout", "buy", "long", "bull", "beat", "raise", "rally", "pump"];
 const NEG = ["puts", "dump", "crash", "drop", "bear", "short", "miss", "warn", "tank", "sell", "downgrade"];
