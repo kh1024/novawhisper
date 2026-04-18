@@ -57,13 +57,36 @@ export default function Dashboard() {
 
       {/* ETF strip */}
       <Card className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                    <Info className="h-3 w-3" /> About prices
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-relaxed">
+                  Prices come from Finnhub + Alpha Vantage and may be delayed up to ~15 minutes vs. live brokerage feeds (e.g. Robinhood). Use for research, not order entry.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             {quotesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-            <span className="pill pill-bullish">
-              <ShieldAlert className="h-3 w-3" /> {verifiedCount}/{quotes.length} verified
-            </span>
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="pill pill-bullish cursor-help">
+                    <ShieldCheck className="h-3 w-3" /> {verifiedCount}/{quotes.length} good
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Two providers agree on the price (within 1%).
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <span>{etfs.length} ETFs</span>
           </div>
         </div>
@@ -75,20 +98,28 @@ export default function Dashboard() {
               const up = e.change >= 0;
               const meta = statusMeta(e.status);
               return (
-                <button
-                  key={e.symbol}
-                  onClick={() => setOpenSymbol(e.symbol)}
-                  className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs font-semibold">{e.symbol}</span>
-                    <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
-                      {up ? "+" : ""}{e.changePct.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
-                  <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
-                </button>
+                <TooltipProvider key={e.symbol} delayDuration={200}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => setOpenSymbol(e.symbol)}
+                        className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all w-full"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-xs font-semibold">{e.symbol}</span>
+                          <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
+                            {up ? "+" : ""}{e.changePct.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
+                        <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                      {meta.tip}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               );
             })}
           </div>
