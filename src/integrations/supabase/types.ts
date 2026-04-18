@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      portfolio_positions: {
+        Row: {
+          close_premium: number | null
+          closed_at: string | null
+          contracts: number
+          created_at: string
+          direction: string
+          entry_at: string
+          entry_premium: number | null
+          entry_underlying: number | null
+          expiry: string
+          id: string
+          notes: string | null
+          option_type: string
+          owner_key: string
+          source: string | null
+          status: string
+          strike: number
+          strike_short: number | null
+          symbol: string
+          thesis: string | null
+          updated_at: string
+        }
+        Insert: {
+          close_premium?: number | null
+          closed_at?: string | null
+          contracts?: number
+          created_at?: string
+          direction: string
+          entry_at?: string
+          entry_premium?: number | null
+          entry_underlying?: number | null
+          expiry: string
+          id?: string
+          notes?: string | null
+          option_type: string
+          owner_key: string
+          source?: string | null
+          status?: string
+          strike: number
+          strike_short?: number | null
+          symbol: string
+          thesis?: string | null
+          updated_at?: string
+        }
+        Update: {
+          close_premium?: number | null
+          closed_at?: string | null
+          contracts?: number
+          created_at?: string
+          direction?: string
+          entry_at?: string
+          entry_premium?: number | null
+          entry_underlying?: number | null
+          expiry?: string
+          id?: string
+          notes?: string | null
+          option_type?: string
+          owner_key?: string
+          source?: string | null
+          status?: string
+          strike?: number
+          strike_short?: number | null
+          symbol?: string
+          thesis?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       web_picks: {
         Row: {
           created_at: string
