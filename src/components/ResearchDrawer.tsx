@@ -103,6 +103,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   const [novaLoading, setNovaLoading] = useState(false);
   const [budget, setBudget] = useBudget();
   const [settings] = useSettings();
+  const { all: eventRiskAll } = useEventRiskSignals();
 
   const generateNova = async () => {
     if (!symbol || !q) return;
@@ -122,6 +123,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
           budget,
           model: settings.aiModel,
           riskProfile: settings.riskProfile,
+          eventRisk: eventRiskAll.map((e) => ({
+            key: e.key,
+            label: e.label,
+            status: e.status,
+            tone: e.tone,
+            hits: e.hits,
+            topHeadline: e.topHeadline ?? null,
+          })),
           topPicks: topPicks.map((p) => ({
             type: p.c.type,
             strike: p.c.strike,
