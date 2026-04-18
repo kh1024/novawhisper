@@ -30,7 +30,8 @@ export function MarketHeader() {
   }, []);
 
   const ny = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const open = isMarketOpen(ny);
+  const session = currentSessionET();
+  const sessionPill = SESSION_PILL[session];
   const time = ny.toLocaleTimeString("en-US", {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
   });
@@ -52,9 +53,9 @@ export function MarketHeader() {
     <header className="h-14 flex items-center gap-3 px-4 border-b border-border bg-surface/40 backdrop-blur-xl">
       <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
       <div className="hidden md:flex items-center gap-2">
-        <span className={`pill ${open ? "pill-live" : "pill-neutral"}`}>
-          <span className={open ? "live-dot" : "h-1.5 w-1.5 rounded-full bg-muted-foreground inline-block"} />
-          {open ? "Market Open" : "Market Closed"}
+        <span className={sessionPill.cls} title={sessionPill.tip}>
+          <span className={sessionPill.live ? "live-dot" : "h-1.5 w-1.5 rounded-full bg-muted-foreground inline-block"} />
+          {sessionPill.label}
         </span>
         <span className="pill pill-neutral">
           <Clock className="h-3 w-3" />
