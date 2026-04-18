@@ -411,3 +411,60 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
   );
 }
 
+function HistoryPanel() {
+  const { data, isLoading, error } = useWebPicksHistory(15);
+  if (isLoading) {
+    return <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>;
+  }
+  if (error) {
+    return <Card className="border-bearish/40 bg-bearish/5 p-4 text-sm text-bearish">Failed to load history: {(error as Error).message}</Card>;
+  }
+  const runs = data ?? [];
+  if (runs.length === 0) {
+    return <Card className="p-6 text-sm text-muted-foreground">No saved runs yet — hit Re-scrape on Web Picks to record one.</Card>;
+  }
+  return (
+    <div className="space-y-3">
+      {runs.map((run) => (
+        <Card key={run.id} className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">{new Date(run.fetched_at).toLocaleString()}</div>
+              <p className="mt-0.5 text-sm text-foreground/90 line-clamp-2">{run.market_read || "—"}</p>
+            </div>
+            <div className="flex gap-1.5 text-[10px]">
+              <Badge variant="outline">{run.pick_count} picks</Badge>
+              <Badge variant="outline">{run.source_count} sources</Badge>
+            </div>
+          </div>
+          {run.picks.length > 0 && (
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {run.picks.map((p) => {
+                const tierClass = p.tier === "safe" ? "border-bullish/40 bg-bullish/5" : p.tier === "aggressive" ? "border-bearish/40 bg-bearish/5" : "border-border bg-surface/40";
+                const isCall = p.option_type.includes("call");
+                const tone = p.direction === "long" && isCall ? "text-bullish" : p.direction === "long" && p.option_type.includes("put") ? "text-bearish" : "text-foreground";
+                const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
+                return (
+                  <div key={p.id} className={cn("rounded-md border p-2.5", tierClass)}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-sm font-semibold">{p.symbol}</span>
+                      <Badge variant="outline" className="text-[10px] capitalize">{p.tier}</Badge>
+                    </div>
+                    <div className={cn("mt-1 font-mono text-xs font-semibold", tone)}>
+                      {p.direction.toUpperCase()} ${strikeLabel} {p.option_type.replace("_", " ").toUpperCase()} · {p.expiry}
+                    </div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">Play at ${Number(p.play_at).toFixed(2)}{p.premium_estimate ? ` · ${p.premium_estimate}` : ""}</div>
+                    <p className="mt-1 text-[11px] text-foreground/80 line-clamp-2">{p.thesis}</p>
+                    {p.outcome && p.outcome !== "open" && (
+                      <Badge variant="secondary" className="mt-1.5 text-[10px] capitalize">{p.outcome}{p.pnl_pct != null ? ` · ${p.pnl_pct >= 0 ? "+" : ""}${Number(p.pnl_pct).toFixed(1)}%` : ""}</Badge>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      ))}
+    </div>
+  );
+}
