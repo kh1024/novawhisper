@@ -49,6 +49,12 @@ export interface SetupRow {
   whyWeak: string[];
   dataQuality: number;        // 0-100, drives confidence
   status: VerifiedQuote["status"] | "no-quote";
+  crl: {
+    verdict: CrlVerdict;
+    reason: string;
+    riskBadge: RiskBadge | null;
+    flags: string[];
+  };
 }
 
 // Cheap deterministic PRNG seeded by symbol. Stable across renders.
