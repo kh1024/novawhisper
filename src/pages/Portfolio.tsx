@@ -275,7 +275,7 @@ export default function Portfolio() {
   );
 }
 
-function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings }) {
+function PositionCard({ p, verdict, spot, settings, autoSim = false }: { p: PortfolioPosition; verdict?: Verdict; spot?: number; settings: AppSettings; autoSim?: boolean }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const isCall = p.option_type.includes("call");
@@ -284,10 +284,25 @@ function PositionCard({ p, verdict, spot, settings }: { p: PortfolioPosition; ve
   const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
 
-  // Per-card simulated spot override (paper trades only). Lets users bump the
-  // underlying ±5% / ±10% to see how P&L and moneyness react. Real spot is
-  // untouched; we just compute against `effectiveSpot`.
+  // Per-card simulated spot override (paper trades only). Manual chips set a
+  // fixed offset; auto-cycle drives a random-walk offset every 2s.
   const [simOffsetPct, setSimOffsetPct] = useState(0);
+
+  // Random-walk auto-cycle: only runs for open paper trades when parent toggles autoSim.
+  useEffect(() => {
+    if (!autoSim || !p.is_paper || p.status !== "open") return;
+    const id = setInterval(() => {
+      setSimOffsetPct((cur) => {
+        // Mean-reverting random walk in [-10, +10]
+        const drift = -cur * 0.08; // pull back toward 0
+        const shock = (Math.random() - 0.5) * 1.6; // ±0.8% per tick
+        const next = cur + drift + shock;
+        return Math.max(-10, Math.min(10, +next.toFixed(2)));
+      });
+    }, 2000);
+    return () => clearInterval(id);
+  }, [autoSim, p.is_paper, p.status]);
+
   const realSpot = spot ?? null;
   const effectiveSpot = realSpot != null && simOffsetPct !== 0
     ? realSpot * (1 + simOffsetPct / 100)
