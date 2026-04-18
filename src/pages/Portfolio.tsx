@@ -469,6 +469,23 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
               </button>
             ))}
           </div>
+          {(worstCase != null || bestCase != null) && (
+            <div className="mt-1.5 flex items-center justify-between gap-2 rounded border border-border/60 bg-background/40 px-2 py-1 text-[10px] font-mono">
+              <span className="flex items-center gap-1">
+                <span className="text-muted-foreground uppercase tracking-wider text-[9px]">Worst −10%</span>
+                <span className={cn(worstCase != null && worstCase >= 0 ? "text-bullish" : "text-bearish")}>
+                  {worstCase != null ? fmtUsd(worstCase) : "—"}
+                </span>
+              </span>
+              <span className="text-muted-foreground/50">·</span>
+              <span className="flex items-center gap-1">
+                <span className="text-muted-foreground uppercase tracking-wider text-[9px]">Best +10%</span>
+                <span className={cn(bestCase != null && bestCase >= 0 ? "text-bullish" : "text-bearish")}>
+                  {bestCase != null ? fmtUsd(bestCase) : "—"}
+                </span>
+              </span>
+            </div>
+          )}
           <div className="text-[9px] text-muted-foreground mt-1 leading-tight">
             Adjusts P&amp;L estimate &amp; moneyness only — Nova's verdict still uses real spot.
           </div>
