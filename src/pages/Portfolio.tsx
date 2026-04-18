@@ -350,6 +350,9 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
   const unrealizedPct = unrealized != null && p.entry_premium != null && p.direction === "long"
     ? (unrealized / (Number(p.entry_premium) * p.contracts * 100)) * 100
     : null;
+  // Real (non-simulated) P&L so we can show the delta when simulating.
+  const unrealizedReal = p.status === "open" && isSimulating ? estimateUnrealizedPnl(p, realSpot, settings) : null;
+  const simDelta = unrealized != null && unrealizedReal != null ? unrealized - unrealizedReal : null;
   const roundTripFee = feeRoundTrip(settings, p.contracts);
 
   return (
