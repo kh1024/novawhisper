@@ -12,6 +12,7 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import { useBudget } from "@/lib/budget";
 
 type Props = {
   symbol: string | null;
