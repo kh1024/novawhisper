@@ -14,6 +14,7 @@ interface Props extends NewPosition {
 
 export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props) {
   const add = useAddPosition();
+  const [settings] = useSettings();
   const [saved, setSaved] = useState(false);
   const [open, setOpen] = useState(false);
   const [contracts, setContracts] = useState<string>(String(pick.contracts ?? 1));
@@ -26,7 +27,7 @@ export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props
     const n = Math.max(1, Math.floor(Number(contracts) || 1));
     const p = premium.trim() === "" ? null : Number(premium);
     add.mutate(
-      { ...pick, contracts: n, entryPremium: Number.isFinite(p as number) ? (p as number) : null },
+      { ...pick, contracts: n, entryPremium: Number.isFinite(p as number) ? (p as number) : null, isPaper: settings.paperMode },
       {
         onSuccess: () => {
           setSaved(true);
@@ -57,8 +58,15 @@ export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props
       </PopoverTrigger>
       <PopoverContent className="w-64 p-3" onClick={(e) => e.stopPropagation()} align="end">
         <div className="space-y-2.5">
-          <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Save to portfolio
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+              {settings.paperMode ? "Save as paper trade" : "Save to portfolio"}
+            </div>
+            {settings.paperMode && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded border border-warning/40 bg-warning/10 text-warning flex items-center gap-1">
+                <FlaskConical className="h-2.5 w-2.5" /> SIM
+              </span>
+            )}
           </div>
           <div className="font-mono text-xs">
             {pick.symbol} ${pick.strike}
