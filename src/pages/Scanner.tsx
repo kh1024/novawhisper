@@ -493,9 +493,21 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <div className="flex justify-between"><span className="text-muted-foreground">Earnings</span><span>{row.earningsInDays != null ? `${row.earningsInDays}d` : "—"}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Data quality</span><span className={scoreColor(row.dataQuality)}>{row.dataQuality}</span></div>
         </div>
-        <Button onClick={onOpen} className="w-full" size="sm">
-          Open full research →
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={onOpen} className="flex-1" size="sm">
+            Open full research →
+          </Button>
+          <Button asChild variant="outline" size="sm" className="gap-1.5">
+            <a
+              href={`https://robinhood.com/stocks/${encodeURIComponent(row.symbol)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Open ${row.symbol} on Robinhood`}
+            >
+              <ExternalLink className="h-3 w-3" /> Robinhood
+            </a>
+          </Button>
+        </div>
       </div>
     </div>
   );
