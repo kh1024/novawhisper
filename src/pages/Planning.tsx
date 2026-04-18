@@ -256,6 +256,19 @@ function PickCard({ pick }: { pick: PlanningPick }) {
           </ul>
         </div>
       )}
+      <div className="mt-3 flex justify-end">
+        <SaveToPortfolioButton
+          symbol={pick.symbol}
+          optionType={pick.optionType}
+          direction={pick.direction}
+          strike={pick.strike}
+          strikeShort={pick.strikeShort}
+          expiry={pick.expiry}
+          entryUnderlying={pick.playAt}
+          thesis={pick.thesis}
+          source="planning"
+        />
+      </div>
     </Card>
   );
 }
@@ -403,7 +416,21 @@ function BucketColumn({ title, tone, icon, blurb, picks }: { title: string; tone
             />
             <div className="mt-2 space-y-1 text-[11px]">
               <div><span className="text-muted-foreground">Risk: </span><span className="text-foreground/80">{p.risk}</span></div>
-              <div className="text-[10px] text-muted-foreground italic">via {p.source}</div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10px] text-muted-foreground italic truncate">via {p.source}</div>
+                <SaveToPortfolioButton
+                  size="xs"
+                  symbol={p.symbol}
+                  optionType={p.optionType}
+                  direction={p.direction}
+                  strike={p.strike}
+                  strikeShort={p.strikeShort}
+                  expiry={p.expiry}
+                  entryUnderlying={p.playAt}
+                  thesis={p.thesis}
+                  source="web-pick"
+                />
+              </div>
             </div>
           </div>
         ))}
