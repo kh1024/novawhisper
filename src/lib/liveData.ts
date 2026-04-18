@@ -61,13 +61,13 @@ async function fetchQuotes(symbols: string[]): Promise<VerifiedQuote[]> {
 /** Live verified quotes for the selected symbols. Defaults to the full universe. */
 export function useLiveQuotes(symbols?: string[], opts?: { refetchMs?: number }) {
   const list = symbols && symbols.length ? symbols : TICKER_UNIVERSE.map((u) => u.symbol);
-  // Single-ticker calls (drawer) poll at 60s; full universe at 3 min to respect free-tier quotas.
-  const defaultMs = list.length === 1 ? 60_000 : 3 * 60_000;
+  // Refresh every 5 seconds for near-real-time updates.
+  const defaultMs = 5_000;
   return useQuery({
     queryKey: ["live-quotes", list.join(",")],
     queryFn: () => fetchQuotes(list),
     refetchInterval: opts?.refetchMs ?? defaultMs,
-    staleTime: list.length === 1 ? 30_000 : 2 * 60_000,
+    staleTime: 2_000,
   });
 }
 
