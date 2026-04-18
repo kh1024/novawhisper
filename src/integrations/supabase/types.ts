@@ -14,7 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      web_picks: {
+        Row: {
+          created_at: string
+          current_price: number | null
+          direction: string
+          entry_price: number | null
+          evaluated_at: string | null
+          expiry: string
+          id: string
+          option_type: string
+          outcome: string | null
+          play_at: number
+          pnl_pct: number | null
+          premium_estimate: string | null
+          risk: string
+          run_id: string
+          source: string
+          strategy: string
+          strike: number
+          strike_short: number | null
+          symbol: string
+          thesis: string
+          tier: string
+        }
+        Insert: {
+          created_at?: string
+          current_price?: number | null
+          direction: string
+          entry_price?: number | null
+          evaluated_at?: string | null
+          expiry: string
+          id?: string
+          option_type: string
+          outcome?: string | null
+          play_at: number
+          pnl_pct?: number | null
+          premium_estimate?: string | null
+          risk: string
+          run_id: string
+          source: string
+          strategy: string
+          strike: number
+          strike_short?: number | null
+          symbol: string
+          thesis: string
+          tier: string
+        }
+        Update: {
+          created_at?: string
+          current_price?: number | null
+          direction?: string
+          entry_price?: number | null
+          evaluated_at?: string | null
+          expiry?: string
+          id?: string
+          option_type?: string
+          outcome?: string | null
+          play_at?: number
+          pnl_pct?: number | null
+          premium_estimate?: string | null
+          risk?: string
+          run_id?: string
+          source?: string
+          strategy?: string
+          strike?: number
+          strike_short?: number | null
+          symbol?: string
+          thesis?: string
+          tier?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "web_picks_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "web_picks_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      web_picks_runs: {
+        Row: {
+          created_at: string
+          fetched_at: string
+          id: string
+          market_read: string | null
+          pick_count: number
+          source_count: number
+          sources: Json
+        }
+        Insert: {
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          market_read?: string | null
+          pick_count?: number
+          source_count?: number
+          sources?: Json
+        }
+        Update: {
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          market_read?: string | null
+          pick_count?: number
+          source_count?: number
+          sources?: Json
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
