@@ -171,7 +171,7 @@ export default function Portfolio() {
             <Card className="p-6 text-sm text-muted-foreground">No closed positions yet.</Card>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
-              {closed.map((p) => <PositionCard key={p.id} p={p} />)}
+              {closed.map((p) => <PositionCard key={p.id} p={p} settings={settings} />)}
             </div>
           )}
         </TabsContent>
