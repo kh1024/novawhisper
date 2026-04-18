@@ -355,6 +355,8 @@ export default function Scanner() {
                     const { cls: bcls, Icon: BIcon } = biasMeta(r.bias);
                     const ready = readinessMeta(r.readiness);
                     const isOpen = expanded === r.symbol;
+                    const exp = expiryStatus.get(`scanner:${r.symbol}`);
+                    const verdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
                     return (
                       <Fragment key={r.symbol}>
                         <tr
@@ -394,11 +396,11 @@ export default function Scanner() {
                             <div className="flex flex-col gap-1">
                               <span className={cn(
                                 "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
-                                r.crl.verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                r.crl.verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                (r.crl.verdict === "NO" || r.crl.verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                r.crl.verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                              )}>{r.crl.verdict}</span>
+                                verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
+                                verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
+                                (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
+                                verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
+                              )}>{verdict}</span>
                               {r.crl.riskBadge && (
                                 <span className={cn(
                                   "text-[9px] px-1.5 py-0 rounded border w-fit",
@@ -407,6 +409,7 @@ export default function Scanner() {
                                   r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
                                 )}>{r.crl.riskBadge}</span>
                               )}
+                              <PickExpiryChips status={exp} compact />
                             </div>
                           </td>
                           <td className="px-3 py-3">
