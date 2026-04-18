@@ -226,6 +226,11 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   if (atrPct > 4.5) warnings.push(`High volatility — ATR ${atrPct}% of price.`);
   if (rsi > 78) warnings.push(`Overbought — RSI ${rsi}.`);
   if (rsi < 22) warnings.push(`Oversold — RSI ${rsi}.`);
+  // Surface meaningful pre/post moves so traders see why the verdict shifted.
+  if ((q.session === "pre" || q.session === "post") && Math.abs(extPct) >= 1) {
+    const where = q.session === "pre" ? "Pre-market" : "After-hours";
+    warnings.push(`${where} ${extPct >= 0 ? "+" : ""}${extPct.toFixed(2)}% — verdict reflects gap.`);
+  }
 
   const whyValid: string[] = [];
   if (breakdown.liquidity > 70) whyValid.push("Deep liquidity in underlying and options.");
