@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Slider } from "@/components/ui/slider";
 import { usePortfolio, useClosePosition, useDeletePosition, useAddPosition, type PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
