@@ -1,9 +1,18 @@
-import { useMemo } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
-import { getMockQuotes } from "@/lib/mockData";
+import { ArrowDown, ArrowUp, Loader2 } from "lucide-react";
+import { useLiveQuotes } from "@/lib/liveData";
 
 export function TickerTape() {
-  const quotes = useMemo(() => getMockQuotes(), []);
+  const { data: quotes = [], isLoading } = useLiveQuotes(undefined, { refetchMs: 60_000 });
+
+  if (isLoading || quotes.length === 0) {
+    return (
+      <div className="w-full border-y border-border bg-surface/60 backdrop-blur-xl py-2.5 flex items-center justify-center text-xs text-muted-foreground gap-2">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Fetching live quotes…
+      </div>
+    );
+  }
+
   // duplicate for seamless infinite scroll
   const loop = [...quotes, ...quotes];
 
@@ -29,7 +38,6 @@ export function TickerTape() {
           );
         })}
       </div>
-      {/* Edge fades */}
       <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-background to-transparent" />
       <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-background to-transparent" />
     </div>
