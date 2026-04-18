@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -285,9 +285,8 @@ export default function Scanner() {
                     const ready = readinessMeta(r.readiness);
                     const isOpen = expanded === r.symbol;
                     return (
-                      <>
+                      <Fragment key={r.symbol}>
                         <tr
-                          key={r.symbol}
                           onClick={() => setExpanded(isOpen ? null : r.symbol)}
                           className={cn(
                             "border-t border-border/60 hover:bg-surface/40 cursor-pointer transition-colors",
