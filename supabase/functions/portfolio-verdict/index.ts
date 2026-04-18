@@ -60,6 +60,11 @@ function ema(closes: number[], period: number): number | null {
   for (let i = period; i < closes.length; i++) e = closes[i] * k + e * (1 - k);
   return e;
 }
+function sma(closes: number[], period: number): number | null {
+  if (closes.length < period) return null;
+  const slice = closes.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
+}
 function rsi(closes: number[], period = 14): number | null {
   if (closes.length < period + 1) return null;
   let gains = 0, losses = 0;
@@ -85,6 +90,44 @@ function streak(closes: number[]): number {
   }
   return s;
 }
+// Realized volatility over last `period` daily closes, annualized (252).
+function realizedVolAnnualized(closes: number[], period = 30): number | null {
+  if (closes.length < period + 1) return null;
+  const slice = closes.slice(-(period + 1));
+  const rets: number[] = [];
+  for (let i = 1; i < slice.length; i++) {
+    const r = Math.log(slice[i] / slice[i - 1]);
+    if (Number.isFinite(r)) rets.push(r);
+  }
+  if (rets.length < 5) return null;
+  const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+  const variance = rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length;
+  return Math.sqrt(variance) * Math.sqrt(252);
+}
+// IV Percentile estimate: where current IV sits between 0.5×RV and 2.5×RV
+// (a common rule-of-thumb band when historical IV series isn't available).
+function ivPercentileEstimate(iv: number | null, rv: number | null): number | null {
+  if (iv == null || rv == null || rv <= 0) return null;
+  const lo = rv * 0.5, hi = rv * 2.5;
+  const pct = ((iv - lo) / (hi - lo)) * 100;
+  return Math.max(0, Math.min(100, +pct.toFixed(0)));
+}
+// Is "now" before 10:30 AM US-Eastern on a weekday? (Opening-range window.)
+function beforeOpeningRange(now = new Date()): boolean {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => fmt.find((p) => p.type === t)?.value ?? "";
+  const wd = get("weekday");
+  if (wd === "Sat" || wd === "Sun") return false;
+  const h = Number(get("hour"));
+  const m = Number(get("minute"));
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return false;
+  // Market opens 09:30 ET. "Opening range" = 09:30–10:30. We only force WAIT
+  // during that window itself (not pre-market, not after 10:30).
+  const minutes = h * 60 + m;
+  return minutes >= 9 * 60 + 30 && minutes < 10 * 60 + 30;
+}
 
 type CrlVerdict = "GO" | "WAIT" | "NO" | "EXIT" | "NEUTRAL";
 type RiskBadge = "Safe" | "Mild" | "Aggressive";
@@ -103,10 +146,17 @@ interface CrlOutput {
   highMomentum: boolean;
   flags: string[];
   valuationAlert: ValuationAlert;
+  // Strategic Validation Layer
+  trendGateBroken: boolean;          // price < SMA200 → no calls
+  highPremium: boolean;              // IV percentile > 75
+  openingRange: boolean;             // before 10:30 AM ET on a weekday
+  premiumStopTriggered: boolean;     // option premium dropped ≥30% from entry
 }
 
 const VALUATION_OVERSHOOT_PCT = 15;
 const EMA_OVERSHOOT_PCT = 15;
+const PREMIUM_STOP_PCT = 30;        // hard stop-loss on option premium drop
+const HIGH_PREMIUM_IVP = 75;        // IV percentile threshold for "High Premium"
 
 // Expert risk classification — Greeks AND RSI together.
 function classifyRisk(
@@ -153,8 +203,18 @@ function runCrl(args: {
   iv: number | null; dte: number | null; isLong: boolean; isCall: boolean;
   intrinsicValue?: number | null;
   unrealizedPnl?: number | null;
+  // Strategic Validation Layer inputs
+  sma200?: number | null;
+  ivPercentile?: number | null;
+  beforeOpeningRange?: boolean;
+  entryPremium?: number | null;
+  currentPremium?: number | null;
 }): CrlOutput {
-  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall, intrinsicValue, unrealizedPnl } = args;
+  const {
+    rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall,
+    intrinsicValue, unrealizedPnl,
+    sma200, ivPercentile, beforeOpeningRange: opening, entryPremium, currentPremium,
+  } = args;
   const emaDistancePct = ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
   const highMomentum = winningStreak >= 3;
   const riskBadge = classifyRisk(delta, theta, iv, r);
@@ -165,6 +225,21 @@ function runCrl(args: {
   const valuationAlert = computeValuationAlert(spot, intrinsicValue ?? null);
   if (valuationAlert.triggered && valuationAlert.message) flags.push(valuationAlert.message);
 
+  // High Premium / IV Percentile flag (orthogonal)
+  const highPremium = ivPercentile != null && ivPercentile > HIGH_PREMIUM_IVP;
+  if (highPremium) flags.push(`High Premium (IVP ${ivPercentile}% > ${HIGH_PREMIUM_IVP})`);
+
+  // Trend Gate — long-term support broken (only matters for CALL suggestions)
+  const trendGateBroken = isCall && spot != null && sma200 != null && spot < sma200;
+
+  // Premium hard stop — for open longs only
+  let premiumStopTriggered = false;
+  let premiumDropPct: number | null = null;
+  if (isLong && entryPremium != null && entryPremium > 0 && currentPremium != null) {
+    premiumDropPct = ((currentPremium - entryPremium) / entryPremium) * 100;
+    if (premiumDropPct <= -PREMIUM_STOP_PCT) premiumStopTriggered = true;
+  }
+
   let stopLoss = false;
   if (isLong && spot != null && ema8 != null) {
     if (isCall && spot < ema8) stopLoss = true;
@@ -173,7 +248,27 @@ function runCrl(args: {
 
   const make = (verdict: CrlVerdict, reason: string, sl = stopLoss): CrlOutput => ({
     verdict, reason, riskBadge, stopLossTriggered: sl, emaDistancePct, highMomentum, flags, valuationAlert,
+    trendGateBroken, highPremium, openingRange: !!opening, premiumStopTriggered,
   });
+
+  // ── Hard Stop-Loss (overrides EMA / everything else for open longs) ──
+  if (premiumStopTriggered) {
+    flags.push(`Hard stop −${Math.abs(premiumDropPct!).toFixed(0)}% premium`);
+    return make(
+      "EXIT",
+      `Premium dropped ${premiumDropPct!.toFixed(0)}% from entry $${entryPremium!.toFixed(2)} → $${currentPremium!.toFixed(2)}. Hard stop hit — sell at loss now.`,
+      true,
+    );
+  }
+
+  // ── Trend Gate — block CALL suggestions when price is below 200-SMA ──
+  if (trendGateBroken) {
+    flags.push("Trend Gate: below 200-SMA");
+    return make(
+      "NO",
+      `Price $${spot!.toFixed(2)} is below 200-SMA $${sma200!.toFixed(2)} — long-term trend is broken. No calls until support reclaims.`,
+    );
+  }
 
   // Trap a — Early Exit on losing trade with steep theta + tiny DTE
   if (
@@ -211,15 +306,22 @@ function runCrl(args: {
     return make("WAIT", `RSI ${r.toFixed(0)}${dist} — chasing the peak. Wait for a pullback.`);
   }
 
-  // Trap e — Stop-loss EXIT
+  // Trap e — Stop-loss EXIT (broke 8-EMA)
   if (stopLoss) {
     flags.push("Broke 8-EMA — sell at loss");
     return make("EXIT", `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`, true);
   }
 
+  // Helper to apply opening-range filter to GO signals.
+  const applyOpening = (out: CrlOutput): CrlOutput => {
+    if (out.verdict !== "GO" || !opening) return out;
+    out.flags.push("Opening Range Testing (before 10:30 AM ET)");
+    return { ...out, verdict: "WAIT", reason: `Opening Range Testing — first hour is noisy, wait for 10:30 AM ET to confirm ${out.reason}` };
+  };
+
   if (highMomentum && r != null && r >= 40 && r <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
-    return make("GO", `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, false);
+    return applyOpening(make("GO", `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, false));
   }
   if (highMomentum && r != null && r > 60) {
     return make("WAIT", `Momentum is up but RSI ${r.toFixed(0)} is hot — wait for a cooldown.`);
@@ -253,10 +355,11 @@ Deno.serve(async (req) => {
     }
     const symbols = [...new Set(positions.map((p) => p.symbol.toUpperCase()))];
 
-    // ── Fetch quotes, daily history, and option chains in parallel ──
+    // ── Fetch quotes, daily history (≥220d for SMA200), option chains in parallel ──
+    const opening = beforeOpeningRange();
     const [quotesResp, histResp, ...chainResps] = await Promise.all([
       fetchJson<{ quotes: Quote[] }>("quotes-fetch", { symbols }),
-      fetchJson<{ histories: History[] }>("quotes-history", { symbols, lookbackDays: 30 }),
+      fetchJson<{ histories: History[] }>("quotes-history", { symbols, lookbackDays: 220 }),
       ...symbols.map((s) => fetchJson<{ contracts: OptionContract[] }>("options-fetch", { underlying: s, limit: 250 })),
     ]);
     const quotes = quotesResp?.quotes ?? [];
@@ -274,9 +377,12 @@ Deno.serve(async (req) => {
       const isCall = p.optionType.includes("call");
       const closes = hMap.get(sym) ?? [];
       const ema8 = ema(closes, 8);
+      const sma200 = sma(closes, 200);
       const rsi14 = rsi(closes, 14);
       const winningStreak = streak(closes);
+      const realizedVol = realizedVolAnnualized(closes, 30);
       const contract = matchContract(cMap.get(sym) ?? [], Number(p.strike), p.expiry, isCall);
+      const ivPercentile = ivPercentileEstimate(contract?.iv ?? null, realizedVol);
       // Estimate unrealized $ P&L using contract mid if available, else intrinsic.
       let unrealizedPnl: number | null = null;
       if (p.entryPremium != null && contract?.mid != null) {
@@ -296,12 +402,18 @@ Deno.serve(async (req) => {
         iv: contract?.iv ?? null,
         dte, isLong: p.direction === "long", isCall,
         unrealizedPnl,
+        sma200,
+        ivPercentile,
+        beforeOpeningRange: opening,
+        entryPremium: p.entryPremium ?? null,
+        currentPremium: contract?.mid ?? null,
       });
       return {
-        ...p, spot, dte, ema8, rsi14, winningStreak,
+        ...p, spot, dte, ema8, sma200, rsi14, winningStreak,
         delta: contract?.delta ?? null,
         theta: contract?.theta ?? null,
         iv: contract?.iv ?? null,
+        ivPercentile,
         currentMid: contract?.mid ?? null,
         unrealizedPnl,
         crl,
@@ -389,11 +501,17 @@ Deno.serve(async (req) => {
           highMomentum: p.crl.highMomentum,
           emaDistancePct: p.crl.emaDistancePct,
           flags: p.crl.flags,
+          valuationAlert: p.crl.valuationAlert,
+          trendGateBroken: p.crl.trendGateBroken,
+          highPremium: p.crl.highPremium,
+          openingRange: p.crl.openingRange,
+          premiumStopTriggered: p.crl.premiumStopTriggered,
         },
         // Raw inputs (so UI can show "RSI 76 · 8-EMA 410.50")
         metrics: {
-          rsi14: p.rsi14, ema8: p.ema8, winningStreak: p.winningStreak,
-          delta: p.delta, theta: p.theta, iv: p.iv, dte: p.dte, currentMid: p.currentMid,
+          rsi14: p.rsi14, ema8: p.ema8, sma200: p.sma200, winningStreak: p.winningStreak,
+          delta: p.delta, theta: p.theta, iv: p.iv, ivPercentile: p.ivPercentile,
+          dte: p.dte, currentMid: p.currentMid,
         },
       };
     });
