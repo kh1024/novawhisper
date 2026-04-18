@@ -322,6 +322,17 @@ async function getQuote(
   ]);
   const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
   const v = verify(sym, finn, alpha, mass, yahoo, stooq);
+  // If every provider failed this round but we have a previous good price, keep
+  // serving it (marked stale) instead of returning "unavailable" / no data.
+  if (v.status === "unavailable" && cached?.quote && cached.quote.price > 0) {
+    const stale: VerifiedQuote = {
+      ...cached.quote,
+      status: "stale",
+      updatedAt: cached.quote.updatedAt,
+      error: "Live providers timed out — showing last known price.",
+    };
+    return stale;
+  }
   quoteCache.set(sym, { quote: v, at: Date.now() });
   return v;
 }
