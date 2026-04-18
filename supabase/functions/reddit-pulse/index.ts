@@ -81,15 +81,28 @@ interface RedditChild {
 }
 
 async function fetchSub(sub: string, sort: string, limit: number) {
-  const url = `https://www.reddit.com/r/${sub}/${sort}.json?limit=${limit}&t=day`;
-  const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
-  if (!r.ok) {
-    console.warn(`[reddit] ${sub}/${sort} ${r.status}`);
-    return [];
+  for (const host of HOSTS) {
+    const url = `${host}/r/${sub}/${sort}.json?limit=${limit}&t=day&raw_json=1`;
+    try {
+      const r = await fetch(url, {
+        headers: {
+          "User-Agent": UA,
+          Accept: "application/json,text/html;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+      });
+      if (!r.ok) {
+        console.warn(`[reddit] ${host} ${sub}/${sort} ${r.status}`);
+        continue;
+      }
+      const j = await r.json();
+      const children: RedditChild[] = j?.data?.children ?? [];
+      return children.filter((c) => !c.data.stickied).map((c) => c.data);
+    } catch (e) {
+      console.warn(`[reddit] ${host} ${sub}/${sort} fetch error`, e);
+    }
   }
-  const j = await r.json();
-  const children: RedditChild[] = j?.data?.children ?? [];
-  return children.filter((c) => !c.data.stickied).map((c) => c.data);
+  return [];
 }
 
 Deno.serve(async (req) => {
