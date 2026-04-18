@@ -327,6 +327,109 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* ───────────── Trading fees (broker P&L) ───────────── */}
+      <Card className="glass-card p-6 space-y-5">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-primary" /> Trading fees (applied to P&amp;L)
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+            Subtracted from realized & unrealized P&amp;L on the Portfolio page so the numbers match your broker statement.
+            Default is <span className="font-semibold">Robinhood</span>: $0 commission + ~$0.03/contract regulatory pass-through.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Broker preset</div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {BROKER_PRESETS.map((b) => {
+              const active = settings.brokerPreset === b.value;
+              return (
+                <button
+                  key={b.value}
+                  onClick={() => {
+                    updateSettings({
+                      brokerPreset: b.value as BrokerPreset,
+                      ...(b.value !== "custom" && {
+                        feePerContract: b.feePerContract,
+                        feePerTrade: b.feePerTrade,
+                        regulatoryFeePerContract: b.regulatoryFeePerContract,
+                      }),
+                    });
+                    flashSaved();
+                  }}
+                  className={`text-left p-3 rounded-lg border transition-all ${
+                    active ? "border-primary bg-primary/10" : "border-border bg-surface/30 hover:border-primary/40"
+                  }`}
+                >
+                  <div className="text-sm font-medium flex items-center gap-2">
+                    {b.label}
+                    {active && <Check className="h-3.5 w-3.5 text-primary" />}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{b.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-3 gap-3 pt-2 border-t border-border/40">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Commission / contract</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+              <input
+                type="number"
+                min={0}
+                step={0.05}
+                value={settings.feePerContract}
+                onChange={(e) => updateSettings({ brokerPreset: "custom", feePerContract: Number(e.target.value) || 0 })}
+                onBlur={flashSaved}
+                className="w-full h-9 pl-6 pr-2 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Regulatory / contract</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={settings.regulatoryFeePerContract}
+                onChange={(e) => updateSettings({ brokerPreset: "custom", regulatoryFeePerContract: Number(e.target.value) || 0 })}
+                onBlur={flashSaved}
+                className="w-full h-9 pl-6 pr-2 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">Flat fee / trade</label>
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                value={settings.feePerTrade}
+                onChange={(e) => updateSettings({ brokerPreset: "custom", feePerTrade: Number(e.target.value) || 0 })}
+                onBlur={flashSaved}
+                className="w-full h-9 pl-6 pr-2 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3 font-mono">
+          Round-trip cost on a 1-contract trade:{" "}
+          <span className="text-foreground">
+            ${(2 * (settings.feePerContract + settings.regulatoryFeePerContract + settings.feePerTrade)).toFixed(2)}
+          </span>{" "}
+          · 5-contract: ${(2 * (5 * (settings.feePerContract + settings.regulatoryFeePerContract) + settings.feePerTrade)).toFixed(2)}
+        </div>
+      </Card>
+
       {/* ───────────── Webhook alerts (Make.com / n8n / Slack) ───────────── */}
       <Card className="glass-card p-6 space-y-5">
         <div>
