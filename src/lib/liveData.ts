@@ -12,8 +12,8 @@ export interface VerifiedQuote {
   change: number;
   changePct: number;
   volume: number;
-  sources: { finnhub: number | null; "alpha-vantage": number | null };
-  consensusSource: "finnhub" | "alpha-vantage" | null;
+  sources: { finnhub: number | null; "alpha-vantage": number | null; massive: number | null };
+  consensusSource: "finnhub" | "alpha-vantage" | "massive" | null;
   status: QuoteStatus;
   diffPct: number | null;
   updatedAt: string;
