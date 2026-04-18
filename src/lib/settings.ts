@@ -41,12 +41,12 @@ const DEFAULTS: AppSettings = {
   brokerPreset: "robinhood",
   feePerContract: 0,
   feePerTrade: 0,
-  regulatoryFeePerContract: 0.03,
+  regulatoryFeePerContract: 0.08,
   paperMode: false,
 };
 
 export const BROKER_PRESETS: { value: BrokerPreset; label: string; feePerContract: number; feePerTrade: number; regulatoryFeePerContract: number; hint: string }[] = [
-  { value: "robinhood", label: "Robinhood",  feePerContract: 0,    feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "$0 commission + ~$0.03/contract regulatory pass-through." },
+  { value: "robinhood", label: "Robinhood",  feePerContract: 0,    feePerTrade: 0,    regulatoryFeePerContract: 0.08, hint: "$0 commission + ~$0.08/contract regulatory pass-through." },
   { value: "webull",    label: "Webull",     feePerContract: 0,    feePerTrade: 0,    regulatoryFeePerContract: 0.05, hint: "$0 commission + ~$0.05/contract regulatory." },
   { value: "schwab",    label: "Schwab",     feePerContract: 0.65, feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "$0.65/contract + regulatory pass-through." },
   { value: "ibkr",      label: "IBKR Lite",  feePerContract: 0.65, feePerTrade: 0,    regulatoryFeePerContract: 0.03, hint: "Tiered: $0.65/contract typical retail." },
