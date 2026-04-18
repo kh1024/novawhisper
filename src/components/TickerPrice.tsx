@@ -12,14 +12,14 @@ interface Props {
   changePct?: number | null;
 }
 
-export function TickerPrice({ symbol, className, showChange = false, price, changePct }: Props) {
-  const enabled = price == null;
-  const { data } = useLiveQuotes(enabled ? [symbol] : [], { refetchMs: 60_000 });
-  const q = enabled ? data?.find((x) => x.symbol === symbol) : null;
-  const px = price ?? q?.price ?? null;
-  const pct = changePct ?? q?.changePct ?? null;
+function FetchedTickerPrice({ symbol, className, showChange }: { symbol: string; className?: string; showChange?: boolean }) {
+  const { data } = useLiveQuotes([symbol], { refetchMs: 60_000 });
+  const q = data?.find((x) => x.symbol === symbol);
+  if (!q || q.price == null) return null;
+  return <Pill px={q.price} pct={q.changePct} className={className} showChange={showChange} />;
+}
 
-  if (px == null) return null;
+function Pill({ px, pct, className, showChange }: { px: number; pct: number | null; className?: string; showChange?: boolean }) {
   return (
     <span className={cn("inline-flex items-baseline gap-1 font-mono text-xs text-muted-foreground", className)}>
       <span className="text-foreground/80">${px.toFixed(2)}</span>
@@ -31,4 +31,9 @@ export function TickerPrice({ symbol, className, showChange = false, price, chan
       )}
     </span>
   );
+}
+
+export function TickerPrice({ symbol, className, showChange = false, price, changePct }: Props) {
+  if (price != null) return <Pill px={price} pct={changePct ?? null} className={className} showChange={showChange} />;
+  return <FetchedTickerPrice symbol={symbol} className={className} showChange={showChange} />;
 }
