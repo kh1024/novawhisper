@@ -1,12 +1,14 @@
 // Plain-English market hero cards with visual meters.
-// Each card translates a metric into Bad → Caution → Good with a clear label
+// Translates each metric into Bad → Caution → Good with a clear label
 // and a colored meter bar. Numbers are kept as small secondary detail.
+// Event-risk cards (Geopolitics, Political Posts, Fed/Rates, Earnings) are
+// derived live from the news feed.
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { motion, type Variants } from "framer-motion";
-import { Activity, AlertTriangle, ShieldCheck, TrendingUp, Info, Cpu, Zap } from "lucide-react";
+import { Activity, ShieldCheck, TrendingUp, Info, Globe2, Megaphone, Landmark, BarChart3 } from "lucide-react";
 import { MARKET_REGIME } from "@/lib/mockData";
-import { useNarrativeSignals } from "@/lib/sentimentSignals";
+import { useEventRiskSignals, type EventRiskSignal } from "@/lib/sentimentSignals";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
@@ -17,12 +19,12 @@ type Tone = "good" | "ok" | "bad";
 
 interface MeterCard {
   label: string;
-  status: string;            // big plain-English word
-  tone: Tone;                // drives color
-  meter: number;             // 0-100, position on the meter
-  detail: string;            // small subtitle (numbers OK here)
+  status: string;
+  tone: Tone;
+  meter: number;
+  detail: string;
   icon: typeof TrendingUp;
-  tip: string;               // hover explanation
+  tip: string;
 }
 
 const TONE_STYLES: Record<Tone, { bar: string; text: string; pillBg: string; ring: string }> = {
@@ -31,7 +33,21 @@ const TONE_STYLES: Record<Tone, { bar: string; text: string; pillBg: string; rin
   bad:  { bar: "bg-bearish", text: "text-bearish", pillBg: "bg-bearish/15", ring: "ring-bearish/40" },
 };
 
-function buildCards(memory: ReturnType<typeof useNarrativeSignals>["memory"], energy: ReturnType<typeof useNarrativeSignals>["energy"]): MeterCard[] {
+const EVENT_ICON: Record<EventRiskSignal["key"], typeof TrendingUp> = {
+  geopolitics: Globe2,
+  political: Megaphone,
+  fed: Landmark,
+  earnings: BarChart3,
+};
+
+const EVENT_TIP: Record<EventRiskSignal["key"], string> = {
+  geopolitics: "War, sanctions, tariffs, missile strikes. Hot = expect intraday gaps and risk-off flows.",
+  political: "Trump/Xi/Putin posts, executive orders, Senate votes. Hot = single-tweet moves possible — size down.",
+  fed: "FOMC, CPI/PPI/PCE, jobs report, Powell remarks, yields. Hot = rate-sensitive sectors will whipsaw.",
+  earnings: "Major earnings prints + guidance. Hot = single-name gap risk; avoid short-dated naked options.",
+};
+
+function buildCards(events: EventRiskSignal[]): MeterCard[] {
   // 1) Market Regime
   const regimeTone: Tone = MARKET_REGIME.regime.toLowerCase().includes("on") ? "good" : MARKET_REGIME.regime.toLowerCase().includes("off") ? "bad" : "ok";
   const regimeMeter = regimeTone === "good" ? 85 : regimeTone === "ok" ? 50 : 20;
@@ -47,7 +63,7 @@ function buildCards(memory: ReturnType<typeof useNarrativeSignals>["memory"], en
   const breadthTone: Tone = b >= 60 ? "good" : b >= 40 ? "ok" : "bad";
   const breadthLabel = b >= 70 ? "Strong" : b >= 55 ? "Healthy" : b >= 40 ? "Mixed" : "Weak";
 
-  return [
+  const baseCards: MeterCard[] = [
     {
       label: "Market Mood",
       status: regimeTone === "good" ? "Good" : regimeTone === "ok" ? "Mixed" : "Risky",
@@ -70,35 +86,26 @@ function buildCards(memory: ReturnType<typeof useNarrativeSignals>["memory"], en
       icon: ShieldCheck,
       tip: "How many stocks are participating in the trend. Higher = healthier rally.",
     },
-    {
-      label: "Event Risk",
-      status: "Watch Out", tone: "bad", meter: 80,
-      detail: "FOMC + 2 earnings this week",
-      icon: AlertTriangle,
-      tip: "Major scheduled events that can spike volatility. Size positions smaller this week.",
-    },
-    {
-      label: "Memory Cycle",
-      status: memory.status, tone: memory.tone, meter: memory.meter,
-      detail: memory.detail,
-      icon: Cpu,
-      tip: "Tracks HBM3E/HBM4 demand & memory-spot narratives in live news. Hot Tailwind = AI memory supercycle accelerating (good for Micron, ASML, SMH).",
-    },
-    {
-      label: "Energy Wall",
-      status: energy.status, tone: energy.tone, meter: energy.meter,
-      detail: energy.detail,
-      icon: Zap,
-      tip: "Power-grid constraints for AI data centers. Wall Pressure can flip GO signals to WAIT — even strong chip names face rollout delays.",
-    },
   ];
+
+  const eventCards: MeterCard[] = events.map((e) => ({
+    label: e.label,
+    status: e.status,
+    tone: e.tone,
+    meter: e.meter,
+    detail: e.detail,
+    icon: EVENT_ICON[e.key],
+    tip: EVENT_TIP[e.key],
+  }));
+
+  return [...baseCards, ...eventCards];
 }
 
 export function MarketHeroCards() {
-  const { memory, energy } = useNarrativeSignals();
-  const cards = buildCards(memory, energy);
+  const { all } = useEventRiskSignals();
+  const cards = buildCards(all);
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
       {cards.map((c, i) => {
         const styles = TONE_STYLES[c.tone];
         return (
