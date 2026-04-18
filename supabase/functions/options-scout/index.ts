@@ -1,9 +1,12 @@
 // Options Scout — scrapes finance sites via Firecrawl for live options ideas,
 // then Nova (Lovable AI) buckets them into Safe / Mild / Aggressive plays.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
 const FIRECRAWL_API_KEY = Deno.env.get("FIRECRAWL_API_KEY");
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 // Search queries we run via Firecrawl /v2/search — each returns top results
 // with scraped markdown so Nova can read the actual articles, not just titles.
