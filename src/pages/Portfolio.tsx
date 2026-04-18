@@ -353,7 +353,11 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
   // Real (non-simulated) P&L so we can show the delta when simulating.
   const unrealizedReal = p.status === "open" && isSimulating ? estimateUnrealizedPnl(p, realSpot, settings) : null;
   const simDelta = unrealized != null && unrealizedReal != null ? unrealized - unrealizedReal : null;
-  const roundTripFee = feeRoundTrip(settings, p.contracts);
+  // Range preview: P&L at -10% and +10% spot, shown on paper cards without needing clicks.
+  const worstCase = p.is_paper && p.status === "open" && realSpot != null
+    ? estimateUnrealizedPnl(p, realSpot * 0.9, settings) : null;
+  const bestCase = p.is_paper && p.status === "open" && realSpot != null
+    ? estimateUnrealizedPnl(p, realSpot * 1.1, settings) : null;
 
   return (
     <Card className="p-4">
