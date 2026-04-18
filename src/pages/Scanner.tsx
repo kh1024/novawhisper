@@ -338,7 +338,7 @@ export default function Scanner() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>
