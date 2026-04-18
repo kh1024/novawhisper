@@ -120,11 +120,16 @@ export default function Planning() {
           </div>
 
           {/* Sources tabs */}
-          <Tabs defaultValue="youtube" className="mt-2">
+          <Tabs defaultValue="webpicks" className="mt-2">
             <TabsList>
+              <TabsTrigger value="webpicks"><Globe className="mr-1.5 h-3.5 w-3.5" /> Web Picks</TabsTrigger>
               <TabsTrigger value="youtube" disabled={!includeYouTube || !data?.sources?.youtube}><Youtube className="mr-1.5 h-3.5 w-3.5" /> YouTube</TabsTrigger>
               <TabsTrigger value="quotes"><Flame className="mr-1.5 h-3.5 w-3.5" /> Quotes</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="webpicks" className="mt-3">
+              <WebPicksPanel />
+            </TabsContent>
 
             <TabsContent value="youtube" className="mt-3">
               {data?.sources?.youtube ? (
