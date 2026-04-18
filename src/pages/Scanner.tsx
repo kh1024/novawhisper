@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import {
   Search, LayoutGrid, Table2, SlidersHorizontal, RefreshCw, Loader2,
   TrendingUp, TrendingDown, Minus, AlertTriangle, ShieldAlert, Activity,
-  Gauge, Zap, Clock, Newspaper, Scale, RotateCcw,
+  Gauge, Zap, Clock, Newspaper, Scale, RotateCcw, CandlestickChart, ExternalLink,
 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
@@ -295,8 +295,13 @@ export default function Scanner() {
                           )}
                         >
                           <td className="px-3 py-3">
-                            <div className="font-mono font-semibold">{r.symbol}</div>
-                            <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">{r.name}</div>
+                            <div className="flex items-center gap-2">
+                              <div>
+                                <div className="font-mono font-semibold">{r.symbol}</div>
+                                <div className="text-[10px] text-muted-foreground truncate max-w-[140px]">{r.name}</div>
+                              </div>
+                              <ChartLinks symbol={r.symbol} />
+                            </div>
                           </td>
                           <td className="px-3 py-3 mono">${r.price.toFixed(2)}</td>
                           <td className={cn("px-3 py-3 mono", r.changePct >= 0 ? "text-bullish" : "text-bearish")}>
@@ -398,6 +403,33 @@ function EstNum({ n, est, suffix = "" }: { n: number; est?: boolean; suffix?: st
   );
 }
 
+function ChartLinks({ symbol, className }: { symbol: string; className?: string }) {
+  const links = [
+    { href: `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(symbol)}`, label: "Open chart on TradingView", Icon: CandlestickChart },
+    { href: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`, label: "Open quote on Yahoo Finance", Icon: ExternalLink },
+  ];
+  return (
+    <div className={cn("inline-flex items-center gap-1", className)} onClick={(e) => e.stopPropagation()}>
+      {links.map(({ href, label, Icon }) => (
+        <Tooltip key={href}>
+          <TooltipTrigger asChild>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={label}
+              className="inline-flex h-6 w-6 items-center justify-center rounded border border-border/60 bg-surface/40 text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
+            >
+              <Icon className="h-3 w-3" />
+            </a>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+      ))}
+    </div>
+  );
+}
+
 function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -479,6 +511,7 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
         <div>
           <div className="font-mono font-semibold text-lg">{row.symbol}</div>
           <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">{row.name}</div>
+          <ChartLinks symbol={row.symbol} className="mt-1.5" />
         </div>
         <div className="text-right">
           <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
