@@ -205,6 +205,14 @@ Deno.serve(async (req) => {
       },
       user_budget: budget,
       user_risk_profile: riskProfile,
+      market_event_risk: (ctx.eventRisk ?? []).map((e) => ({
+        category: e.key,
+        label: e.label,
+        status: e.status,
+        tone: e.tone,
+        headline_count: e.hits,
+        top_headline: e.topHeadline ?? null,
+      })),
       contracts: (ctx.topPicks ?? []).map((p) => ({
         type: p.type,
         strike: p.strike,
@@ -226,13 +234,14 @@ Deno.serve(async (req) => {
       })),
     };
 
-    const userPrompt = `Evaluate this options trade idea. Apply the 8 internal self-checks, then run STEPS 1–7, then output the required format. Use ONLY the data below — do not invent prices, news, or contracts.
+    const userPrompt = `Evaluate this options trade idea. Apply the 8 internal self-checks, then run STEPS 1–8 (including STEP 4 EVENT RISK CHECK using market_event_risk), then output the required format. Use ONLY the data below — do not invent prices, news, or contracts.
 
 \`\`\`json
 ${JSON.stringify(structuredInput, null, 2)}
 \`\`\`
 
-If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.`;
+If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.
+If any market_event_risk item is "Hot" AND directly relevant to ${ctx.symbol}, action must be WAIT or SKIP.`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
