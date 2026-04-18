@@ -37,6 +37,7 @@ const items = [
   { id: "scanner", title: "Market Scanner", url: "/scanner", icon: Radar },
   { id: "patterns", title: "Patterns", url: "/patterns", icon: Activity },
   { id: "planning", title: "Planning", url: "/planning", icon: Brain },
+  { id: "strategy", title: "Strategy Builder", url: "/strategy", icon: Compass },
   { id: "research", title: "Research", url: "/research", icon: Microscope },
   { id: "chains", title: "Chains", url: "/chains", icon: Layers },
   { id: "portfolio", title: "Portfolio", url: "/portfolio", icon: Briefcase },
