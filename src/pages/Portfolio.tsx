@@ -1,19 +1,21 @@
 // Portfolio — saved options positions with live underlying + Nova's honest take.
-import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical } from "lucide-react";
+import { Briefcase, RefreshCw, Trash2, X, TrendingUp, TrendingDown, Minus, AlertTriangle, Trophy, Skull, Clock, FlaskConical, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { usePortfolio, useClosePosition, useDeletePosition, type PortfolioPosition } from "@/lib/portfolio";
+import { usePortfolio, useClosePosition, useDeletePosition, useAddPosition, type PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
 import { useVerdicts, type Verdict } from "@/lib/portfolioVerdict";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSettings, BROKER_PRESETS, type AppSettings } from "@/lib/settings";
 import { dispatchVerdictTransitions } from "@/lib/webhook";
 import { feeOneSide, feeRoundTrip } from "@/lib/fees";
+import { buildSamplePaperTrades } from "@/lib/seedPaperTrades";
+import { toast } from "@/hooks/use-toast";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -62,10 +64,39 @@ function fmtUsd(n: number) {
   return `${s}$${Math.abs(n).toFixed(0)}`;
 }
 
+type BookFilter = "all" | "real" | "paper";
+
 export default function Portfolio() {
-  const { data: positions = [], isLoading } = usePortfolio();
+  const { data: allPositions = [], isLoading } = usePortfolio();
+  const [settingsForFilter] = useSettings();
+  // Default to PAPER view when SIM mode is on so users actually see their sim trades.
+  const [book, setBook] = useState<BookFilter>(settingsForFilter.paperMode ? "paper" : "all");
+  const positions = useMemo(() => {
+    if (book === "all") return allPositions;
+    if (book === "paper") return allPositions.filter((p) => p.is_paper);
+    return allPositions.filter((p) => !p.is_paper);
+  }, [allPositions, book]);
   const open = useMemo(() => positions.filter((p) => p.status === "open"), [positions]);
   const closed = useMemo(() => positions.filter((p) => p.status !== "open"), [positions]);
+  const paperCount = allPositions.filter((p) => p.is_paper).length;
+  const realCount = allPositions.length - paperCount;
+  const addPos = useAddPosition();
+
+  const seedSamples = () => {
+    const samples = buildSamplePaperTrades();
+    let done = 0;
+    samples.forEach((s) =>
+      addPos.mutate(s, {
+        onSuccess: () => {
+          done++;
+          if (done === samples.length) {
+            toast({ title: "Simulation seeded", description: `${samples.length} sample paper trades added.` });
+            setBook("paper");
+          }
+        },
+      }),
+    );
+  };
   const verdictQ = useVerdicts(open);
   const verdictMap = new Map((verdictQ.data?.verdicts ?? []).map((v) => [v.id, v]));
   const quoteMap = new Map((verdictQ.data?.quotes ?? []).map((q) => [q.symbol, q]));
