@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical } from "lucide-react";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
 import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
 import { toast } from "sonner";
@@ -327,6 +327,55 @@ export default function Settings() {
             {activeTickerSet.size} of {TICKER_UNIVERSE.length} symbols streaming.
           </div>
         </div>
+      </Card>
+
+      {/* ───────────── Simulation / Paper trading ───────────── */}
+      <Card className="glass-card p-6 space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-warning" /> Simulation Mode
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+            When ON, every trade you save is tagged as <span className="font-semibold text-warning">paper</span>.
+            Paper trades use the same live market data and verdict engine, but they're tracked separately on the Portfolio page so your real P&amp;L stays clean.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            updateSettings({ paperMode: !settings.paperMode });
+            flashSaved();
+          }}
+          className={`w-full flex items-center justify-between gap-4 rounded-lg border p-4 text-left transition-colors ${
+            settings.paperMode
+              ? "border-warning/60 bg-warning/10"
+              : "border-border bg-surface/40 hover:bg-surface/60"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+              settings.paperMode ? "bg-warning/20 text-warning" : "bg-muted/40 text-muted-foreground"
+            }`}>
+              <FlaskConical className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">
+                {settings.paperMode ? "Simulation is ON" : "Simulation is OFF"}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {settings.paperMode
+                  ? "New saves go to your paper book. Toggle off to save real trades."
+                  : "Saves count as real trades. Toggle on to test ideas without risk."}
+              </div>
+            </div>
+          </div>
+          <div className={`h-6 w-11 rounded-full relative transition-colors flex-shrink-0 ${
+            settings.paperMode ? "bg-warning" : "bg-muted"
+          }`}>
+            <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform ${
+              settings.paperMode ? "translate-x-[22px]" : "translate-x-0.5"
+            }`} />
+          </div>
+        </button>
       </Card>
 
       {/* ───────────── Trading fees (broker P&L) ───────────── */}

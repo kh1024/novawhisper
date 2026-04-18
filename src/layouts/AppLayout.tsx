@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { MarketHeader } from "@/components/MarketHeader";
 import { TickerTape } from "@/components/TickerTape";
 import { NewsTicker } from "@/components/NewsTicker";
+import { NovaChatBubble } from "@/components/NovaChatBubble";
 
 export default function AppLayout() {
   return (
@@ -18,6 +19,7 @@ export default function AppLayout() {
             <Outlet />
           </main>
         </div>
+        <NovaChatBubble />
       </div>
     </SidebarProvider>
   );

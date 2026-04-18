@@ -26,6 +26,7 @@ export type Database = {
           entry_underlying: number | null
           expiry: string
           id: string
+          is_paper: boolean
           notes: string | null
           option_type: string
           owner_key: string
@@ -48,6 +49,7 @@ export type Database = {
           entry_underlying?: number | null
           expiry: string
           id?: string
+          is_paper?: boolean
           notes?: string | null
           option_type: string
           owner_key: string
@@ -70,6 +72,7 @@ export type Database = {
           entry_underlying?: number | null
           expiry?: string
           id?: string
+          is_paper?: boolean
           notes?: string | null
           option_type?: string
           owner_key?: string

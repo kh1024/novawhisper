@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, Clock } from "lucide-react";
+import { RefreshCw, Clock, FlaskConical } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useLiveQuotes } from "@/lib/liveData";
@@ -61,6 +61,12 @@ export function MarketHeader() {
           <span className="mono">{time} ET</span>
         </span>
         <span className={`pill ${sourceCls}`}>{sourceLabel}</span>
+        {settings.paperMode && (
+          <span className="pill border-warning/50 bg-warning/15 text-warning gap-1" title="Simulation Mode is ON — new saves go to your paper book">
+            <FlaskConical className="h-3 w-3" />
+            SIM MODE
+          </span>
+        )}
         {isLive && (
           <span className="pill pill-live">
             <span className="live-dot" />
