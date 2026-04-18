@@ -135,8 +135,8 @@ export default function Scanner() {
         key: `scanner:${today}:${r.symbol}`,
         symbol: r.symbol,
         source: "scanner",
-        reason: r.crl?.reasoning ?? `Setup score ${r.setupScore} · ${r.bias}`,
-        risk: r.crl?.risk,
+        reason: r.crl?.reason ?? `Setup score ${r.setupScore} · ${r.bias}`,
+        risk: r.crl?.riskBadge,
       })),
     });
   }, [rows, settings]);
