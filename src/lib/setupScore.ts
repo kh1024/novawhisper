@@ -186,7 +186,7 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   if (earningsInDays != null && earningsInDays <= 2) catalyst = 85;
   else if (earningsInDays != null && earningsInDays <= 7) catalyst = 65;
   else if (relVolume > 2.2) catalyst = 70;
-  else if (Math.abs(q.changePct) > 3) catalyst = 55;
+  else if (Math.abs(effectiveChangePct) > 3) catalyst = 55;
 
   // 6) Risk-adjusted: penalize wide-ATR + close-to-earnings combos
   let riskAdjusted = 70;
