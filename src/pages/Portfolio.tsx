@@ -181,6 +181,11 @@ export default function Portfolio() {
             <div className={cn("font-mono text-lg font-semibold", totals.unrealized >= 0 ? "text-bullish" : "text-bearish")}>
               {totals.unrealizedKnown ? fmtUsd(totals.unrealized) : "—"}
             </div>
+            {totals.anySim && (
+              <div className={cn("text-[10px] font-mono mt-0.5", totals.unrealizedSim >= 0 ? "text-bullish" : "text-bearish")}>
+                sim: {fmtUsd(totals.unrealizedSim)}
+              </div>
+            )}
           </div>
           <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Realized</div>
@@ -193,6 +198,11 @@ export default function Portfolio() {
             <div className={cn("font-mono text-lg font-semibold", totals.total >= 0 ? "text-bullish" : "text-bearish")}>
               {fmtUsd(totals.total)}
             </div>
+            {totals.anySim && (
+              <div className={cn("text-[10px] font-mono", totals.totalSim >= 0 ? "text-bullish" : "text-bearish")}>
+                sim: {fmtUsd(totals.totalSim)}
+              </div>
+            )}
             <div className="text-[9px] text-muted-foreground mt-0.5">−${totals.feesPaid.toFixed(2)} fees</div>
           </div>
           <Button size="sm" onClick={() => { qc.invalidateQueries({ queryKey: ["portfolio-verdict"] }); verdictQ.refetch(); }} disabled={verdictQ.isFetching || open.length === 0}>
