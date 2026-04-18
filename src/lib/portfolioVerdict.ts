@@ -22,6 +22,12 @@ export interface VerdictCrl {
   highMomentum: boolean;
   emaDistancePct: number | null;
   flags: string[];
+  valuationAlert?: {
+    triggered: boolean;
+    intrinsicValue: number | null;
+    premiumPct: number | null;
+    message: string | null;
+  };
 }
 
 export interface Verdict {

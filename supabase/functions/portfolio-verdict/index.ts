@@ -88,6 +88,12 @@ function streak(closes: number[]): number {
 
 type CrlVerdict = "GO" | "WAIT" | "NO" | "EXIT" | "NEUTRAL";
 type RiskBadge = "Safe" | "Mild" | "Aggressive";
+interface ValuationAlert {
+  triggered: boolean;
+  intrinsicValue: number | null;
+  premiumPct: number | null;
+  message: string | null;
+}
 interface CrlOutput {
   verdict: CrlVerdict;
   reason: string;
@@ -96,7 +102,10 @@ interface CrlOutput {
   emaDistancePct: number | null;
   highMomentum: boolean;
   flags: string[];
+  valuationAlert: ValuationAlert;
 }
+
+const VALUATION_OVERSHOOT_PCT = 15;
 
 function classifyRisk(delta: number | null, theta: number | null, iv: number | null): RiskBadge | null {
   if (delta == null && theta == null && iv == null) return null;
@@ -107,17 +116,38 @@ function classifyRisk(delta: number | null, theta: number | null, iv: number | n
   return "Mild";
 }
 
+function computeValuationAlert(spot: number | null, intrinsic: number | null): ValuationAlert {
+  if (spot == null || intrinsic == null || intrinsic <= 0) {
+    return { triggered: false, intrinsicValue: intrinsic, premiumPct: null, message: null };
+  }
+  const premiumPct = (spot / intrinsic - 1) * 100;
+  if (premiumPct < VALUATION_OVERSHOOT_PCT) {
+    return { triggered: false, intrinsicValue: intrinsic, premiumPct, message: null };
+  }
+  return {
+    triggered: true,
+    intrinsicValue: intrinsic,
+    premiumPct,
+    message: `Risk Alert: trading ${premiumPct.toFixed(1)}% above intrinsic ($${intrinsic.toFixed(2)})`,
+  };
+}
+
 function runCrl(args: {
   rsi: number | null; ema8: number | null; spot: number | null;
   winningStreak: number; delta: number | null; theta: number | null;
   iv: number | null; dte: number | null; isLong: boolean; isCall: boolean;
+  intrinsicValue?: number | null;
 }): CrlOutput {
-  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall } = args;
+  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall, intrinsicValue } = args;
   const emaDistancePct = ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
   const highMomentum = winningStreak >= 3;
   const riskBadge = classifyRisk(delta, theta, iv);
   const flags: string[] = [];
   if (highMomentum) flags.push("High momentum (3+ day streak)");
+
+  // Risk Alert (orthogonal — fires even on Safe calls)
+  const valuationAlert = computeValuationAlert(spot, intrinsicValue ?? null);
+  if (valuationAlert.triggered && valuationAlert.message) flags.push(valuationAlert.message);
 
   let stopLoss = false;
   if (isLong && spot != null && ema8 != null) {
@@ -125,29 +155,36 @@ function runCrl(args: {
     if (!isCall && spot > ema8) stopLoss = true;
   }
 
-  if (theta != null && dte != null && theta < -0.5 && dte < 4) {
-    flags.push("Time decay trap");
-    return { verdict: "NO", reason: `Theta ${theta.toFixed(2)} with only ${dte}d to expiry — premium melts faster than any move can recover.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  const make = (verdict: CrlVerdict, reason: string, sl = stopLoss): CrlOutput => ({
+    verdict, reason, riskBadge, stopLossTriggered: sl, emaDistancePct, highMomentum, flags, valuationAlert,
+  });
+
+  // Trap 1 — Mathematical Trap (DTE < 5 AND theta < -0.50)
+  if (theta != null && dte != null && theta < -0.5 && dte < 5) {
+    flags.push("Mathematical trap (time decay)");
+    return make("NO", `Theta ${theta.toFixed(2)} with only ${dte}d to expiry — premium melts faster than any move can recover.`);
   }
-  if (r != null && r > 70 && emaDistancePct != null && Math.abs(emaDistancePct) > 5) {
-    flags.push("Overextended (RSI > 70, > 5% from 8-EMA)");
-    return { verdict: "WAIT", reason: `RSI ${r.toFixed(0)} and ${emaDistancePct.toFixed(1)}% above 8-EMA — pullback risk outweighs the trend.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  // Trap 2 — Technical Overextension (RSI > 70 alone)
+  if (r != null && r > 70) {
+    flags.push("Overextended (RSI > 70)");
+    const dist = emaDistancePct != null ? ` and ${emaDistancePct.toFixed(1)}% vs 8-EMA` : "";
+    return make("WAIT", `RSI ${r.toFixed(0)}${dist} — technical overextension. Wait for a pullback.`);
   }
   if (stopLoss) {
     flags.push("Broke 8-EMA — sell at loss");
-    return { verdict: "EXIT", reason: `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`, riskBadge, stopLossTriggered: true, emaDistancePct, highMomentum, flags };
+    return make("EXIT", `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`, true);
   }
   if (highMomentum && r != null && r >= 40 && r <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
-    return { verdict: "GO", reason: `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, riskBadge, stopLossTriggered: false, emaDistancePct, highMomentum, flags };
+    return make("GO", `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, false);
   }
   if (highMomentum && r != null && r > 60) {
-    return { verdict: "WAIT", reason: `Momentum is up but RSI ${r.toFixed(0)} is hot — wait for a cooldown.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+    return make("WAIT", `Momentum is up but RSI ${r.toFixed(0)} is hot — wait for a cooldown.`);
   }
   if (!highMomentum && r != null && r < 40) {
-    return { verdict: "WAIT", reason: `Weak streak and RSI ${r.toFixed(0)} — no edge here, sit it out.`, riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+    return make("WAIT", `Weak streak and RSI ${r.toFixed(0)} — no edge here, sit it out.`);
   }
-  return { verdict: "NEUTRAL", reason: "No conflict — but no clean GO signal either.", riskBadge, stopLossTriggered: stopLoss, emaDistancePct, highMomentum, flags };
+  return make("NEUTRAL", "No conflict — but no clean GO signal either.");
 }
 
 // Match a position to its real option contract from a chain.
