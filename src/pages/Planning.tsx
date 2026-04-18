@@ -666,9 +666,13 @@ function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus }: {
                   source="web-pick"
                 />
               </div>
+              {exp && (exp.isStale || exp.rsiFlipped || exp.thetaAccelerating) && (
+                <div className="mt-1.5"><PickExpiryChips status={exp} compact /></div>
+              )}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
