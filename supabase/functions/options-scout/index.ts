@@ -49,28 +49,34 @@ Deno.serve(async (req) => {
     if (!FIRECRAWL_API_KEY) throw new Error("FIRECRAWL_API_KEY not configured");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
 
-    // 1) Scrape all sources in parallel
-    const scraped = (await Promise.all(SOURCES.map((s) => scrape(s.url).then((r) => r ? { ...r, name: s.name } : null))))
-      .filter((x): x is { url: string; markdown: string; name: string } => x !== null);
-
-    if (scraped.length === 0) {
-      return new Response(JSON.stringify({ error: "No sources could be scraped right now. Try again in a moment." }), {
+    // 1) Run all Firecrawl searches in parallel (last 24h)
+    const groups = await Promise.all(
+      QUERIES.map(async (q) => ({ tier: q.tier, query: q.q, results: await fcSearch(q.q) })),
+    );
+    const totalResults = groups.reduce((n, g) => n + g.results.length, 0);
+    if (totalResults === 0) {
+      return new Response(JSON.stringify({ error: "Firecrawl returned no results. Try again in a moment." }), {
         status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // 2) Build context for Nova
-    const context = scraped.map((s) => `### ${s.name}\nSource: ${s.url}\n\n${s.markdown}`).join("\n\n---\n\n");
+    const context = groups.map((g) =>
+      `### Search bucket: ${g.tier.toUpperCase()} — "${g.query}"\n\n` +
+      g.results.map((r) => `- [${r.title || r.url}](${r.url})\n${r.markdown}`).join("\n\n")
+    ).join("\n\n---\n\n");
 
-    const systemPrompt = `You are Nova, an experienced options strategist. You read live scraped data from finance sites and produce three actionable buckets of options ideas for the next session:
+    const allSources = groups.flatMap((g) => g.results.map((r) => ({ name: r.title || new URL(r.url).hostname, url: r.url })));
+
+    const systemPrompt = `You are Nova, an experienced options strategist. You read live web search results from Firecrawl (last 24 hours) and produce three actionable buckets of options ideas for the next session:
 
 - SAFE: low-risk income/hedging plays (covered calls, cash-secured puts on blue chips, long-dated debit spreads on stable names). Defined risk, high probability.
 - MILD: moderate-risk directional plays (vertical spreads, 30-45 DTE single-leg on liquid names with a clear catalyst).
 - AGGRESSIVE: high-risk/high-reward (0DTE-7DTE, naked single-leg on momentum names, earnings straddles, unusual-activity follow-the-whale).
 
-For each pick: ticker, strategy, thesis (1 sentence grounded in the scraped data), entry idea, key risk. Pick 2-3 per bucket. Only use tickers you actually saw in the source data. Cite which source mentioned it.`;
+For each pick: ticker, strategy, thesis (1 sentence grounded in the actual article content), entry idea (concrete strikes/expiry/direction), key risk. Pick 2-3 per bucket. ONLY use tickers that explicitly appear in the article text. Cite the source URL or domain.`;
 
-    const userPrompt = `Scraped finance sources (${scraped.length} sites):\n\n${context}\n\nReturn three buckets via the tool.`;
+    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by intended risk tier):\n\n${context}\n\nReturn three buckets via the tool.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
