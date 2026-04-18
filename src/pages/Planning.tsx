@@ -1,7 +1,7 @@
 // Planning ("Internet Talk") — synthesizes YouTube creator chatter + our quotes
 // into a ranked next-session watchlist using Lovable AI.
 import { useState } from "react";
-import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target } from "lucide-react";
+import { Brain, Flame, Youtube, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus, Globe, Shield, Zap, Target, History } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePlanning, type PlanningPick, type SourceTicker } from "@/lib/planning";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import { useWebPicksHistory, type HistoryRun } from "@/lib/webPicksHistory";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -123,12 +124,17 @@ export default function Planning() {
           <Tabs defaultValue="webpicks" className="mt-2">
             <TabsList>
               <TabsTrigger value="webpicks"><Globe className="mr-1.5 h-3.5 w-3.5" /> Web Picks</TabsTrigger>
+              <TabsTrigger value="history"><History className="mr-1.5 h-3.5 w-3.5" /> History</TabsTrigger>
               <TabsTrigger value="youtube" disabled={!includeYouTube || !data?.sources?.youtube}><Youtube className="mr-1.5 h-3.5 w-3.5" /> YouTube</TabsTrigger>
               <TabsTrigger value="quotes"><Flame className="mr-1.5 h-3.5 w-3.5" /> Quotes</TabsTrigger>
             </TabsList>
 
             <TabsContent value="webpicks" className="mt-3">
               <WebPicksPanel />
+            </TabsContent>
+
+            <TabsContent value="history" className="mt-3">
+              <HistoryPanel />
             </TabsContent>
 
             <TabsContent value="youtube" className="mt-3">
