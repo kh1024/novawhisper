@@ -174,9 +174,9 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
 
   // 4) Timing: relative volume + intraday move
   const rvScore = relVolume >= 2 ? 50 : relVolume >= 1.3 ? 35 : relVolume >= 0.8 ? 20 : 5;
-  const moveScore = Math.abs(q.changePct) > 0.5 && Math.abs(q.changePct) < 5
+  const moveScore = Math.abs(effectiveChangePct) > 0.5 && Math.abs(effectiveChangePct) < 5
     ? 35
-    : Math.abs(q.changePct) >= 5
+    : Math.abs(effectiveChangePct) >= 5
       ? 15  // gap risk
       : 10;
   const timing = clamp(rvScore + moveScore);
