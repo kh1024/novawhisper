@@ -63,11 +63,11 @@ Deno.serve(async (req) => {
 
     // 4) Call Lovable AI with structured tool output
     const systemPrompt = `You are Nova, an experienced options trader analyzing tomorrow's session.
-You synthesize three things: (a) what retail is talking about on Reddit, (b) what finance YouTube creators are covering, (c) verified market quotes.
+You synthesize two things: (a) what finance YouTube creators are covering and their comment sections, (b) verified market quotes.
 Pick 5-8 tickers worth watching for the next session. For each, give a directional bias, a one-sentence thesis, key catalysts, and risks.
 Be honest: if hype is high but data is weak, say "fade the noise". Avoid generic advice.`;
 
-    const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop Reddit posts:\n${JSON.stringify(topRedditPosts, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool.`;
+    const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
