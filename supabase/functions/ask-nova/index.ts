@@ -202,14 +202,17 @@ Deno.serve(async (req) => {
       })),
     };
 
-    const userPrompt = `Evaluate this options trade idea. Apply the 8 internal self-checks, then run STEPS 1–8 (including STEP 4 EVENT RISK CHECK using market_event_risk), then output the required format. Use ONLY the data below — do not invent prices, news, or contracts.
+    const userPrompt = `Audit this trade idea using the 3-STEP AUDIT (Momentum Check → Math Audit → Conflict Resolution), then output the required Move / Logic Type / The Why / The Clock format. Use ONLY the data below — do not invent prices, RSI values, news, or contracts.
 
 \`\`\`json
 ${JSON.stringify(structuredInput, null, 2)}
 \`\`\`
 
-If contracts is empty, output VERDICT: NO TRADE with Confidence: Low.
-If any market_event_risk item is "Hot" AND directly relevant to ${ctx.symbol}, action must be WAIT or SKIP.`;
+Reminders:
+- If contracts is empty → Move = NO.
+- If DTE < 4 AND theta worse than -0.50 → Move = NO (math favors the house).
+- If RSI not provided, infer cautiously from change_pct and trend — never cite a fake RSI number.
+- If any market_event_risk item is "Hot" AND directly relevant to ${ctx.symbol} → Move cannot be GO.`;
 
     const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
