@@ -106,13 +106,28 @@ interface CrlOutput {
 }
 
 const VALUATION_OVERSHOOT_PCT = 15;
+const EMA_OVERSHOOT_PCT = 15;
 
-function classifyRisk(delta: number | null, theta: number | null, iv: number | null): RiskBadge | null {
-  if (delta == null && theta == null && iv == null) return null;
+// Expert risk classification — Greeks AND RSI together.
+function classifyRisk(
+  delta: number | null, theta: number | null, iv: number | null, rsi: number | null,
+): RiskBadge | null {
+  if (delta == null && theta == null && iv == null && rsi == null) return null;
   const aD = delta != null ? Math.abs(delta) : null;
   const aT = theta != null ? Math.abs(theta) : null;
-  if ((aD != null && aD < 0.35) || (iv != null && iv >= 0.6)) return "Aggressive";
-  if (aD != null && aD >= 0.65 && (aT == null || aT < 0.3)) return "Safe";
+  // Aggressive — any single hot signal.
+  if (
+    (aD != null && aD < 0.35) ||
+    (aT != null && aT > 0.5) ||
+    (iv != null && iv >= 0.6) ||
+    (rsi != null && rsi > 70)
+  ) return "Aggressive";
+  // Safe — full deep-ITM stock-replacement profile.
+  if (
+    aD != null && aD > 0.8 &&
+    aT != null && aT < 0.15 &&
+    (rsi == null || rsi < 60)
+  ) return "Safe";
   return "Mild";
 }
 
@@ -137,11 +152,12 @@ function runCrl(args: {
   winningStreak: number; delta: number | null; theta: number | null;
   iv: number | null; dte: number | null; isLong: boolean; isCall: boolean;
   intrinsicValue?: number | null;
+  unrealizedPnl?: number | null;
 }): CrlOutput {
-  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall, intrinsicValue } = args;
+  const { rsi: r, ema8, spot, winningStreak, delta, theta, iv, dte, isLong, isCall, intrinsicValue, unrealizedPnl } = args;
   const emaDistancePct = ema8 != null && spot != null && ema8 > 0 ? ((spot - ema8) / ema8) * 100 : null;
   const highMomentum = winningStreak >= 3;
-  const riskBadge = classifyRisk(delta, theta, iv);
+  const riskBadge = classifyRisk(delta, theta, iv, r);
   const flags: string[] = [];
   if (highMomentum) flags.push("High momentum (3+ day streak)");
 
@@ -159,21 +175,48 @@ function runCrl(args: {
     verdict, reason, riskBadge, stopLossTriggered: sl, emaDistancePct, highMomentum, flags, valuationAlert,
   });
 
-  // Trap 1 — Mathematical Trap (DTE < 5 AND theta < -0.50)
+  // Trap a — Early Exit on losing trade with steep theta + tiny DTE
+  if (
+    unrealizedPnl != null && unrealizedPnl < 0 &&
+    theta != null && theta < -0.5 &&
+    dte != null && dte < 2
+  ) {
+    flags.push("Sell at loss (losing + theta bleed + ≤2 DTE)");
+    return make(
+      "EXIT",
+      `Losing trade with theta ${theta.toFixed(2)} and only ${dte}d left — paying $${Math.abs(theta * 100).toFixed(0)}/contract/day to hope. Cut now, don't ride to zero.`,
+      true,
+    );
+  }
+
+  // Trap b — Mathematical Trap (DTE < 5 AND theta < -0.50)
   if (theta != null && dte != null && theta < -0.5 && dte < 5) {
     flags.push("Mathematical trap (time decay)");
     return make("NO", `Theta ${theta.toFixed(2)} with only ${dte}d to expiry — premium melts faster than any move can recover.`);
   }
-  // Trap 2 — Technical Overextension (RSI > 70 alone)
+
+  // Trap c — EMA Overshoot (spot > 8-EMA × 1.15)
+  if (emaDistancePct != null && emaDistancePct > EMA_OVERSHOOT_PCT) {
+    flags.push(`EMA overshoot (+${emaDistancePct.toFixed(1)}% vs 8-EMA)`);
+    return make(
+      "NO",
+      `Price is ${emaDistancePct.toFixed(1)}% above 8-EMA $${ema8?.toFixed(2)} — too stretched. NO-GO until it retouches the EMA.`,
+    );
+  }
+
+  // Trap d — Technical Overextension (RSI > 70)
   if (r != null && r > 70) {
     flags.push("Overextended (RSI > 70)");
     const dist = emaDistancePct != null ? ` and ${emaDistancePct.toFixed(1)}% vs 8-EMA` : "";
-    return make("WAIT", `RSI ${r.toFixed(0)}${dist} — technical overextension. Wait for a pullback.`);
+    return make("WAIT", `RSI ${r.toFixed(0)}${dist} — chasing the peak. Wait for a pullback.`);
   }
+
+  // Trap e — Stop-loss EXIT
   if (stopLoss) {
     flags.push("Broke 8-EMA — sell at loss");
     return make("EXIT", `Price ${spot?.toFixed(2)} broke ${isCall ? "below" : "above"} 8-EMA ${ema8?.toFixed(2)} — discipline says cut now, don't wait for expiration.`, true);
   }
+
   if (highMomentum && r != null && r >= 40 && r <= 60) {
     flags.push("Fresh breakout (RSI 40-60)");
     return make("GO", `3+ day streak with RSI ${r.toFixed(0)} — fresh momentum, not exhausted.`, false);
