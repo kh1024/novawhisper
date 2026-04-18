@@ -87,7 +87,7 @@ export default function Portfolio() {
     const openCount = open.length;
     let realized = 0;
     for (const p of closed) {
-      const r = realizedPnl(p);
+      const r = realizedPnl(p, settings);
       if (r != null) realized += r;
     }
     let unrealized = 0;
@@ -95,7 +95,7 @@ export default function Portfolio() {
     let costBasis = 0;
     for (const p of open) {
       const spot = quoteMap.get(p.symbol)?.price ?? null;
-      const u = estimateUnrealizedPnl(p, spot);
+      const u = estimateUnrealizedPnl(p, spot, settings);
       if (u != null) { unrealized += u; unrealizedKnown = true; }
       if (p.entry_premium != null && p.direction === "long") {
         costBasis += Number(p.entry_premium) * p.contracts * 100;
