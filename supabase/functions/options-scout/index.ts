@@ -145,14 +145,20 @@ function pickSchema() {
   return {
     type: "object",
     properties: {
-      symbol: { type: "string" },
+      symbol: { type: "string", description: "Underlying ticker, e.g. AAPL" },
       strategy: { type: "string", description: "e.g. 'Covered call', 'Bull put spread', '0DTE call', 'Long straddle'" },
+      optionType: { type: "string", enum: ["call", "put", "call_spread", "put_spread", "straddle", "strangle", "iron_condor"], description: "Primary leg type" },
+      direction: { type: "string", enum: ["long", "short"], description: "Buying (long) or selling (short) the primary leg" },
+      strike: { type: "number", description: "Primary strike price in USD. For spreads, the long-leg strike." },
+      strikeShort: { type: "number", description: "Optional second strike for spreads/multi-leg (the short leg)." },
+      expiry: { type: "string", description: "Expiration date in YYYY-MM-DD format. Use the next standard monthly or weekly expiry that fits the strategy." },
+      playAt: { type: "number", description: "Underlying price at which to enter the trade (USD)." },
+      premiumEstimate: { type: "string", description: "Rough expected option premium per contract, e.g. '$1.20-$1.40' or 'collect $0.85 credit'." },
       thesis: { type: "string" },
-      entry: { type: "string", description: "Concrete entry idea — strikes/expiry/direction." },
       risk: { type: "string", description: "Main risk in one line." },
-      source: { type: "string", description: "Which scraped source flagged it." },
+      source: { type: "string", description: "Which source flagged it (URL or domain)." },
     },
-    required: ["symbol", "strategy", "thesis", "entry", "risk", "source"],
+    required: ["symbol", "strategy", "optionType", "direction", "strike", "expiry", "playAt", "thesis", "risk", "source"],
     additionalProperties: false,
   };
 }
