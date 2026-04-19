@@ -80,6 +80,9 @@ export interface OptionContract {
   theta: number | null;
   vega: number | null;
   underlyingPrice: number | null;
+  /** Optional 52-week IV range — populated when the upstream provider exposes it. */
+  iv52wLow?: number | null;
+  iv52wHigh?: number | null;
 }
 
 const META = new Map(TICKER_UNIVERSE.map((u) => [u.symbol, u]));

@@ -5,19 +5,25 @@
 // liquid monthly so a "play this on 2025-04-19" pick doesn't survive past
 // April 19.
 import type { ScoutPick } from "@/lib/optionsScout";
-import type { VerifiedQuote } from "@/lib/liveData";
+import type { VerifiedQuote, OptionContract } from "@/lib/liveData";
 import type { SymbolSma } from "@/lib/sma200";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { validateSignal, type ValidationResult, type SignalInput, type OptionType } from "@/lib/gates";
 import { syncExpiry } from "@/lib/gates/expiryDate";
 import { computeStreakDays } from "@/lib/streak";
+import { ivpFromChain } from "@/lib/ivPercentile";
 
 interface PickGateOpts {
   pick: ScoutPick;
   quote?: VerifiedQuote | null;
   sma?: SymbolSma | null;
-  /** IV percentile 0-100 if we have it (otherwise a neutral default). */
+  /**
+   * IV percentile 0-100. Used ONLY if no live `chain` is provided.
+   * When `chain` is present it overrides this value.
+   */
   ivPercentile?: number | null;
+  /** Live options chain — when provided, drives a real IVP for Gate 6. */
+  chain?: OptionContract[] | null;
   /** Optional held position — enables Gate 7. */
   position?: PortfolioPosition | null;
   /** Optional current option premium (for held positions). */
@@ -40,7 +46,7 @@ function parsePremiumEstimate(s?: string | null): number | null {
 
 /** Convert a scout pick to the gate pipeline's input + run it. */
 export function validatePick(opts: PickGateOpts): ValidationResult {
-  const { pick, quote, sma, ivPercentile, position, currentPremium, accountBalance, contracts } = opts;
+  const { pick, quote, sma, ivPercentile, chain, position, currentPremium, accountBalance, contracts } = opts;
   const livePrice = quote?.price ?? pick.playAt;
   const optionType: OptionType = pick.optionType === "put" ? "PUT" : "CALL";
 
@@ -54,6 +60,23 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     ? Number(position.entry_premium)
     : (parsedPremium ?? 0);
 
+  // ── Real IVP for Gate 6 ──
+  // Prefer a chain-derived IVP using the ATM contract's IV vs. the chain's
+  // IV envelope (52-week range when available). If no chain is present we
+  // fall back to neutral 50 — never the upstream PRNG estimate.
+  const chainIvp = ivpFromChain(chain ?? null, livePrice, pick.optionType);
+  let resolvedIvp: number;
+  if (chainIvp) {
+    resolvedIvp = chainIvp.ivp;
+  } else if (ivPercentile != null && Number.isFinite(ivPercentile)) {
+    resolvedIvp = ivPercentile;
+  } else {
+    resolvedIvp = 50;
+    if (typeof console !== "undefined") {
+      console.warn(`[gates/adapter] No live chain for ${pick.symbol} — IVP defaulted to neutral 50.`);
+    }
+  }
+
   const input: SignalInput = {
     ticker: pick.symbol,
     optionType,
@@ -66,7 +89,7 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     rsi14: 55,                                      // unknown — neutral default
     streakDays: computeStreakDays(sma?.closes ?? []), // real consecutive green-day count
     sma200: sma?.sma200 ?? livePrice,               // when unknown, no constraint
-    ivPercentile: ivPercentile ?? 50,
+    ivPercentile: resolvedIvp,
     marketTime: new Date(),
     delta: pick.strategy.toLowerCase().includes("leaps") ? 0.85 : 0.55,
     accountBalance: accountBalance ?? 0,
@@ -77,3 +100,4 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
 
   return validateSignal(input);
 }
+
