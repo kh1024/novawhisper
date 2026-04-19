@@ -121,6 +121,9 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   // Live options chain → top picks
   const { data: chain, isLoading: chainLoading } = useOptionsChain(symbol, 200);
+  // Daily closes — feeds the sparkline on NovaVerdictCard.
+  const { map: smaMap } = useSma200(symbol ? [symbol] : []);
+  const novaCloses = symbol ? smaMap.get(symbol)?.closes ?? null : null;
   const topPicks = useMemo(
     () => (chain && q ? pickTopContracts(chain.contracts, q.price) : []),
     [chain, q]
