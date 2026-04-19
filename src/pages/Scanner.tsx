@@ -315,13 +315,14 @@ export default function Scanner() {
         {/* NOVA AI filter — natural-language pick filter */}
         <NovaFilterBar />
 
-        {/* Readiness summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Action-label summary — institutional ranking buckets. */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
-            { k: "NOW",      v: counts.now,      sub: "high-conviction setups", cls: "border-bullish/40 text-bullish",   Icon: Zap },
-            { k: "WAIT",     v: counts.wait,     sub: "thesis valid, timing off", cls: "border-warning/40 text-warning",   Icon: Clock },
-            { k: "AVOID",    v: counts.avoid,    sub: "blocked or weak",        cls: "border-bearish/40 text-bearish",   Icon: ShieldAlert },
-            { k: "Warnings", v: counts.warnings, sub: "data / risk flags",      cls: "border-border text-foreground",    Icon: AlertTriangle },
+            { k: "ELITE",     v: counts.ELITE,     sub: "rank ≥ 90 · all aligned",     cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "GO NOW",    v: counts["GO NOW"], sub: "rank 80–89 · trade today",    cls: "border-bullish/40 text-bullish",     Icon: TrendingUp },
+            { k: "GOOD",      v: counts.GOOD,     sub: "rank 70–79 · wait for entry", cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WATCHLIST", v: counts.WATCHLIST, sub: "rank 60–69 · monitor",        cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "PASS",      v: counts.PASS,     sub: "no edge",                     cls: "border-border text-muted-foreground", Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
