@@ -213,20 +213,72 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
 }
 
 // ── Yahoo Finance (free, no key, very reliable for ETFs) ──
+// Yahoo started requiring a "crumb + session cookie" handshake in late 2023.
+// Without it, /v7/finance/quote returns HTTP 401. We do the handshake once
+// per cold start and reuse the cookie/crumb for ~1h.
+const YAHOO_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+let yahooSession: { cookie: string; crumb: string; at: number } | null = null;
+const YAHOO_SESSION_TTL_MS = 60 * 60_000; // 1h
+
+async function getYahooSession(): Promise<{ cookie: string; crumb: string } | null> {
+  if (yahooSession && Date.now() - yahooSession.at < YAHOO_SESSION_TTL_MS) {
+    return { cookie: yahooSession.cookie, crumb: yahooSession.crumb };
+  }
+  try {
+    // Step 1 — hit fc.yahoo.com to get an A1/A3 cookie.
+    const cookieRes = await fetch("https://fc.yahoo.com", {
+      headers: { "User-Agent": YAHOO_UA, Accept: "*/*" },
+      redirect: "manual",
+    });
+    const setCookie = cookieRes.headers.get("set-cookie") ?? "";
+    // Crude split — Deno doesn't expose multi-set-cookie, but the A1 cookie is
+    // returned as the first segment in this header.
+    const cookie = setCookie.split(",").map((c) => c.split(";")[0].trim()).filter(Boolean).join("; ");
+    if (!cookie) {
+      console.warn("[yahoo] handshake: no Set-Cookie returned");
+      return null;
+    }
+    // Step 2 — exchange cookie for a crumb.
+    const crumbRes = await fetch("https://query2.finance.yahoo.com/v1/test/getcrumb", {
+      headers: { "User-Agent": YAHOO_UA, Accept: "*/*", Cookie: cookie },
+    });
+    if (!crumbRes.ok) {
+      console.warn(`[yahoo] handshake: crumb HTTP ${crumbRes.status}`);
+      return null;
+    }
+    const crumb = (await crumbRes.text()).trim();
+    if (!crumb) {
+      console.warn("[yahoo] handshake: empty crumb");
+      return null;
+    }
+    yahooSession = { cookie, crumb, at: Date.now() };
+    return { cookie, crumb };
+  } catch (e) {
+    console.error("[yahoo] handshake error", e);
+    return null;
+  }
+}
+
 // One batched call returns up to ~50 symbols at once.
 async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuote>> {
   const out = new Map<string, SourceQuote>();
   if (symbols.length === 0) return out;
+  const session = await getYahooSession();
+  if (!session) return out;
   try {
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}`;
+    const url = `https://query2.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(","))}&crumb=${encodeURIComponent(session.crumb)}`;
     const r = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; NovaTerminal/1.0)",
+        "User-Agent": YAHOO_UA,
         Accept: "application/json",
+        Cookie: session.cookie,
       },
     });
     if (!r.ok) {
       console.warn(`[yahoo] batch HTTP ${r.status}`);
+      // Invalidate session — next call will re-handshake.
+      if (r.status === 401 || r.status === 403) yahooSession = null;
       return out;
     }
     const d = await r.json();
