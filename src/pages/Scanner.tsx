@@ -294,17 +294,23 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  // Action-label counts derived from the institutional rank.
+  // Top-card counts now mirror the CRL signal shown in the row badge,
+  // so "BUY NOW" up top always equals the number of BUY rows in the table.
+  // GO → BUY NOW · WAIT → WATCHLIST · NEUTRAL → WAIT · NO/EXIT → AVOID.
   const counts = useMemo(() => {
-    const tally: Record<ActionLabel, number> = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0 };
-    let warnings = 0;
+    const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
     for (const r of rows) {
-      const lbl = rankMap.get(r.symbol)?.rank.label ?? "AVOID";
-      tally[lbl]++;
-      if (r.warnings.length > 0) warnings++;
+      const exp = expiryStatus.get(`scanner:${r.symbol}`);
+      const v = exp?.effectiveVerdict ?? r.crl?.verdict ?? "NEUTRAL";
+      if (v === "GO") tally["BUY NOW"]++;
+      else if (v === "WAIT") tally.WATCHLIST++;
+      else if (v === "EXIT") tally.EXIT++;
+      else if (v === "NO") tally.AVOID++;
+      else tally.WAIT++; // NEUTRAL
+      if (r.warnings.length > 0) tally.warnings++;
     }
-    return { ...tally, warnings };
-  }, [rows, rankMap]);
+    return tally;
+  }, [rows, expiryStatus]);
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
@@ -342,10 +348,10 @@ export default function Scanner() {
         {/* Action-label summary — institutional ranking buckets. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "score ≥ 80 · take the trade",     cls: "border-bullish/60 text-bullish",     Icon: Zap },
-            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "score 70–79 · wait for trigger",  cls: "border-primary/40 text-primary",     Icon: Clock },
-            { k: "WAIT",       v: counts.WAIT,            sub: "score 50–69 · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
-            { k: "AVOID",      v: counts.AVOID,           sub: "no edge · liquidity / IV trap",   cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
+            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "CRL: GO · take the trade",         cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "CRL: WAIT · trigger pending",      cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WAIT",       v: counts.WAIT,            sub: "CRL: NEUTRAL · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "AVOID",      v: counts.AVOID,           sub: "CRL: NO · no edge / IV trap",      cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
