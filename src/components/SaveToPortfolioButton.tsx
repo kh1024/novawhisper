@@ -47,6 +47,34 @@ export function SaveToPortfolioButton({ size = "sm", className, validation, ...p
       ? (Number(premium) * Number(contracts) * 100).toFixed(0)
       : null;
 
+  // Kill switch — Gate pipeline returned BLOCKED → no Buy/Save allowed.
+  const blocked = validation?.finalStatus === "BLOCKED";
+  const blockedReason = blocked
+    ? validation?.gateResults.find((g) => g.status === "BLOCKED")?.reasoning
+      ?? "A safety gate is blocking this trade."
+    : null;
+
+  if (blocked) {
+    return (
+      <Hint label={`🚫 BLOCKED — ${blockedReason}`}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled
+          className={cn(
+            size === "xs" ? "h-6 px-2 text-[10px]" : "h-7 px-2 text-[11px]",
+            "border-bearish/40 bg-bearish/10 text-bearish opacity-80 cursor-not-allowed",
+            className,
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Lock className="mr-1 h-3 w-3" />
+          Blocked
+        </Button>
+      </Hint>
+    );
+  }
+
   return (
     <Popover open={open} onOpenChange={(o) => !saved && setOpen(o)}>
       <PopoverTrigger asChild>
