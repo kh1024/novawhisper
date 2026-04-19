@@ -34,6 +34,7 @@ import { useSma200 } from "@/lib/sma200";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
+import { usePortfolio } from "@/lib/portfolio";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -201,6 +202,15 @@ export default function Scanner() {
 
   // 200-day SMA gate — pulled once per session, cached 24h.
   const sma = useSma200(rows.map((r) => r.symbol));
+
+  // EXIT signals only apply to symbols the user actually holds in their portfolio.
+  // For everything else, an EXIT verdict is meaningless (you can't exit what you don't own),
+  // so we surface it as NO ("don't enter") instead.
+  const portfolioQ = usePortfolio();
+  const ownedSymbols = useMemo(
+    () => new Set((portfolioQ.data ?? []).filter((p) => p.status === "open").map((p) => p.symbol.toUpperCase())),
+    [portfolioQ.data],
+  );
 
   const [novaSpec] = useNovaFilter();
 
@@ -446,7 +456,10 @@ export default function Scanner() {
                     // (readiness label is replaced by Final Rank column below)
                     const isOpen = expanded === r.symbol;
                     const exp = expiryStatus.get(`scanner:${r.symbol}`);
-                    const baseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
+                    const rawBaseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
+                    const isOwned = ownedSymbols.has(r.symbol.toUpperCase());
+                    // EXIT only makes sense if the user holds the position. Otherwise show NO.
+                    const baseVerdict = (rawBaseVerdict === "EXIT" && !isOwned) ? "NO" : rawBaseVerdict;
                     // NOVA Guards — 200-SMA gate is the relevant one for scanner long-call setups.
                     const guard = evaluateGuards({
                       symbol: r.symbol,
@@ -458,8 +471,11 @@ export default function Scanner() {
                       sma200: sma.map.get(r.symbol)?.sma200 ?? null,
                       riskBucket: r.crl.riskBadge?.toLowerCase() ?? null,
                     });
-                    // If guard blocks, downgrade GO → BLOCKED so the user can't act.
-                    const verdict = guard.shouldBlockSignal && baseVerdict === "GO" ? "EXIT" : baseVerdict;
+                    // If guard blocks a GO, downgrade. EXIT downgrade only fires for owned positions;
+                    // for non-owned tickers we surface BLOCKED but keep verdict as NO.
+                    const verdict = guard.shouldBlockSignal && baseVerdict === "GO"
+                      ? (isOwned ? "EXIT" : "NO")
+                      : baseVerdict;
                     const blocked = guard.shouldBlockSignal;
                     return (
                       <Fragment key={r.symbol}>
