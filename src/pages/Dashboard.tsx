@@ -167,10 +167,13 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
-          Drag the grip on the left of any section to reorder
-        </span>
+      <div className="flex items-center justify-between px-1 gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+            Drag the grip on the left of any section to reorder
+          </span>
+          <NovaModeBadge />
+        </div>
         <Hint label="Reset section order to default">
           <button
             onClick={() => { window.localStorage.removeItem(SECTIONS_STORAGE_KEY); window.location.reload(); }}
