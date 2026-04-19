@@ -10,6 +10,7 @@ import {
   detectTimeState, inferRegime, adjustForRegime, scoreToGrade,
   type ConfidenceGrade, type MarketRegime,
 } from "./novaBrain";
+import { computeStreakDays } from "./streak";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
@@ -287,12 +288,14 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   if (q.status === "unavailable") dataQuality = 0;
   dataQuality = clamp(dataQuality);
 
-  // ── Conflict Resolution Layer (estimated for scanner) ──
-  // Use effectiveChangePct so pre/post gaps influence streak detection.
-  const fakeStreak = effectiveChangePct > 1.5 && emaDist20 > 0 ? 3 : effectiveChangePct > 0.5 && emaDist20 > 0 ? 2 : 0;
+  // ── Conflict Resolution Layer ──
+  // Streak now comes from the shared helper (real closes when available; the
+  // scanner pipeline doesn't have the daily-close array on hand, so this stays
+  // 0 here and the adapter feeds the real value into Gate 4).
+  const realStreak = computeStreakDays([]);
   const synEma8 = q.price > 0 && emaDist20 !== 0 ? q.price / (1 + emaDist20 / 100) : null;
   const crlOut = runConflictResolution({
-    rsi, ema8: synEma8, spot: q.price, winningStreakDays: fakeStreak,
+    rsi, ema8: synEma8, spot: q.price, winningStreakDays: realStreak,
     delta: null, theta: null, iv: null, dte: null,
     isLong: bias !== "bearish", isCall: bias !== "bearish",
   });

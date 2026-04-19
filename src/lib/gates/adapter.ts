@@ -10,6 +10,7 @@ import type { SymbolSma } from "@/lib/sma200";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { validateSignal, type ValidationResult, type SignalInput, type OptionType } from "@/lib/gates";
 import { syncExpiry } from "@/lib/gates/expiryDate";
+import { computeStreakDays } from "@/lib/streak";
 
 interface PickGateOpts {
   pick: ScoutPick;
@@ -63,7 +64,7 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     quoteTimestamp: quote?.updatedAt ? new Date(quote.updatedAt) : new Date(),
     liveFeedPrice: livePrice,
     rsi14: 55,                                      // unknown — neutral default
-    streakDays: 1,                                  // unknown — neutral default
+    streakDays: computeStreakDays(sma?.closes ?? []), // real consecutive green-day count
     sma200: sma?.sma200 ?? livePrice,               // when unknown, no constraint
     ivPercentile: ivPercentile ?? 50,
     marketTime: new Date(),

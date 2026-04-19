@@ -9,6 +9,7 @@ export interface SymbolSma {
   sma200: number | null;
   spot: number | null;          // last close from history (not live)
   belowSma200: boolean | null;
+  closes: number[];             // raw daily closes (last ~210) — fuels streak/RSI math
   source: string;
   error?: string;
 }
@@ -40,6 +41,7 @@ async function fetchSma200(symbols: string[]): Promise<SymbolSma[]> {
       sma200: sma,
       spot: last,
       belowSma200: sma != null && last != null ? last < sma : null,
+      closes: Array.isArray(h.closes) ? h.closes : [],
       source: h.source,
       error: h.error,
     };
