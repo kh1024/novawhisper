@@ -431,11 +431,75 @@ INSTRUCTIONS:
       const strat = String(p.strategy ?? "").toLowerCase();
       const ot = String(p.optionType ?? "").toLowerCase();
       const dir = String(p.direction ?? "").toLowerCase();
-      // Hard reject any short premium / income leaks.
       if (dir === "short") return false;
       if (ot !== "call" && ot !== "put") return false;
       return ALLOWED_STRATS.some((a) => strat.includes(a));
     };
+
+    // ─── PROFESSIONAL STRIKE SELECTION + CONTRACT SANITY (server-side) ───
+    // Even if the model drifts, these rules guarantee no absurd ITM / far-OTM
+    // mislabeled picks reach the UI.
+    type Tier = "conservative" | "moderate" | "aggressive" | "lottery";
+    function sanityCheck(p: Record<string, unknown>, originalTier: Tier):
+      { keep: boolean; tier: Tier; reason?: string; penalty: number } {
+      const strike = Number(p.strike ?? 0);
+      const playAt = Number(p.playAt ?? 0);
+      const ot = String(p.optionType ?? "").toLowerCase();
+      const isSpread = /debit spread/i.test(String(p.strategy ?? ""));
+      if (!strike || !playAt) return { keep: true, tier: originalTier, penalty: 0 };
+
+      const moneynessPct = ((strike - playAt) / playAt) * 100;
+      const otmCallPct = ot === "call" ? moneynessPct : -moneynessPct;
+      const itmCallPct = -otmCallPct;
+      const otmPutPct = ot === "put" ? -moneynessPct : moneynessPct;
+      const itmPutPct = -otmPutPct;
+
+      if (ot === "call") {
+        if (otmCallPct > 50) return { keep: false, tier: originalTier, reason: "Call >50% OTM hard reject", penalty: 0 };
+        if (itmCallPct > 25 && !isSpread) return { keep: false, tier: originalTier, reason: "Call >25% deep ITM — capital inefficient", penalty: 0 };
+      } else if (ot === "put") {
+        if (otmPutPct > 50) return { keep: false, tier: originalTier, reason: "Put >50% OTM hard reject", penalty: 0 };
+        if (itmPutPct > 25 && !isSpread) return { keep: false, tier: originalTier, reason: "Put >25% deep ITM — capital inefficient", penalty: 0 };
+      }
+
+      let tier: Tier = originalTier;
+      const farOtm = ot === "call" ? otmCallPct : otmPutPct;
+      if (farOtm > 25) tier = "lottery";
+      else if (farOtm > 15 && (tier === "conservative" || tier === "moderate")) tier = "aggressive";
+
+      let penalty = 0;
+      if (farOtm > 25) penalty += 25;
+      else if (farOtm > 15) penalty += 10;
+      const deepItm = ot === "call" ? itmCallPct : itmPutPct;
+      if (deepItm > 15 && !isSpread) penalty += 20;
+      return { keep: true, tier, penalty };
+    }
+
+    const TIERS: Tier[] = ["conservative", "moderate", "aggressive", "lottery"];
+    const sanitized: Record<Tier, Record<string, unknown>[]> = {
+      conservative: [], moderate: [], aggressive: [], lottery: [],
+    };
+    for (const t of TIERS) {
+      const arr = (buckets[t] as unknown[] | undefined) ?? [];
+      for (const raw of arr) {
+        const p = raw as Record<string, unknown>;
+        if (!isAllowed(p)) continue;
+        const res = sanityCheck(p, t);
+        if (!res.keep) {
+          console.log(`[options-scout] sanity rejected ${p.symbol} ${p.strategy} ${p.strike}: ${res.reason}`);
+          continue;
+        }
+        if (res.penalty) {
+          const cs = Number(p.confidenceScore ?? 7);
+          p.confidenceScore = Math.max(1, cs - res.penalty / 10);
+        }
+        sanitized[res.tier].push(p);
+      }
+    }
+    buckets.conservative = sanitized.conservative;
+    buckets.moderate = sanitized.moderate;
+    buckets.aggressive = sanitized.aggressive;
+    buckets.lottery = sanitized.lottery;
 
     // 5) Persist this run + picks for history & performance tracking
     let runId: string | null = null;
