@@ -174,9 +174,9 @@ export default function Dashboard() {
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
             {picks.map((p) => {
-              const isPut = p.strategy.includes("put");
+              const isPut = p.strategy === "long-put";
               const optionType = isPut ? "put" : "call";
-              const direction = (p.strategy === "csp" || p.strategy === "covered-call") ? "short" : "long";
+              const direction = "long" as const;
               const live = quoteMap.get(p.symbol);
               const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
               const guard = evaluateGuards({
