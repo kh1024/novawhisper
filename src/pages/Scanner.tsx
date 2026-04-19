@@ -433,7 +433,7 @@ export default function Scanner() {
           ))}
         </div>
 
-        <ScannerToolbar
+        <WatchlistPanel onOpenSymbol={setOpenSymbol} />
           filters={filters}
           defaults={DEFAULT_FILTERS}
           onChange={setFilters}
