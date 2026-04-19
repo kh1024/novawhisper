@@ -7,6 +7,7 @@
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
+import { isMassiveDown, markMassiveDown, isOutageStatus } from "../_shared/massiveOutage.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -27,7 +28,12 @@ async function fetchMassiveQuote(symbol: string, key: string): Promise<{ price: 
     const r = await fetch(
       `https://api.massive.com/v2/last/trade/${encodeURIComponent(symbol)}?apiKey=${key}`,
     );
-    if (!r.ok) return null;
+    if (!r.ok) {
+      if (isOutageStatus(r.status)) {
+        await markMassiveDown(`live-tick HTTP ${r.status}`);
+      }
+      return null;
+    }
     const j = await r.json() as MassiveQuote;
     const p = j.results?.p;
     if (p == null) return null;
@@ -62,6 +68,14 @@ Deno.serve(async (req) => {
       });
     }
     const symbols = Array.from(new Set(parsed.data.symbols.map((s) => s.toUpperCase())));
+
+    // Kill-switch — if Massive is flagged offline, don't waste the call;
+    // hourly massive-ping will clear the flag when API recovers.
+    if (await isMassiveDown()) {
+      return new Response(JSON.stringify({ ok: true, broadcast: 0, note: "massive_offline" }), {
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
 
     // Fetch all quotes in parallel (throttle handles fairness).
     const ticks = (await Promise.all(symbols.map(async (sym) => {
