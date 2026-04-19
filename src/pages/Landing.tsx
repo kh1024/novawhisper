@@ -97,7 +97,7 @@ export default function Landing() {
             <a href="#how" className="hover:text-foreground transition-colors">How it works</a>
           </nav>
           <div className="flex items-center gap-2">
-            <Link to="/" className="text-sm text-muted-foreground hover:text-foreground hidden sm:inline-block">Sign in</Link>
+            <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground hidden sm:inline-block">Sign in</Link>
             <Button asChild size="sm" className="gap-1.5">
               <Link to="/scanner">Try the Scanner <ArrowRight className="h-3.5 w-3.5" /></Link>
             </Button>

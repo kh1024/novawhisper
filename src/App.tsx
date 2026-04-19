@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AppLayout from "./layouts/AppLayout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Lazy-load route pages so each chunk parses on demand instead of all up
 // front. Cuts the longest main-thread task during initial load (lower FID).
@@ -20,6 +21,8 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Strategy = lazy(() => import("./pages/Strategy"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Landing = lazy(() => import("./pages/Landing"));
+const Auth = lazy(() => import("./pages/Auth"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
 const queryClient = new QueryClient();
@@ -38,8 +41,19 @@ const App = () => (
       <BrowserRouter>
         <Suspense fallback={<RouteFallback />}>
           <Routes>
+            {/* Public routes */}
             <Route path="/landing" element={<Landing />} />
-            <Route element={<AppLayout />}>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* Authenticated app */}
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppLayout />
+                </ProtectedRoute>
+              }
+            >
               <Route path="/" element={<Dashboard />} />
               <Route path="/market" element={<Market />} />
               <Route path="/scanner" element={<Scanner />} />
