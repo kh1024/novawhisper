@@ -36,16 +36,18 @@ export default function Dashboard() {
   const novaActive = isFilterActive(novaSpec);
 
   const picks = useMemo(() => {
+    // App is single-leg only — keep just long calls and long puts.
+    const singleLeg = allPicks.filter((p) => p.strategy === "long-call" || p.strategy === "long-put");
     // When NOVA filter is active, ignore the risk tab so the user's natural-
     // language ask drives the result set across all buckets.
-    const base = novaActive ? allPicks : allPicks.filter((p) => p.riskBucket === riskTab);
+    const base = novaActive ? singleLeg : singleLeg.filter((p) => p.riskBucket === riskTab);
     return base
       .filter((p) => pickMatchesFilter({
         symbol: p.symbol,
         strategy: p.strategy,
         riskBucket: p.riskBucket,
         bias: p.bias,
-        optionType: p.strategy.includes("put") ? "put" : "call",
+        optionType: p.strategy === "long-put" ? "put" : "call",
         expiration: p.expiration,
         dte: p.dte,
         premium: p.premium,
@@ -172,9 +174,9 @@ export default function Dashboard() {
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
             {picks.map((p) => {
-              const isPut = p.strategy.includes("put");
+              const isPut = p.strategy === "long-put";
               const optionType = isPut ? "put" : "call";
-              const direction = (p.strategy === "csp" || p.strategy === "covered-call") ? "short" : "long";
+              const direction = "long" as const;
               const live = quoteMap.get(p.symbol);
               const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
               const guard = evaluateGuards({
