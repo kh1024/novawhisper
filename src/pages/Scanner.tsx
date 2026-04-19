@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
 
