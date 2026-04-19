@@ -20,6 +20,7 @@ import { QuoteSourceChip } from "@/components/QuoteSourceChip";
 import { TipsRotator } from "@/components/TipsRotator";
 import { SortableList } from "@/components/SortableList";
 import { NovaStatusStrip } from "@/components/NovaStatusStrip";
+import { NovaModeBadge } from "@/components/NovaModeBadge";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
