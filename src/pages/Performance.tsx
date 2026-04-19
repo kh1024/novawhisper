@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Hint } from "@/components/Hint";
 import { ACTION_HINT } from "@/lib/glossary";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer,
+  Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer,
   Tooltip as RTooltip, XAxis, YAxis,
 } from "recharts";
 import { Brain, RefreshCw, TrendingDown, TrendingUp, Zap } from "lucide-react";
