@@ -1,25 +1,38 @@
 // Short-circuit pipeline. Stops at the first BLOCKED or WAIT so the user sees
 // one unambiguous reason rather than a wall of conflicting gate noise.
 import type { SignalInput, ValidationResult, GateResult, RiskLabel } from "./types";
+import { AFFORDABILITY_CAP_PCT } from "./types";
 import {
   gate1_DataIntegrity, gate2_TrendGate, gate3_IntrinsicAudit,
   gate4_ExhaustionFilter, gate5_OrbLock, gate6_IvpGuard, gate7_SafetyExit,
+  gate8_Affordability,
 } from "./gates";
 
 export function validateSignal(input: SignalInput): ValidationResult {
   const gateResults: GateResult[] = [];
   const warnings: string[] = [];
 
-  // Order: integrity → trend → intrinsic → exhaustion → ORB → IVP → safety.
   const pipeline = [
     gate1_DataIntegrity,
     gate2_TrendGate,
-    gate3_IntrinsicAudit,    // FLAGGED but non-blocking — never short-circuits
+    gate3_IntrinsicAudit,    // FLAGGED but non-blocking
     gate4_ExhaustionFilter,
     gate5_OrbLock,
     gate6_IvpGuard,
     gate7_SafetyExit,
+    gate8_Affordability,     // NEW — last so the cost message stays loud
   ];
+
+  const gateNameByFn = new Map<typeof pipeline[number], string>([
+    [gate1_DataIntegrity,    "DATA_INTEGRITY"],
+    [gate2_TrendGate,        "TREND_GATE"],
+    [gate3_IntrinsicAudit,   "INTRINSIC_AUDIT"],
+    [gate4_ExhaustionFilter, "EXHAUSTION_FILTER"],
+    [gate5_OrbLock,          "ORB_LOCK"],
+    [gate6_IvpGuard,         "IVP_GUARD"],
+    [gate7_SafetyExit,       "SAFETY_EXIT"],
+    [gate8_Affordability,    "AFFORDABILITY"],
+  ]);
 
   let firstBlock: GateResult | null = null;
   for (const fn of pipeline) {
@@ -31,16 +44,10 @@ export function validateSignal(input: SignalInput): ValidationResult {
     }
     if ((r.status === "BLOCKED" || r.status === "WAIT") && !firstBlock) {
       firstBlock = r;
-      // Short-circuit AFTER recording the result. Remaining gates marked SKIPPED.
       const remaining = pipeline.slice(pipeline.indexOf(fn) + 1);
       for (const skipFn of remaining) {
         gateResults.push({
-          gate: skipFn === gate2_TrendGate ? "TREND_GATE"
-            : skipFn === gate3_IntrinsicAudit ? "INTRINSIC_AUDIT"
-            : skipFn === gate4_ExhaustionFilter ? "EXHAUSTION_FILTER"
-            : skipFn === gate5_OrbLock ? "ORB_LOCK"
-            : skipFn === gate6_IvpGuard ? "IVP_GUARD"
-            : "SAFETY_EXIT",
+          gate: gateNameByFn.get(skipFn) ?? "UNKNOWN",
           passed: false, status: "WAIT",
           label: "⚪ SKIPPED",
           reasoning: `Not evaluated — pipeline stopped at ${firstBlock.gate}.`,
@@ -65,6 +72,22 @@ export function validateSignal(input: SignalInput): ValidationResult {
     ? Number((input.entryPremium * 0.70).toFixed(2))
     : undefined;
 
+  // ── Budget impact summary (always computed when we have the data) ──
+  const contracts = Math.max(1, Math.floor(input.contracts ?? 1));
+  const contractCost = Number.isFinite(input.entryPremium) && input.entryPremium > 0
+    ? input.entryPremium * 100 * contracts
+    : 0;
+  const account = Number.isFinite(input.accountBalance) ? input.accountBalance : 0;
+  const pctOfPortfolio = account > 0 ? (contractCost / account) * 100 : 0;
+  const affordabilityResult = gateResults.find((g) => g.gate === "AFFORDABILITY");
+  const budgetImpact = contractCost > 0 && account > 0 ? {
+    contractCost,
+    pctOfPortfolio,
+    accountBalance: account,
+    overBudget: pctOfPortfolio > AFFORDABILITY_CAP_PCT,
+    suggestion: affordabilityResult?.suggestion,
+  } : undefined;
+
   return {
     ticker: input.ticker,
     optionType: input.optionType,
@@ -74,5 +97,6 @@ export function validateSignal(input: SignalInput): ValidationResult {
     approvedAt: finalStatus === "APPROVED" || finalStatus === "FLAGGED" ? new Date() : undefined,
     autoExitTrigger,
     activeWarnings: warnings,
+    budgetImpact,
   };
 }

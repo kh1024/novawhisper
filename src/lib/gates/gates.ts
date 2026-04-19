@@ -1,5 +1,6 @@
 // Pure gate implementations — no React, no I/O, easy to unit test.
 import type { SignalInput, GateResult } from "./types";
+import { AFFORDABILITY_CAP_PCT, SPREAD_SWEET_SPOT } from "./types";
 
 export function gate1_DataIntegrity(i: SignalInput): GateResult {
   const staleness_s = (Date.now() - i.quoteTimestamp.getTime()) / 1000;
@@ -91,7 +92,6 @@ export function gate5_OrbLock(i: SignalInput): GateResult {
   const est = new Date(i.marketTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const totalMin = est.getHours() * 60 + est.getMinutes();
   const lockMin = 10 * 60 + 30;
-  // Only enforce on US weekdays during regular session.
   const dow = est.getDay();
   if (dow === 0 || dow === 6) {
     return {
@@ -161,5 +161,78 @@ export function gate7_SafetyExit(i: SignalInput): GateResult {
     gate: "SAFETY_EXIT", passed: true, status: "APPROVED",
     label: "🟢 POSITION WITHIN STOP RANGE",
     reasoning: `Premium $${i.currentPremium.toFixed(2)} is ${cushionPct.toFixed(1)}% above the auto-exit threshold ($${exitThreshold.toFixed(2)}). Auto-exit fires if premium hits $${exitThreshold.toFixed(2)}.`,
+  };
+}
+
+// ── GATE 8: Affordability (Position Sizing) ──────────────────────────────────
+// Hard cap: a single contract's cost (premium × 100) × contracts must be
+// ≤ AFFORDABILITY_CAP_PCT (5%) of the account balance. Otherwise label
+// "TOO EXPENSIVE" and, when the pick is Grade A, recommend a vertical debit
+// spread sized into the $200–$500 sweet spot.
+export function gate8_Affordability(i: SignalInput): GateResult {
+  const contracts = Math.max(1, Math.floor(i.contracts ?? 1));
+  const premium = Number(i.entryPremium);
+  const account = Number(i.accountBalance);
+
+  // Without a real premium or account we can't enforce the cap — pass quietly.
+  if (!Number.isFinite(premium) || premium <= 0 || !Number.isFinite(account) || account <= 0) {
+    return {
+      gate: "AFFORDABILITY", passed: true, status: "APPROVED",
+      label: "🟢 NO COST DATA",
+      reasoning: `No premium or account balance set — affordability check skipped. Configure your portfolio in Settings to enable this gate.`,
+    };
+  }
+
+  const contractCost = premium * 100 * contracts;
+  const pctOfAccount = (contractCost / account) * 100;
+  const capDollars = (account * AFFORDABILITY_CAP_PCT) / 100;
+
+  if (pctOfAccount > AFFORDABILITY_CAP_PCT) {
+    // Grade A picks get an actionable spread suggestion to bring cost down.
+    if (i.grade === "A") {
+      // Suggest a width that lands the net debit in the sweet-spot range.
+      // Heuristic: typical debit spread costs ~30-50% of the long premium.
+      // We target a debit ≈ $300 (mid of $200-$500) and back into a width.
+      const targetDebit = Math.min(SPREAD_SWEET_SPOT.max, Math.max(SPREAD_SWEET_SPOT.min, capDollars));
+      const targetPerContract = targetDebit / 100;
+      // Suggest a short-leg roughly 5-10% OTM from the long-leg strike.
+      const widthPct = i.optionType === "CALL" ? 0.05 : -0.05;
+      const shortStrike = Math.round(i.strikePrice * (1 + widthPct));
+      const longLeg = i.strikePrice;
+      return {
+        gate: "AFFORDABILITY", passed: false, status: "BLOCKED",
+        label: "🔴 TOO EXPENSIVE — Spread Suggested",
+        reasoning: `Single ${i.optionType} costs $${contractCost.toFixed(0)} (${pctOfAccount.toFixed(1)}% of $${account.toLocaleString()}) — exceeds the ${AFFORDABILITY_CAP_PCT}% per-trade cap ($${capDollars.toFixed(0)}). This is a Grade A setup, so instead of skipping it, convert to a ${i.optionType === "CALL" ? "Call" : "Put"} Debit Spread: BUY $${longLeg} ${i.optionType} / SELL $${shortStrike} ${i.optionType}. Estimated net debit ≈ $${targetDebit.toFixed(0)} (within the $${SPREAD_SWEET_SPOT.min}–$${SPREAD_SWEET_SPOT.max} sweet spot). You keep the directional thesis at a fraction of the cost — capped upside, but a real, affordable trade.`,
+        suggestion: {
+          kind: "VERTICAL_SPREAD",
+          title: `${i.optionType === "CALL" ? "Call" : "Put"} Debit Spread`,
+          detail: `Buy $${longLeg} / Sell $${shortStrike} · est. net debit ~$${targetPerContract.toFixed(2)}/contract (~$${targetDebit.toFixed(0)} total)`,
+        },
+      };
+    }
+    return {
+      gate: "AFFORDABILITY", passed: false, status: "BLOCKED",
+      label: "🔴 TOO EXPENSIVE",
+      reasoning: `Contract cost $${contractCost.toFixed(0)} = ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account. This breaches the ${AFFORDABILITY_CAP_PCT}% per-trade cap ($${capDollars.toFixed(0)}). Either reduce position size or choose a cheaper expiration / closer-to-the-money strike.`,
+      suggestion: {
+        kind: "REDUCE_CONTRACTS",
+        title: "Reduce size or pick a cheaper contract",
+        detail: `Max affordable premium per contract at 1× = $${(capDollars / 100).toFixed(2)}.`,
+      },
+    };
+  }
+
+  if (pctOfAccount > AFFORDABILITY_CAP_PCT * 0.6) {
+    return {
+      gate: "AFFORDABILITY", passed: true, status: "FLAGGED",
+      label: "🟡 ELEVATED COST",
+      reasoning: `Trade uses ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account ($${contractCost.toFixed(0)}). Within the ${AFFORDABILITY_CAP_PCT}% cap but on the high side — consider sizing down.`,
+    };
+  }
+
+  return {
+    gate: "AFFORDABILITY", passed: true, status: "APPROVED",
+    label: "🟢 AFFORDABLE",
+    reasoning: `Trade cost $${contractCost.toFixed(0)} = ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account. Well within the ${AFFORDABILITY_CAP_PCT}% per-trade cap.`,
   };
 }

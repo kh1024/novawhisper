@@ -1,4 +1,4 @@
-// 7-Gate Validation System — institutional safety pipeline.
+// 7-Gate + Affordability Validation System — institutional safety pipeline.
 // Every NOVA pick / open position passes through these gates BEFORE the UI
 // shows a Buy CTA or holds quiet on a losing trade.
 //   1. Data Integrity   — quote freshness + price drift
@@ -8,6 +8,7 @@
 //   5. ORB Lock         — pre-10:30 EST waits
 //   6. IVP Guard        — IV percentile crush risk
 //   7. Safety Exit      — 30% premium stop on OPEN positions
+//   8. Affordability    — per-trade cost vs portfolio (5% hard cap)
 export type OptionType = "CALL" | "PUT";
 export type SignalStatus = "APPROVED" | "BLOCKED" | "WAIT" | "FLAGGED";
 export type RiskLabel = "CONSERVATIVE_DIRECTIONAL" | "AGGRESSIVE_SPECULATION" | "SPECULATIVE";
@@ -27,6 +28,14 @@ export interface SignalInput {
   ivPercentile: number;
   marketTime: Date;
   delta: number;
+  /** NEW: total account capital in dollars — drives Gate 8. */
+  accountBalance: number;
+  /** NEW: contracts being sized (default 1). */
+  contracts?: number;
+  /** NEW: Grade A/B/C — used by Gate 8 to recommend a debit spread. */
+  grade?: "A" | "B" | "C";
+  /** NEW: pick expiry (YYYY-MM-DD) — used by date-sync logic upstream. */
+  expiryDate?: string;
 }
 
 export interface GateResult {
@@ -35,6 +44,12 @@ export interface GateResult {
   status: SignalStatus;
   label: string;
   reasoning: string;
+  /** Optional structured suggestion (e.g. spread alternative). */
+  suggestion?: {
+    kind: "VERTICAL_SPREAD" | "REDUCE_CONTRACTS" | "FAR_EXPIRY";
+    title: string;
+    detail: string;
+  };
 }
 
 export interface ValidationResult {
@@ -46,6 +61,14 @@ export interface ValidationResult {
   approvedAt?: Date;
   autoExitTrigger?: number;
   activeWarnings: string[];
+  /** NEW: budget impact summary surfaced by Gate 8. */
+  budgetImpact?: {
+    contractCost: number;       // premium × 100 × contracts
+    pctOfPortfolio: number;     // 0–100
+    accountBalance: number;
+    overBudget: boolean;        // > 5%
+    suggestion?: GateResult["suggestion"];
+  };
 }
 
 export const GATE_ORDER = [
@@ -56,6 +79,7 @@ export const GATE_ORDER = [
   "ORB_LOCK",
   "IVP_GUARD",
   "SAFETY_EXIT",
+  "AFFORDABILITY",
 ] as const;
 export type GateName = (typeof GATE_ORDER)[number];
 
@@ -67,4 +91,10 @@ export const GATE_LABELS: Record<GateName, string> = {
   ORB_LOCK: "ORB Lock (10:30 EST)",
   IVP_GUARD: "IVP Guard",
   SAFETY_EXIT: "Safety Exit (-30%)",
+  AFFORDABILITY: "Affordability (5% cap)",
 };
+
+/** Hard cap: a single trade may not consume more than this % of account. */
+export const AFFORDABILITY_CAP_PCT = 5;
+/** Sweet-spot dollar range Gate 8 nudges Grade-A picks toward via spreads. */
+export const SPREAD_SWEET_SPOT = { min: 200, max: 500 } as const;
