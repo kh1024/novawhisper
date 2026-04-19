@@ -298,9 +298,24 @@ export default function Dashboard() {
               </TabsList>
             </Tabs>
           </div>
-          {picks.length === 0 && (
-            <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
-          )}
+          {picks.length === 0 && (() => {
+            const ts = detectTimeState();
+            const closed = ts.state === "weekend" || ts.state === "closed" || ts.state === "holiday";
+            const copy = emptyStateCopy(riskTab, { isWeekendOrClosed: closed });
+            const fallback: RiskBucket = riskTab === "safe" ? "mild" : riskTab === "mild" ? "safe" : riskTab === "aggressive" ? "mild" : "aggressive";
+            return (
+              <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-5 text-center space-y-2">
+                <div className="text-sm font-semibold">{copy.headline}</div>
+                <div className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">{copy.sub}</div>
+                <button
+                  onClick={() => setRiskTab(fallback)}
+                  className="mt-2 text-[11px] font-semibold tracking-wide text-primary hover:underline underline-offset-2"
+                >
+                  Show {fallback === "safe" ? "Conservative" : fallback === "mild" ? "Moderate" : fallback === "aggressive" ? "Aggressive" : "Lottery"} picks instead →
+                </button>
+              </div>
+            );
+          })()}
           {allOverBudget && (
             <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[11px] leading-snug">
               No {riskTab} contracts fit your <span className="font-mono">${budget.toLocaleString()}</span> per-trade cap right now — showing the cheapest options below. Each row suggests a budget-friendly alt ticker. Adjust capital/risk in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
