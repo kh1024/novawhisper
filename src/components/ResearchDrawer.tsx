@@ -20,6 +20,7 @@ import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { useEventRiskSignals } from "@/lib/sentimentSignals";
 import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
+import { useSma200 } from "@/lib/sma200";
 
 type Props = {
   symbol: string | null;
