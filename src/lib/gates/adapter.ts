@@ -5,19 +5,25 @@
 // liquid monthly so a "play this on 2025-04-19" pick doesn't survive past
 // April 19.
 import type { ScoutPick } from "@/lib/optionsScout";
-import type { VerifiedQuote } from "@/lib/liveData";
+import type { VerifiedQuote, OptionContract } from "@/lib/liveData";
 import type { SymbolSma } from "@/lib/sma200";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { validateSignal, type ValidationResult, type SignalInput, type OptionType } from "@/lib/gates";
 import { syncExpiry } from "@/lib/gates/expiryDate";
 import { computeStreakDays } from "@/lib/streak";
+import { ivpFromChain } from "@/lib/ivPercentile";
 
 interface PickGateOpts {
   pick: ScoutPick;
   quote?: VerifiedQuote | null;
   sma?: SymbolSma | null;
-  /** IV percentile 0-100 if we have it (otherwise a neutral default). */
+  /**
+   * IV percentile 0-100. Used ONLY if no live `chain` is provided.
+   * When `chain` is present it overrides this value.
+   */
   ivPercentile?: number | null;
+  /** Live options chain — when provided, drives a real IVP for Gate 6. */
+  chain?: OptionContract[] | null;
   /** Optional held position — enables Gate 7. */
   position?: PortfolioPosition | null;
   /** Optional current option premium (for held positions). */
