@@ -15,6 +15,7 @@ import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest"
 import { useSma200, type SymbolSma } from "@/lib/sma200";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { PickMetaRow } from "@/components/PickMetaRow";
 import { GateValidationDashboard } from "@/components/GateValidationDashboard";
 import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
@@ -99,14 +100,15 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
             {p.grade}
           </span>
         )}
-        <span className={cn("text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded",
-          isBull ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish")}>
-          {p.optionType.replace("_", " ")}
-        </span>
-        <span className="text-[10px] text-muted-foreground ml-auto mono">
-          ${p.strike}{p.strikeShort ? `/${p.strikeShort}` : ""} · {p.expiry}
-        </span>
       </div>
+      <PickMetaRow
+        bias={p.bias ?? (isBull ? "bullish" : "bearish")}
+        optionType={p.optionType}
+        strike={p.strikeShort ? `${p.strike}/${p.strikeShort}` : p.strike}
+        expiry={p.expiry}
+        tier={p.risk}
+        timing={blocked ? "avoid" : undefined}
+      />
       <div className="text-[11px] text-muted-foreground line-clamp-2">{p.thesis}</div>
       <div className="flex items-center gap-2 text-[10px] flex-wrap">
         {oi != null && oi > 0 && (
