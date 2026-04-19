@@ -126,23 +126,34 @@ export default function Dashboard() {
         : singleLegMock.filter((p) => p.riskBucket === riskTab);
     }
 
-    return pool
-      .filter((p) => pickMatchesFilter({
-        symbol: p.symbol,
-        strategy: p.strategy,
-        riskBucket: p.riskBucket,
-        bias: p.bias,
-        optionType: p.strategy === "long-put" || p.strategy === "leaps-put" ? "put" : "call",
-        expiration: p.expiration,
-        dte: p.dte,
-        premium: p.premium,
-        score: p.score,
-        annualized: p.annualized,
-        earningsInDays: p.earningsInDays ?? null,
-      }, novaSpec))
-      .filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget)
-      .slice(0, novaActive ? 12 : 6);
+    const filtered = pool.filter((p) => pickMatchesFilter({
+      symbol: p.symbol,
+      strategy: p.strategy,
+      riskBucket: p.riskBucket,
+      bias: p.bias,
+      optionType: p.strategy === "long-put" || p.strategy === "leaps-put" ? "put" : "call",
+      expiration: p.expiration,
+      dte: p.dte,
+      premium: p.premium,
+      score: p.score,
+      annualized: p.annualized,
+      earningsInDays: p.earningsInDays ?? null,
+    }, novaSpec));
+
+    // Capital-fit: prefer contracts that fit the per-trade cap. If none in the
+    // bucket fit (common at high prices or with a tiny budget), fall back to
+    // the cheapest available — sorted by cost — so the bucket is never empty.
+    // Each over-budget row still shows the alt-ticker chip + "over budget" note.
+    const fits = filtered.filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget);
+    const overBudget = filtered
+      .filter((p) => !(Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget))
+      .sort((a, b) => (a.premium ?? Infinity) - (b.premium ?? Infinity));
+    return (fits.length > 0 ? fits : overBudget).slice(0, novaActive ? 12 : 6);
   }, [allPicks, riskTab, novaSpec, novaActive, scout, budget]);
+
+  // True only when EVERY pick the user sees is over their per-trade cap.
+  const allOverBudget = picks.length > 0
+    && picks.every((p) => !Number.isFinite(p.premium) || p.premium <= 0 || p.premium * 100 > budget);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
