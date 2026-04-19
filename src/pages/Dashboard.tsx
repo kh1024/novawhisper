@@ -322,19 +322,34 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Top opportunities */}
               <Card className="glass-card p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold tracking-wide">Top Opportunities Today</h2>
             </div>
-            <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
-              <TabsList className="h-8 bg-surface/60">
-                <TabsTrigger value="safe" className="text-xs h-6">🟢 Conservative</TabsTrigger>
-                <TabsTrigger value="mild" className="text-xs h-6">🟡 Moderate</TabsTrigger>
-                <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
-                <TabsTrigger value="lottery" className="text-xs h-6">🎲 Lottery</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-3 flex-wrap">
+              {isWeekend && (
+                <Hint label="Markets are closed. When ON, picks whose live quote is more than 4 hours old are hidden — they're frozen at Friday's close and can't be priced reliably.">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hideWeekendGhosts}
+                      onChange={(e) => setHideWeekendGhosts(e.target.checked)}
+                      className="h-3 w-3 accent-primary cursor-pointer"
+                    />
+                    Hide Weekend Ghosts
+                  </label>
+                </Hint>
+              )}
+              <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
+                <TabsList className="h-8 bg-surface/60">
+                  <TabsTrigger value="safe" className="text-xs h-6">🟢 Conservative</TabsTrigger>
+                  <TabsTrigger value="mild" className="text-xs h-6">🟡 Moderate</TabsTrigger>
+                  <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
+                  <TabsTrigger value="lottery" className="text-xs h-6">🎲 Lottery</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
           {picks.length === 0 && (() => {
             const ts = detectTimeState();
