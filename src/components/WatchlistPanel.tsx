@@ -141,32 +141,15 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                       </span>
                     )}
                   </div>
-                  {(() => {
-                    const timing = timingLabel(v?.action, v?.status);
-                    const biasText = w.bias === "bullish" ? "Bullish" : w.bias === "bearish" ? "Bearish" : "Neutral";
-                    const biasCls = w.bias === "bullish" ? "text-bullish" : w.bias === "bearish" ? "text-bearish" : "text-foreground";
-                    return (
-                      <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 text-[11px] leading-tight">
-                        <div>
-                          <span className="text-muted-foreground">Bias:</span>{" "}
-                          <span className={`font-semibold ${biasCls}`}>{biasText}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Timing:</span>{" "}
-                          <span className={`font-semibold ${timing.cls}`}>{timing.label}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Risk:</span>{" "}
-                          <span className="font-semibold text-foreground">{riskLabel(w.tier)}</span>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Contract:</span>{" "}
-                          <span className="font-semibold mono text-foreground">{contractLabel(w.strike, w.option_type)}</span>
-                          {w.expiry ? <span className="text-muted-foreground"> · {w.expiry}</span> : null}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <PickMetaRow
+                    className="mt-1.5"
+                    bias={w.bias}
+                    optionType={w.option_type}
+                    strike={w.strike}
+                    expiry={w.expiry}
+                    tier={w.tier}
+                    timing={timingFromVerdict(v?.action, v?.status)}
+                  />
                   {w.thesis && (
                     <div className="text-xs text-muted-foreground truncate mt-1">{w.thesis}</div>
                   )}
