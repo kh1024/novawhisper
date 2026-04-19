@@ -429,6 +429,27 @@ export default function Settings() {
               </button>
             </div>
           </div>
+          {/* Add custom ticker */}
+          <div className="flex gap-2 flex-wrap">
+            <input
+              type="text"
+              value={newTicker}
+              onChange={(e) => setNewTicker(e.target.value.toUpperCase())}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomTicker())}
+              placeholder="Add ticker (e.g. COIN, PLTR, BRK.B)"
+              maxLength={10}
+              className="flex-1 min-w-[200px] h-9 px-3 text-sm font-mono uppercase bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              onClick={addCustomTicker}
+              disabled={!newTicker.trim()}
+              className="h-9 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Add
+            </button>
+          </div>
+
+          {/* Built-in chips */}
           <div className="flex flex-wrap gap-1.5">
             {TICKER_UNIVERSE.map((u) => {
               const active = activeTickerSet.has(u.symbol);
@@ -447,8 +468,48 @@ export default function Settings() {
               );
             })}
           </div>
+
+          {/* Custom chips with remove (×) */}
+          {customTickers.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Custom ({customTickers.length})
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {customTickers.map((sym) => {
+                  const active = activeTickerSet.has(sym);
+                  return (
+                    <span
+                      key={sym}
+                      className={`inline-flex items-center gap-1 text-xs font-mono pl-2.5 pr-1 py-1 rounded border transition-colors ${
+                        active
+                          ? "bg-primary/15 border-primary/60 text-primary"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      <button
+                        onClick={() => toggleSymbol(sym)}
+                        className="hover:text-foreground"
+                        title={active ? "Hide from tape" : "Show on tape"}
+                      >
+                        {sym}
+                      </button>
+                      <button
+                        onClick={() => removeCustomTicker(sym)}
+                        className="h-5 w-5 inline-flex items-center justify-center rounded hover:bg-bearish/20 hover:text-bearish text-muted-foreground"
+                        title="Remove ticker"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="text-[10px] text-muted-foreground">
-            {activeTickerSet.size} of {TICKER_UNIVERSE.length} symbols streaming.
+            {activeTickerSet.size} of {mergedUniverseSymbols.length} symbols streaming.
           </div>
         </div>
       </Card>
