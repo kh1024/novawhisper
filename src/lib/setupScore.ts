@@ -115,12 +115,14 @@ function estimateOptionsLiquidity(symbol: string, marketCap?: number) {
   return 48;
 }
 
-export function computeSetup(q: VerifiedQuote): SetupRow {
+export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; timeStateLabel?: string; timeState?: ReturnType<typeof detectTimeState> }): SetupRow {
   const meta = TICKER_UNIVERSE.find((t) => t.symbol === q.symbol);
   const sector = q.sector ?? meta?.sector ?? "—";
   const name = q.name ?? meta?.name ?? q.symbol;
   const marketCap = q.marketCap ?? (meta as any)?.marketCap;
   const r = rng(q.symbol);
+  const time = ctx?.timeState ?? detectTimeState();
+  const regime: MarketRegime = ctx?.regime ?? "sideways";
 
   // ── Extended-hours awareness ───────────────────────────────────────────
   // During pre/post sessions, fold the extended-hours move into the working
