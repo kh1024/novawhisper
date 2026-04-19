@@ -107,7 +107,7 @@ function fallbackQuote(symbol: string, base?: Partial<VerifiedQuote>): VerifiedQ
     change: 0,
     changePct: 0,
     volume: 0,
-    sources: base?.sources ?? { finnhub: null, "alpha-vantage": null, massive: null, yahoo: null, stooq: null },
+    sources: base?.sources ?? { finnhub: null, "alpha-vantage": null, massive: null, yahoo: null, stooq: null, cnbc: null, google: null },
     consensusSource: base?.consensusSource ?? null,
     status: "unavailable",
     diffPct: base?.diffPct ?? null,
