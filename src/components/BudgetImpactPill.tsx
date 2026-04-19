@@ -4,7 +4,7 @@
 import { Wallet } from "lucide-react";
 import { Hint } from "@/components/Hint";
 import { cn } from "@/lib/utils";
-import { AFFORDABILITY_CAP_PCT, type ValidationResult } from "@/lib/gates";
+import { AFFORDABILITY_CAP_PCT, AFFORDABILITY_WARN_PCT, type ValidationResult } from "@/lib/gates";
 
 interface Props {
   result: ValidationResult;
@@ -18,17 +18,20 @@ export function BudgetImpactPill({ result, className, size = "xs" }: Props) {
   if (!b || !Number.isFinite(b.contractCost) || b.contractCost <= 0) return null;
 
   const pct = b.pctOfPortfolio;
-  const tone = b.overBudget
+  // > 5% turns RED ("over-leveraged"), > 10% is the hard block.
+  const tone = pct > AFFORDABILITY_WARN_PCT
     ? "border-bearish/50 bg-bearish/15 text-bearish"
-    : pct > AFFORDABILITY_CAP_PCT * 0.6
+    : pct > 2
       ? "border-warning/50 bg-warning/15 text-warning"
       : "border-bullish/40 bg-bullish/10 text-bullish";
 
   const text = size === "xs" ? "text-[10px]" : "text-[11px]";
 
   const tooltip = b.overBudget
-    ? `This trade would consume ${pct.toFixed(1)}% of your $${b.accountBalance.toLocaleString()} account ($${b.contractCost.toFixed(0)}) — over the ${AFFORDABILITY_CAP_PCT}% per-trade cap.${b.suggestion ? `\n\nSuggestion: ${b.suggestion.title} — ${b.suggestion.detail}` : ""}`
-    : `This trade uses ${pct.toFixed(1)}% of your $${b.accountBalance.toLocaleString()} buying power ($${b.contractCost.toFixed(0)}). Cap: ${AFFORDABILITY_CAP_PCT}%.`;
+    ? `UNAFFORDABLE — this trade would consume ${pct.toFixed(1)}% of your $${b.accountBalance.toLocaleString()} account ($${b.contractCost.toFixed(0)}), over the ${AFFORDABILITY_CAP_PCT}% hard cap.${b.suggestion ? `\n\nSmart Pivot: ${b.suggestion.title} — ${b.suggestion.detail}` : ""}`
+    : pct > AFFORDABILITY_WARN_PCT
+      ? `Over-leveraged: this trade uses ${pct.toFixed(1)}% of your $${b.accountBalance.toLocaleString()} account ($${b.contractCost.toFixed(0)}). Comfort line is ${AFFORDABILITY_WARN_PCT}%, hard cap is ${AFFORDABILITY_CAP_PCT}%.`
+      : `This trade uses ${pct.toFixed(1)}% of your $${b.accountBalance.toLocaleString()} buying power ($${b.contractCost.toFixed(0)}). Cap: ${AFFORDABILITY_CAP_PCT}%.`;
 
   return (
     <Hint label={tooltip}>

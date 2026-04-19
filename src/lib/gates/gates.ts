@@ -1,6 +1,6 @@
 // Pure gate implementations — no React, no I/O, easy to unit test.
 import type { SignalInput, GateResult } from "./types";
-import { AFFORDABILITY_CAP_PCT, SPREAD_SWEET_SPOT } from "./types";
+import { AFFORDABILITY_CAP_PCT, AFFORDABILITY_WARN_PCT, MAX_RISK_PCT, SPREAD_SWEET_SPOT } from "./types";
 
 export function gate1_DataIntegrity(i: SignalInput): GateResult {
   const staleness_s = (Date.now() - i.quoteTimestamp.getTime()) / 1000;
@@ -164,11 +164,15 @@ export function gate7_SafetyExit(i: SignalInput): GateResult {
   };
 }
 
-// ── GATE 8: Affordability (Position Sizing) ──────────────────────────────────
-// Hard cap: a single contract's cost (premium × 100) × contracts must be
-// ≤ AFFORDABILITY_CAP_PCT (5%) of the account balance. Otherwise label
-// "TOO EXPENSIVE" and, when the pick is Grade A, recommend a vertical debit
-// spread sized into the $200–$500 sweet spot.
+// ── GATE 8: Affordability (Position Sizing — the 2% Rule) ───────────────────
+// Two thresholds, both relative to the user's total account:
+//   • MAX_RISK_PCT (2%)        — target per-trade dollar risk ($200 on $10k)
+//   • AFFORDABILITY_CAP_PCT    — HARD BLOCK if a single contract's notional
+//                                cost exceeds this % of account (10%).
+// When blocked we always pivot to a vertical debit spread sized into the
+// $150–$300 sweet spot (≈ MaxRisk on a $10k account). The original Grade-A
+// carve-out is removed: a $4,000 single-leg call on a $10k account is
+// dangerous regardless of how strong the setup looks.
 export function gate8_Affordability(i: SignalInput): GateResult {
   const contracts = Math.max(1, Math.floor(i.contracts ?? 1));
   const premium = Number(i.entryPremium);
@@ -185,54 +189,108 @@ export function gate8_Affordability(i: SignalInput): GateResult {
 
   const contractCost = premium * 100 * contracts;
   const pctOfAccount = (contractCost / account) * 100;
-  const capDollars = (account * AFFORDABILITY_CAP_PCT) / 100;
+  const capDollars   = (account * AFFORDABILITY_CAP_PCT) / 100;
+  const maxRisk      = (account * MAX_RISK_PCT) / 100;
 
+  // ── HARD BLOCK: > 10% of account ──────────────────────────────────────────
   if (pctOfAccount > AFFORDABILITY_CAP_PCT) {
-    // Grade A picks get an actionable spread suggestion to bring cost down.
-    if (i.grade === "A") {
-      // Suggest a width that lands the net debit in the sweet-spot range.
-      // Heuristic: typical debit spread costs ~30-50% of the long premium.
-      // We target a debit ≈ $300 (mid of $200-$500) and back into a width.
-      const targetDebit = Math.min(SPREAD_SWEET_SPOT.max, Math.max(SPREAD_SWEET_SPOT.min, capDollars));
-      const targetPerContract = targetDebit / 100;
-      // Suggest a short-leg roughly 5-10% OTM from the long-leg strike.
-      const widthPct = i.optionType === "CALL" ? 0.05 : -0.05;
-      const shortStrike = Math.round(i.strikePrice * (1 + widthPct));
-      const longLeg = i.strikePrice;
-      return {
-        gate: "AFFORDABILITY", passed: false, status: "BLOCKED",
-        label: "🔴 TOO EXPENSIVE — Spread Suggested",
-        reasoning: `Single ${i.optionType} costs $${contractCost.toFixed(0)} (${pctOfAccount.toFixed(1)}% of $${account.toLocaleString()}) — exceeds the ${AFFORDABILITY_CAP_PCT}% per-trade cap ($${capDollars.toFixed(0)}). This is a Grade A setup, so instead of skipping it, convert to a ${i.optionType === "CALL" ? "Call" : "Put"} Debit Spread: BUY $${longLeg} ${i.optionType} / SELL $${shortStrike} ${i.optionType}. Estimated net debit ≈ $${targetDebit.toFixed(0)} (within the $${SPREAD_SWEET_SPOT.min}–$${SPREAD_SWEET_SPOT.max} sweet spot). You keep the directional thesis at a fraction of the cost — capped upside, but a real, affordable trade.`,
-        suggestion: {
-          kind: "VERTICAL_SPREAD",
-          title: `${i.optionType === "CALL" ? "Call" : "Put"} Debit Spread`,
-          detail: `Buy $${longLeg} / Sell $${shortStrike} · est. net debit ~$${targetPerContract.toFixed(2)}/contract (~$${targetDebit.toFixed(0)} total)`,
-        },
-      };
-    }
+    // Always pivot to a Vertical Debit Spread targeting the user's MaxRisk
+    // ($200 on a $10k account). This caps both cost and downside.
+    const targetDebit = Math.max(SPREAD_SWEET_SPOT.min, Math.min(SPREAD_SWEET_SPOT.max, maxRisk));
+    const targetPerContract = targetDebit / 100;
+    // Suggest a short leg ~5 strikes (≈1%) away — narrow enough to keep the
+    // debit small, wide enough to leave meaningful upside.
+    const widthPct = i.optionType === "CALL" ? 0.011 : -0.011;
+    const shortStrike = Math.round(i.strikePrice * (1 + widthPct));
+    const longLeg = i.strikePrice;
+    const spreadName = i.optionType === "CALL" ? "Bull Call Spread" : "Bear Put Spread";
     return {
       gate: "AFFORDABILITY", passed: false, status: "BLOCKED",
-      label: "🔴 TOO EXPENSIVE",
-      reasoning: `Contract cost $${contractCost.toFixed(0)} = ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account. This breaches the ${AFFORDABILITY_CAP_PCT}% per-trade cap ($${capDollars.toFixed(0)}). Either reduce position size or choose a cheaper expiration / closer-to-the-money strike.`,
+      label: "🔴 UNAFFORDABLE — Pivot to Spread",
+      reasoning:
+        `Single ${i.optionType} costs $${contractCost.toFixed(0)} — that's ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account, blowing past the ${AFFORDABILITY_CAP_PCT}% hard cap ($${capDollars.toFixed(0)}). On a $${account.toLocaleString()} account your MaxRisk per trade is $${maxRisk.toFixed(0)} (the 2% Rule). ` +
+        `Smart Pivot → ${spreadName}: BUY $${longLeg} ${i.optionType} / SELL $${shortStrike} ${i.optionType}. Estimated net debit ≈ $${targetDebit.toFixed(0)} per contract — that caps your total downside at MaxRisk while keeping the directional thesis intact. Capped upside, but a real, affordable trade.`,
       suggestion: {
-        kind: "REDUCE_CONTRACTS",
-        title: "Reduce size or pick a cheaper contract",
-        detail: `Max affordable premium per contract at 1× = $${(capDollars / 100).toFixed(2)}.`,
+        kind: "VERTICAL_SPREAD",
+        title: spreadName,
+        detail: `Buy $${longLeg} / Sell $${shortStrike} · est. net debit ~$${targetPerContract.toFixed(2)}/contract (~$${targetDebit.toFixed(0)} total)`,
       },
     };
   }
 
-  if (pctOfAccount > AFFORDABILITY_CAP_PCT * 0.6) {
+  // ── WARN tier: > 5% of account ────────────────────────────────────────────
+  if (pctOfAccount > AFFORDABILITY_WARN_PCT) {
     return {
       gate: "AFFORDABILITY", passed: true, status: "FLAGGED",
-      label: "🟡 ELEVATED COST",
-      reasoning: `Trade uses ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account ($${contractCost.toFixed(0)}). Within the ${AFFORDABILITY_CAP_PCT}% cap but on the high side — consider sizing down.`,
+      label: "🟡 OVER-LEVERAGED — Size Down",
+      reasoning: `Trade uses ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account ($${contractCost.toFixed(0)}) — above the ${AFFORDABILITY_WARN_PCT}% comfort line. Hard cap is ${AFFORDABILITY_CAP_PCT}% ($${capDollars.toFixed(0)}); MaxRisk per the 2% Rule is $${maxRisk.toFixed(0)}. Consider reducing contract count or choosing a cheaper strike.`,
+    };
+  }
+
+  // ── 2% Rule sweet spot ─────────────────────────────────────────────────────
+  if (pctOfAccount > MAX_RISK_PCT) {
+    return {
+      gate: "AFFORDABILITY", passed: true, status: "APPROVED",
+      label: "🟢 WITHIN BUDGET",
+      reasoning: `Trade cost $${contractCost.toFixed(0)} = ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account. Above the 2% MaxRisk target ($${maxRisk.toFixed(0)}) but well under the ${AFFORDABILITY_WARN_PCT}% caution line.`,
     };
   }
 
   return {
     gate: "AFFORDABILITY", passed: true, status: "APPROVED",
-    label: "🟢 AFFORDABLE",
-    reasoning: `Trade cost $${contractCost.toFixed(0)} = ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account. Well within the ${AFFORDABILITY_CAP_PCT}% per-trade cap.`,
+    label: "🟢 INSIDE 2% RULE",
+    reasoning: `Trade cost $${contractCost.toFixed(0)} = ${pctOfAccount.toFixed(1)}% of your $${account.toLocaleString()} account — inside the 2% MaxRisk target ($${maxRisk.toFixed(0)}).`,
+  };
+}
+
+// ── GATE 9: Date Validator ──────────────────────────────────────────────────
+// Confirms the pick's expiry is a real, future, liquid Friday. If the date
+// has passed or is malformed, the upstream adapter pivots to the nearest
+// monthly — this gate surfaces that pivot to the user. Also flags expiries
+// that fall outside the standard Friday weekly/monthly grid as low-liquidity.
+export function gate9_DateValidator(i: SignalInput): GateResult {
+  const raw = i.expiryDate;
+  if (!raw) {
+    return {
+      gate: "DATE_VALIDATOR", passed: false, status: "WAIT",
+      label: "🟡 NO EXPIRY",
+      reasoning: `Pick has no expiration date attached. Re-scan for the nearest active Friday expiration before trading.`,
+    };
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!m) {
+    return {
+      gate: "DATE_VALIDATOR", passed: false, status: "BLOCKED",
+      label: "🔴 INVALID DATE",
+      reasoning: `Expiry "${raw}" is not a valid YYYY-MM-DD date. Pick has been blocked until a real expiration is supplied.`,
+    };
+  }
+  const expiry = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 16, 0, 0);
+  const now = new Date();
+  const dte = Math.round((expiry.getTime() - now.getTime()) / 86_400_000);
+  if (dte < 0) {
+    return {
+      gate: "DATE_VALIDATOR", passed: false, status: "BLOCKED",
+      label: "🔴 EXPIRED CONTRACT",
+      reasoning: `Expiry ${raw} has already passed (${Math.abs(dte)} day(s) ago). The system pivots to the nearest active Friday expiration automatically — refresh the pick to load it.`,
+    };
+  }
+  // Liquid expirations are Fridays (weeklies) or third-Friday monthlies.
+  const dow = expiry.getDay(); // 5 = Friday
+  if (dow !== 5) {
+    const dayName = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow];
+    return {
+      gate: "DATE_VALIDATOR", passed: true, status: "FLAGGED",
+      label: "🟡 NON-FRIDAY EXPIRY",
+      reasoning: `Expiry ${raw} falls on a ${dayName} — most US options expire Fridays. Only a handful of indices (SPX/SPY/QQQ) trade non-Friday weeklies with real liquidity. Verify the chain has open interest before entering.`,
+    };
+  }
+  // Third-Friday detection (between the 15th and 21st).
+  const dom = expiry.getDate();
+  const isMonthly = dom >= 15 && dom <= 21;
+  return {
+    gate: "DATE_VALIDATOR", passed: true, status: "APPROVED",
+    label: isMonthly ? "🟢 MONTHLY EXPIRY" : "🟢 WEEKLY EXPIRY",
+    reasoning: `Expiry ${raw} is a valid Friday ${dte} day(s) out — ${isMonthly ? "third-Friday monthly (deepest liquidity on most names)" : "standard Friday weekly"}.`,
   };
 }

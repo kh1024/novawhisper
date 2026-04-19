@@ -5,7 +5,7 @@ import { AFFORDABILITY_CAP_PCT } from "./types";
 import {
   gate1_DataIntegrity, gate2_TrendGate, gate3_IntrinsicAudit,
   gate4_ExhaustionFilter, gate5_OrbLock, gate6_IvpGuard, gate7_SafetyExit,
-  gate8_Affordability,
+  gate8_Affordability, gate9_DateValidator,
 } from "./gates";
 
 export function validateSignal(input: SignalInput): ValidationResult {
@@ -20,7 +20,8 @@ export function validateSignal(input: SignalInput): ValidationResult {
     gate5_OrbLock,
     gate6_IvpGuard,
     gate7_SafetyExit,
-    gate8_Affordability,     // NEW — last so the cost message stays loud
+    gate8_Affordability,
+    gate9_DateValidator,     // NEW — confirms expiry is real, future, liquid
   ];
 
   const gateNameByFn = new Map<typeof pipeline[number], string>([
@@ -32,6 +33,7 @@ export function validateSignal(input: SignalInput): ValidationResult {
     [gate6_IvpGuard,         "IVP_GUARD"],
     [gate7_SafetyExit,       "SAFETY_EXIT"],
     [gate8_Affordability,    "AFFORDABILITY"],
+    [gate9_DateValidator,    "DATE_VALIDATOR"],
   ]);
 
   let firstBlock: GateResult | null = null;

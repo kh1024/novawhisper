@@ -80,6 +80,7 @@ export const GATE_ORDER = [
   "IVP_GUARD",
   "SAFETY_EXIT",
   "AFFORDABILITY",
+  "DATE_VALIDATOR",
 ] as const;
 export type GateName = (typeof GATE_ORDER)[number];
 
@@ -91,10 +92,15 @@ export const GATE_LABELS: Record<GateName, string> = {
   ORB_LOCK: "ORB Lock (10:30 EST)",
   IVP_GUARD: "IVP Guard",
   SAFETY_EXIT: "Safety Exit (-30%)",
-  AFFORDABILITY: "Affordability (5% cap)",
+  AFFORDABILITY: "Affordability (10% cap)",
+  DATE_VALIDATOR: "Date Validator",
 };
 
-/** Hard cap: a single trade may not consume more than this % of account. */
-export const AFFORDABILITY_CAP_PCT = 5;
-/** Sweet-spot dollar range Gate 8 nudges Grade-A picks toward via spreads. */
-export const SPREAD_SWEET_SPOT = { min: 200, max: 500 } as const;
+/** HARD BLOCK: a single trade may not consume more than this % of account. */
+export const AFFORDABILITY_CAP_PCT = 10;
+/** WARNING tier: above this %, the budget pill turns red ("over-leveraged"). */
+export const AFFORDABILITY_WARN_PCT = 5;
+/** Max risk per trade as % of account — the 2% Rule. Drives spread sizing. */
+export const MAX_RISK_PCT = 2;
+/** Sweet-spot dollar range Gate 8 nudges expensive picks toward via spreads. */
+export const SPREAD_SWEET_SPOT = { min: 150, max: 300 } as const;
