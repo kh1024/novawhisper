@@ -77,8 +77,8 @@ export function LiveMiniScanner() {
                 s.bias === "bullish" ? "pill-bullish" :
                 s.bias === "bearish" ? "pill-bearish" : "pill-neutral";
               const rankTone =
-                rank.label === "ELITE" || rank.label === "GO NOW" ? "pill-bullish" :
-                rank.label === "PASS" ? "pill-bearish" : "pill-neutral";
+                rank.label === "BUY" ? "pill-bullish" :
+                rank.label === "DON'T BUY" ? "pill-bearish" : "pill-neutral";
               return (
                 <tr key={s.symbol} className="border-b border-border/40 last:border-0 hover:bg-surface/40 transition-colors">
                   <td className="p-3 font-semibold mono">{s.symbol}</td>

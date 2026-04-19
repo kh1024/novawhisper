@@ -23,7 +23,26 @@ import { useSma200 } from "@/lib/sma200";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import { actionFromScore, labelClasses } from "@/lib/finalRank";
 import type { OptionPick } from "@/lib/mockData";
+
+/**
+ * Compute moneyness for a long option vs the live underlying price.
+ * Returns ITM / ATM / OTM with the % distance — used for the inline
+ * moneyness chip on every pick row.
+ */
+function moneynessOf(optionType: "call" | "put", strike: number, spot: number | null) {
+  if (spot == null || !Number.isFinite(spot) || spot <= 0) return null;
+  const diffPct = ((spot - strike) / spot) * 100;          // call: + = ITM
+  const intrinsicPct = optionType === "call" ? diffPct : -diffPct;
+  if (Math.abs(intrinsicPct) < 1) {
+    return { kind: "ATM" as const, pct: intrinsicPct, cls: "border-muted-foreground/40 text-foreground bg-surface/60" };
+  }
+  if (intrinsicPct > 0) {
+    return { kind: "ITM" as const, pct: intrinsicPct, cls: "border-bullish/50 bg-bullish/10 text-bullish" };
+  }
+  return { kind: "OTM" as const, pct: intrinsicPct, cls: "border-warning/50 bg-warning/10 text-warning" };
+}
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
@@ -249,6 +268,10 @@ export default function Dashboard() {
                 sma200: sma.map.get(p.symbol)?.sma200 ?? null,
               });
               const blocked = guard.shouldBlockSignal;
+              const money = moneynessOf(optionType, p.strike, live?.price ?? pickPrice ?? null);
+              // Action label is driven by the score (0–100). Blocked picks
+              // are forced to DON'T BUY so the language stays consistent.
+              const action = blocked ? "DON'T BUY" as const : actionFromScore(p.score);
               return (
               <div
                 key={p.id}
@@ -284,6 +307,19 @@ export default function Dashboard() {
                     } capitalize`}>
                       {p.riskBucket === "safe" ? "Conservative" : p.riskBucket === "mild" ? "Moderate" : p.riskBucket === "lottery" ? "🎲 Lottery" : "Aggressive"}
                     </span>
+                    {money && (
+                      <Hint label={
+                        money.kind === "ITM"
+                          ? `In-the-money by ${Math.abs(money.pct).toFixed(1)}% — strike already has intrinsic value.`
+                          : money.kind === "OTM"
+                          ? `Out-of-the-money by ${Math.abs(money.pct).toFixed(1)}% — needs to move to gain intrinsic value.`
+                          : `At-the-money — strike sits within 1% of spot.`
+                      }>
+                        <span className={`text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${money.cls}`}>
+                          {money.kind} {money.kind !== "ATM" ? `${Math.abs(money.pct).toFixed(1)}%` : ""}
+                        </span>
+                      </Hint>
+                    )}
                     <NovaGuardBadges guard={guard} />
                   </div>
                   <div className={`mono text-[11px] mt-1 font-semibold ${p.bias === "bullish" ? "text-bullish" : p.bias === "bearish" ? "text-bearish" : "text-foreground"}`}>
@@ -295,9 +331,21 @@ export default function Dashboard() {
                   <div className={`mono text-sm font-semibold ${blocked ? "text-muted-foreground line-through" : "text-bullish"}`}>{p.annualized}% ann.</div>
                   <div className="text-[10px] text-muted-foreground">${p.premium} • {p.dte}d</div>
                 </div>
-                <div className="text-right shrink-0 w-12">
+                <div className="text-right shrink-0 w-20">
                   <div className={`mono text-lg font-semibold ${blocked ? "text-muted-foreground" : ""}`}>{p.score}</div>
-                  <div className="text-[10px] text-muted-foreground">Grade {p.confidence}</div>
+                  <Hint label={
+                    action === "BUY"
+                      ? "High conviction — score ≥ 80. Take the trade now."
+                      : action === "WATCHLIST"
+                      ? "Solid setup — score 65–79. Wait for a confirmed entry."
+                      : action === "WAIT"
+                      ? "Mixed signals — score 50–64. Monitor, no action yet."
+                      : "No edge — skip."
+                  }>
+                    <span className={`mt-0.5 inline-block text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${labelClasses(action)}`}>
+                      {action}
+                    </span>
+                  </Hint>
                 </div>
                 {blocked ? (
                   <Hint label={guard.worst?.message ?? "NOVA Guard blocked this signal."}>

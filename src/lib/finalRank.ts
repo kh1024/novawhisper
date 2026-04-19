@@ -18,7 +18,20 @@
 import type { SetupRow } from "./setupScore";
 import type { StrategyDecision } from "./strategySelector";
 
-export type ActionLabel = "ELITE" | "GO NOW" | "GOOD" | "WATCHLIST" | "PASS";
+// Plain-English action language used across the whole app:
+//   BUY        — high conviction, take the trade now
+//   WATCHLIST  — solid setup, wait for a confirmed entry
+//   WAIT       — early / mixed signals, no action yet
+//   DON'T BUY  — no edge or actively negative — skip
+export type ActionLabel = "BUY" | "WATCHLIST" | "WAIT" | "DON'T BUY";
+
+/** Map any 0–100 confidence/rank score to the canonical action label. */
+export function actionFromScore(score: number): ActionLabel {
+  if (score >= 80) return "BUY";
+  if (score >= 65) return "WATCHLIST";
+  if (score >= 50) return "WAIT";
+  return "DON'T BUY";
+}
 
 export interface Penalty {
   /** Short tag used as a chip / log key. */
@@ -202,12 +215,8 @@ function computePenalties(row: SetupRow, decision: StrategyDecision): Penalty[] 
 
 // ── Action Label (Part 7) ───────────────────────────────────────────────────
 function labelFor(rank: number, decision: StrategyDecision): ActionLabel {
-  if (decision.action === "WAIT — no edge") return "PASS";
-  if (rank >= 90) return "ELITE";
-  if (rank >= 80) return "GO NOW";
-  if (rank >= 70) return "GOOD";
-  if (rank >= 60) return "WATCHLIST";
-  return "PASS";
+  if (decision.action === "WAIT — no edge") return "DON'T BUY";
+  return actionFromScore(rank);
 }
 
 // ── Public entry point ──────────────────────────────────────────────────────
@@ -252,10 +261,9 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
 /** Tailwind classes for an Action Label badge. */
 export function labelClasses(label: ActionLabel): string {
   switch (label) {
-    case "ELITE":     return "bg-bullish/20 text-bullish border-bullish/50";
-    case "GO NOW":    return "bg-bullish/10 text-bullish border-bullish/40";
-    case "GOOD":      return "bg-primary/10 text-primary border-primary/40";
-    case "WATCHLIST": return "bg-warning/10 text-warning border-warning/40";
-    case "PASS":      return "bg-muted/40 text-muted-foreground border-border";
+    case "BUY":         return "bg-bullish/20 text-bullish border-bullish/50";
+    case "WATCHLIST":   return "bg-primary/10 text-primary border-primary/40";
+    case "WAIT":        return "bg-warning/10 text-warning border-warning/40";
+    case "DON'T BUY":   return "bg-bearish/15 text-bearish border-bearish/40";
   }
 }
