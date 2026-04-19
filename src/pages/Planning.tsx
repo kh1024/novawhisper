@@ -544,6 +544,10 @@ function WebPicksPanel() {
     });
   }, [allPicks, settings, expiryStatus]);
 
+  // 200-day SMA cache for the long-term trend gate.
+  // MUST be called before any early returns to preserve hook order.
+  const sma = useSma200(symbols);
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-3">
@@ -560,10 +564,6 @@ function WebPicksPanel() {
       </Card>
     );
   }
-
-
-  // 200-day SMA cache for the long-term trend gate.
-  const sma = useSma200(symbols);
 
   // Build per-pick guard evaluation (stale price, intrinsic audit, 200-SMA, etc.)
   const guardForPick = (p: ScoutPick, tier: "safe" | "mild" | "aggressive"): GuardEval =>
