@@ -459,6 +459,22 @@ export default function Scanner() {
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-1.5">
+                              {(() => {
+                                const c = deriveContractFromRow(r);
+                                const isCall = c.optionType === "call";
+                                return (
+                                  <Hint label={`Save ${r.symbol} $${c.strike} ${isCall ? "CALL" : "PUT"} · exp ${c.expiry}`}>
+                                    <span
+                                      className={cn(
+                                        "mono text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap cursor-help",
+                                        isCall ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5",
+                                      )}
+                                    >
+                                      ${c.strike}{isCall ? "C" : "P"}
+                                    </span>
+                                  </Hint>
+                                );
+                              })()}
                               <SaveToPortfolioButton {...deriveContractFromRow(r)} size="xs" />
                               <Button
                                 size="sm"
