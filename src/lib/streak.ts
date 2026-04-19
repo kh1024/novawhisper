@@ -12,3 +12,26 @@ export function computeStreakDays(closes: number[]): number {
   }
   return count;
 }
+
+/**
+ * Wilder-style RSI(14) computed from a tail of daily closes. Pure +
+ * deterministic — given the same closes array it always returns the same
+ * value. Returns 50 (neutral) when there isn't enough history.
+ */
+export function computeRSI14(closes: number[]): number {
+  if (!Array.isArray(closes) || closes.length < 15) return 50;
+  const tail = closes.slice(-15);
+  let gains = 0;
+  let losses = 0;
+  for (let i = 1; i < tail.length; i++) {
+    const diff = tail[i] - tail[i - 1];
+    if (diff > 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+  const avgGain = gains / 14;
+  const avgLoss = losses / 14;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - 100 / (1 + rs);
+  return Math.round(Math.max(0, Math.min(100, rsi)));
+}

@@ -10,8 +10,8 @@ import type { SymbolSma } from "@/lib/sma200";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { validateSignal, type ValidationResult, type SignalInput, type OptionType } from "@/lib/gates";
 import { syncExpiry } from "@/lib/gates/expiryDate";
-import { computeStreakDays } from "@/lib/streak";
-import { ivpFromChain } from "@/lib/ivPercentile";
+import { computeStreakDays, computeRSI14 } from "@/lib/streak";
+import { ivpFromChain, pickAtmContract } from "@/lib/ivPercentile";
 
 interface PickGateOpts {
   pick: ScoutPick;
@@ -77,6 +77,18 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     }
   }
 
+  // ── Real Delta for Gate sizing ──
+  // Prefer the ATM contract's delta from the live chain. Fall back to the old
+  // strategy-based heuristic only when no chain data is present.
+  const heuristicDelta = pick.strategy.toLowerCase().includes("leaps") ? 0.85 : 0.55;
+  let resolvedDelta: number = heuristicDelta;
+  if (chain && chain.length > 0 && livePrice > 0) {
+    const atm = pickAtmContract(chain, livePrice, pick.optionType);
+    if (atm?.delta != null && Number.isFinite(atm.delta)) {
+      resolvedDelta = atm.delta as number;
+    }
+  }
+
   const input: SignalInput = {
     ticker: pick.symbol,
     optionType,
@@ -86,12 +98,12 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     currentPremium: currentPremium ?? entryPremium,
     quoteTimestamp: quote?.updatedAt ? new Date(quote.updatedAt) : new Date(),
     liveFeedPrice: livePrice,
-    rsi14: 55,                                      // unknown — neutral default
+    rsi14: computeRSI14(sma?.closes ?? []),         // real Wilder RSI from daily closes
     streakDays: computeStreakDays(sma?.closes ?? []), // real consecutive green-day count
     sma200: sma?.sma200 ?? livePrice,               // when unknown, no constraint
     ivPercentile: resolvedIvp,
     marketTime: new Date(),
-    delta: pick.strategy.toLowerCase().includes("leaps") ? 0.85 : 0.55,
+    delta: resolvedDelta,
     accountBalance: accountBalance ?? 0,
     contracts: contracts ?? 1,
     grade: pick.grade,
