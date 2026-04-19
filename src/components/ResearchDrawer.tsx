@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, FileText, Youtube, TrendingUp, Newspaper, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useMemo, useState } from "react";
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { ComposedChart, Area, Line, ReferenceLine, ReferenceDot, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useLiveQuotes, useOptionsChain, statusMeta, type OptionContract } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,7 +40,7 @@ const SYMPATHY_MAP: Record<string, string[]> = {
 function genSeries(symbol: string, base: number, n = 60) {
   let h = 0;
   for (let i = 0; i < symbol.length; i++) h = (h * 31 + symbol.charCodeAt(i)) >>> 0;
-  const out: { d: number; v: number }[] = [];
+  const out: { d: number; v: number; sma?: number }[] = [];
   let v = base * 0.92;
   for (let i = 0; i < n; i++) {
     h = (h * 1664525 + 1013904223) >>> 0;
@@ -49,7 +49,26 @@ function genSeries(symbol: string, base: number, n = 60) {
   }
   // anchor end to current spot
   out[out.length - 1].v = +base.toFixed(2);
+  // 20-period simple moving average — shown as a reference trend line
+  const window = Math.min(20, Math.max(5, Math.floor(n / 3)));
+  for (let i = 0; i < out.length; i++) {
+    const start = Math.max(0, i - window + 1);
+    let sum = 0;
+    for (let j = start; j <= i; j++) sum += out[j].v;
+    out[i].sma = +(sum / (i - start + 1)).toFixed(2);
+  }
   return out;
+}
+
+/** Min/max bookmarks so we can pin them on the chart. */
+function seriesExtents(s: { d: number; v: number }[]) {
+  if (!s.length) return null;
+  let lo = s[0], hi = s[0];
+  for (const p of s) {
+    if (p.v < lo.v) lo = p;
+    if (p.v > hi.v) hi = p;
+  }
+  return { lo, hi };
 }
 
 /** Pick top scored contracts for the drawer's "Picks" tab. */
@@ -233,26 +252,116 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                   </AlertDescription>
                 </Alert>
               )}
-              {/* Chart */}
-              <Card className="glass-card p-4">
-                <div className="text-xs text-muted-foreground mb-2">Price (60d, anchored to live spot)</div>
-                <div className="h-40">
-                  {q ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={series}>
-                        <Line type="monotone" dataKey="v" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                        <XAxis dataKey="d" hide />
-                        <YAxis hide domain={["auto", "auto"]} />
-                        <Tooltip
-                          contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <Skeleton className="h-full w-full" />
-                  )}
-                </div>
-              </Card>
+              {/* Chart — gradient area + 20-period MA + hi/lo bookmarks */}
+              {(() => {
+                const ext = seriesExtents(series);
+                const isUp = q ? (q.changePct ?? 0) >= 0 : true;
+                const stroke = isUp ? "hsl(var(--bullish))" : "hsl(var(--bearish))";
+                const gradId = `priceFill-${symbol}-${isUp ? "up" : "dn"}`;
+                const last = q?.price ?? series[series.length - 1]?.v ?? 0;
+                const change = q?.change ?? 0;
+                const changePct = q?.changePct ?? 0;
+                return (
+                  <Card className="glass-card p-4 overflow-hidden">
+                    <div className="flex items-end justify-between mb-3 gap-2 flex-wrap">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Price · 60d</div>
+                        <div className="flex items-baseline gap-2 mt-0.5">
+                          <span className="mono text-2xl font-semibold">${last.toFixed(2)}</span>
+                          <span className={`mono text-xs font-semibold ${isUp ? "text-bullish" : "text-bearish"}`}>
+                            {isUp ? "▲" : "▼"} {Math.abs(change).toFixed(2)} ({Math.abs(changePct).toFixed(2)}%)
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5 text-[10px]">
+                        {ext && (
+                          <>
+                            <span className="px-1.5 py-0.5 rounded border border-bullish/40 bg-bullish/10 text-bullish font-mono">
+                              H ${ext.hi.v.toFixed(2)}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded border border-bearish/40 bg-bearish/10 text-bearish font-mono">
+                              L ${ext.lo.v.toFixed(2)}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded border border-border bg-surface/60 text-muted-foreground font-mono">
+                              SMA20
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-48">
+                      {q ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={series} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                            <defs>
+                              <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
+                                <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} opacity={0.35} />
+                            <XAxis dataKey="d" hide />
+                            <YAxis
+                              domain={["auto", "auto"]}
+                              orientation="right"
+                              width={48}
+                              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <Tooltip
+                              contentStyle={{
+                                background: "hsl(var(--popover))",
+                                border: "1px solid hsl(var(--border))",
+                                borderRadius: 8,
+                                fontSize: 12,
+                              }}
+                              labelFormatter={(d) => `Day ${Number(d) + 1}`}
+                              formatter={(value: number, name) =>
+                                [`$${Number(value).toFixed(2)}`, name === "sma" ? "SMA20" : "Price"]
+                              }
+                            />
+                            <ReferenceLine y={last} stroke={stroke} strokeDasharray="4 4" strokeOpacity={0.55} />
+                            <Area
+                              type="monotone"
+                              dataKey="v"
+                              stroke="none"
+                              fill={`url(#${gradId})`}
+                              isAnimationActive={false}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="sma"
+                              stroke="hsl(var(--muted-foreground))"
+                              strokeWidth={1}
+                              strokeDasharray="3 3"
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="v"
+                              stroke={stroke}
+                              strokeWidth={2.25}
+                              dot={false}
+                              isAnimationActive={false}
+                            />
+                            {ext && (
+                              <>
+                                <ReferenceDot x={ext.hi.d} y={ext.hi.v} r={3} fill="hsl(var(--bullish))" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                                <ReferenceDot x={ext.lo.d} y={ext.lo.v} r={3} fill="hsl(var(--bearish))" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                              </>
+                            )}
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <Skeleton className="h-full w-full" />
+                      )}
+                    </div>
+                  </Card>
+                );
+              })()}
 
               {/* Live indicators row */}
               <div className="grid grid-cols-4 gap-2">
