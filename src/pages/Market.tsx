@@ -147,6 +147,17 @@ export default function Market() {
       .slice(0, 8);
   }, [scout]);
 
+  // Live open interest per pick
+  const interestMap = useOptionInterest(hotOptions);
+  // Re-rank by OI when available — falls back to grade order otherwise
+  const hotOptionsRanked = useMemo(() => {
+    return [...hotOptions].sort((a, b) => {
+      const oa = interestMap.get(pickInterestKey(a))?.oi ?? -1;
+      const ob = interestMap.get(pickInterestKey(b))?.oi ?? -1;
+      return ob - oa;
+    });
+  }, [hotOptions, interestMap]);
+
   // Search suggestions
   const searchResults = search.trim().length >= 1
     ? TICKER_UNIVERSE.filter((u) =>
