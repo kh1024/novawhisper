@@ -761,19 +761,21 @@ Deno.serve(async (req) => {
 
     const useAlpha = verifyAll || symbols.length === 1;
 
-    // Yahoo's quote endpoint comfortably handles ~50 symbols per call. Chunk
-    // larger universes so we don't get truncated server-side.
+    // Yahoo (batched 50 at a time) + StockData (one batched call, up to 100
+    // tickers) fired in parallel. StockData has a 100/day budget; the batch
+    // function self-throttles via kv_cache and is a no-op off-hours.
     const yahooMap = new Map<string, SourceQuote>();
-    for (let i = 0; i < symbols.length; i += 50) {
-      const chunk = symbols.slice(i, i + 50);
-      const part = await fetchYahooBatch(chunk);
-      for (const [k, v] of part) yahooMap.set(k, v);
-    }
+    const yahooP = (async () => {
+      for (let i = 0; i < symbols.length; i += 50) {
+        const chunk = symbols.slice(i, i + 50);
+        const part = await fetchYahooBatch(chunk);
+        for (const [k, v] of part) yahooMap.set(k, v);
+      }
+    })();
+    const sdP = fetchStockDataBatch(symbols.slice(0, 100));
+    const [, sdMap] = await Promise.all([yahooP, sdP]);
 
-    // Bulk requests were fanning out too many provider calls in parallel and
-    // hitting 429s, which surfaced as "No data" in the UI. Keep a small,
-    // stable concurrency here so ETF/watchlist screens stay populated.
-    const results = await mapWithConcurrency(symbols, BATCH_CONCURRENCY, (sym) => getQuote(sym, useAlpha, yahooMap));
+    const results = await mapWithConcurrency(symbols, BATCH_CONCURRENCY, (sym) => getQuote(sym, useAlpha, yahooMap, sdMap));
     return new Response(JSON.stringify({ quotes: results, fetchedAt: new Date().toISOString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
