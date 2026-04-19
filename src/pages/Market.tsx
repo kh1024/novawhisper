@@ -53,7 +53,7 @@ function MoverRow({ q, onClick }: { q: VerifiedQuote; onClick: () => void }) {
   );
 }
 
-function OptionPickRow({ p, onClick }: { p: ScoutPick; onClick: () => void }) {
+function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; oi?: number }) {
   const isBull = p.bias === "bullish" || p.optionType === "call" || p.optionType === "call_spread";
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
@@ -80,6 +80,14 @@ function OptionPickRow({ p, onClick }: { p: ScoutPick; onClick: () => void }) {
       </div>
       <div className="text-[11px] text-muted-foreground line-clamp-2">{p.thesis}</div>
       <div className="flex items-center gap-2 text-[10px] flex-wrap">
+        {oi != null && oi > 0 && (
+          <span
+            className="font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/30 mono"
+            title="Open interest — total outstanding contracts at this strike/expiry"
+          >
+            OI {fmtOI(oi)}
+          </span>
+        )}
         {p.expectedReturn && <span className="text-bullish font-semibold">+{p.expectedReturn}</span>}
         {p.probability && <span className="text-muted-foreground">{p.probability} prob</span>}
         {p.premiumEstimate && <span className="text-muted-foreground mono">{p.premiumEstimate}</span>}
