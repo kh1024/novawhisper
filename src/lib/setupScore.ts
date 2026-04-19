@@ -10,7 +10,7 @@ import {
   detectTimeState, inferRegime, adjustForRegime, scoreToGrade,
   type ConfidenceGrade, type MarketRegime,
 } from "./novaBrain";
-import { computeStreakDays } from "./streak";
+import { computeStreakDays, computeRSI14 } from "./streak";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
