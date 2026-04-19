@@ -270,8 +270,8 @@ export default function Dashboard() {
               const blocked = guard.shouldBlockSignal;
               const money = moneynessOf(optionType, p.strike, live?.price ?? pickPrice ?? null);
               // Action label is driven by the score (0–100). Blocked picks
-              // are forced to DON'T BUY so the language stays consistent.
-              const action = blocked ? "DON'T BUY" as const : actionFromScore(p.score);
+              // are forced to AVOID so the language stays consistent.
+              const action = blocked ? "AVOID" as const : actionFromScore(p.score);
               return (
               <div
                 key={p.id}
