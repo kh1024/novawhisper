@@ -26,6 +26,18 @@ import { PickExpiryChips } from "@/components/PickExpiryChips";
 import { evaluateGuards, type GuardEval } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
+import { NovaFilterBar } from "@/components/NovaFilterBar";
+import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
+
+// Parse a premium-estimate string ("$2.50", "$1.20–$1.50", "≈$3") down to the
+// lowest dollar value so the budget gate (premium × 100 ≤ budget) is generous.
+function parsePremiumEstimate(s?: string | null): number | null {
+  if (!s) return null;
+  const nums = s.match(/\d+(?:\.\d+)?/g);
+  if (!nums || nums.length === 0) return null;
+  const v = Math.min(...nums.map(Number));
+  return Number.isFinite(v) ? v : null;
+}
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
@@ -548,6 +560,9 @@ function WebPicksPanel() {
   // MUST be called before any early returns to preserve hook order.
   const sma = useSma200(symbols);
 
+  // NOVA AI filter (must also live above early returns).
+  const [novaSpec] = useNovaFilter();
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-3">
@@ -578,14 +593,38 @@ function WebPicksPanel() {
       sma200: sma.map.get(p.symbol)?.sma200 ?? null,
     });
 
-  // Hide timed-out picks per tier.
+  // NOVA filter spec already pulled above (must live before early returns).
+  const todayMs = Date.now();
+  const dteOf = (iso?: string | null): number | null => {
+    if (!iso) return null;
+    const d = new Date(iso + "T00:00:00Z").getTime();
+    if (Number.isNaN(d)) return null;
+    return Math.max(0, Math.round((d - todayMs) / 86_400_000));
+  };
+
+  // Hide timed-out picks per tier + apply NOVA AI filter.
   const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
     const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
-    return (src ?? []).filter((p) => !expiryStatus.get(pickKey(p))?.isTimedOut);
+    return (src ?? []).filter((p) => {
+      if (expiryStatus.get(pickKey(p))?.isTimedOut) return false;
+      const premium = parsePremiumEstimate(p.premiumEstimate);
+      return pickMatchesFilter({
+        symbol: p.symbol,
+        strategy: p.strategy,
+        riskBucket: tier,
+        bias: p.bias,
+        optionType: p.optionType as "call" | "put",
+        expiration: p.expiry,
+        dte: dteOf(p.expiry),
+        premium,
+      }, novaSpec);
+    });
   };
 
   return (
     <div className="space-y-4">
+      <NovaFilterBar />
+
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Live web scout · Firecrawl + Nova</div>
