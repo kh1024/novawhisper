@@ -61,15 +61,18 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     : (parsedPremium ?? 0);
 
   // ── Real IVP for Gate 6 ──
-  // Prefer a chain-derived IVP using the ATM contract's IV vs. the chain's
-  // IV envelope (52-week range when available). If no chain is present we
-  // fall back to neutral 50 — never the upstream PRNG estimate.
-  const chainIvp = ivpFromChain(chain ?? null, livePrice, pick.optionType);
+  // Priority:
+  //   1. Caller-supplied `ivPercentile` (e.g. true 52-week IVP from
+  //      iv_history when ≥60 samples exist — see useResolvedIvp below).
+  //   2. Chain-envelope IVP (ATM IV vs. live chain min/max).
+  //   3. Neutral 50 with a one-shot warning.
+  const callerIvpValid = ivPercentile != null && Number.isFinite(ivPercentile);
+  const chainIvp = callerIvpValid ? null : ivpFromChain(chain ?? null, livePrice, pick.optionType);
   let resolvedIvp: number;
-  if (chainIvp) {
+  if (callerIvpValid) {
+    resolvedIvp = ivPercentile as number;
+  } else if (chainIvp) {
     resolvedIvp = chainIvp.ivp;
-  } else if (ivPercentile != null && Number.isFinite(ivPercentile)) {
-    resolvedIvp = ivPercentile;
   } else {
     resolvedIvp = 50;
     if (typeof console !== "undefined") {
