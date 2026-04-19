@@ -2,15 +2,16 @@
 // Event-risk cards (Geopolitics, Political Posts, Fed/Rates, Earnings) are
 // derived live from the news feed and are clickable — they open a dialog
 // listing every matched headline with a direct link to the source article.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { motion, type Variants } from "framer-motion";
-import { Activity, ShieldCheck, TrendingUp, Info, Globe2, Megaphone, Landmark, BarChart3, ExternalLink, Newspaper } from "lucide-react";
+import { Activity, ShieldCheck, TrendingUp, Info, Globe2, Megaphone, Landmark, BarChart3, ExternalLink, Newspaper, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { MARKET_REGIME } from "@/lib/mockData";
 import { useEventRiskSignals, type EventRiskSignal, type EventRiskMatch } from "@/lib/sentimentSignals";
+import { supabase } from "@/integrations/supabase/client";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
