@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Link } from "react-router-dom";
 import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
 import { Hint } from "@/components/Hint";
 import { getMockPicks, UPCOMING_EVENTS, TICKER_UNIVERSE } from "@/lib/mockData";
@@ -126,23 +127,34 @@ export default function Dashboard() {
         : singleLegMock.filter((p) => p.riskBucket === riskTab);
     }
 
-    return pool
-      .filter((p) => pickMatchesFilter({
-        symbol: p.symbol,
-        strategy: p.strategy,
-        riskBucket: p.riskBucket,
-        bias: p.bias,
-        optionType: p.strategy === "long-put" || p.strategy === "leaps-put" ? "put" : "call",
-        expiration: p.expiration,
-        dte: p.dte,
-        premium: p.premium,
-        score: p.score,
-        annualized: p.annualized,
-        earningsInDays: p.earningsInDays ?? null,
-      }, novaSpec))
-      .filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget)
-      .slice(0, novaActive ? 12 : 6);
+    const filtered = pool.filter((p) => pickMatchesFilter({
+      symbol: p.symbol,
+      strategy: p.strategy,
+      riskBucket: p.riskBucket,
+      bias: p.bias,
+      optionType: p.strategy === "long-put" || p.strategy === "leaps-put" ? "put" : "call",
+      expiration: p.expiration,
+      dte: p.dte,
+      premium: p.premium,
+      score: p.score,
+      annualized: p.annualized,
+      earningsInDays: p.earningsInDays ?? null,
+    }, novaSpec));
+
+    // Capital-fit: prefer contracts that fit the per-trade cap. If none in the
+    // bucket fit (common at high prices or with a tiny budget), fall back to
+    // the cheapest available — sorted by cost — so the bucket is never empty.
+    // Each over-budget row still shows the alt-ticker chip + "over budget" note.
+    const fits = filtered.filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget);
+    const overBudget = filtered
+      .filter((p) => !(Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget))
+      .sort((a, b) => (a.premium ?? Infinity) - (b.premium ?? Infinity));
+    return (fits.length > 0 ? fits : overBudget).slice(0, novaActive ? 12 : 6);
   }, [allPicks, riskTab, novaSpec, novaActive, scout, budget]);
+
+  // True only when EVERY pick the user sees is over their per-trade cap.
+  const allOverBudget = picks.length > 0
+    && picks.every((p) => !Number.isFinite(p.premium) || p.premium <= 0 || p.premium * 100 > budget);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
@@ -282,6 +294,11 @@ export default function Dashboard() {
           </div>
           {picks.length === 0 && (
             <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
+          )}
+          {allOverBudget && (
+            <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[11px] leading-snug">
+              No {riskTab} contracts fit your <span className="font-mono">${budget.toLocaleString()}</span> per-trade cap right now — showing the cheapest options below. Each row suggests a budget-friendly alt ticker. Adjust capital/risk in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
+            </div>
           )}
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
