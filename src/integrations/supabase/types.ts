@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      kv_cache: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       learning_weights: {
         Row: {
           avg_return: number | null
