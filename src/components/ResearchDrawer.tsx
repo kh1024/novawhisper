@@ -518,6 +518,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                   })}
                 </TabsContent>
 
+                <TabsContent value="fundamentals" className="mt-4">
+                  <FundamentalsPanel symbol={symbol} spotPrice={q?.price ?? null} />
+                </TabsContent>
+
+                <TabsContent value="insiders" className="mt-4">
+                  <InsiderActivityPanel symbol={symbol} />
+                </TabsContent>
+
                 <TabsContent value="sym" className="mt-4 space-y-2">
                   <div className="text-xs text-muted-foreground mb-2">
                     Related plays moving with {symbol}
