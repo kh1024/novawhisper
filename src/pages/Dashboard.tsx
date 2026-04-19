@@ -346,24 +346,10 @@ export default function Dashboard() {
           )}
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
-            {picks.map((p) => {
+            {visiblePicks.map(({ p, guard, blocked, optionType, live, pickPrice }) => {
               const isPut = p.strategy === "long-put" || p.strategy === "leaps-put";
               const isLeaps = p.strategy === "leaps-call" || p.strategy === "leaps-put";
-              const optionType = isPut ? "put" : "call";
               const direction = "long" as const;
-              const live = quoteMap.get(p.symbol);
-              const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
-              const guard = evaluateGuards({
-                symbol: p.symbol,
-                pickPrice,
-                livePrice: live?.price ?? null,
-                riskBucket: p.riskBucket,
-                optionType,
-                direction,
-                strike: p.strike,
-                sma200: sma.map.get(p.symbol)?.sma200 ?? null,
-              });
-              const blocked = guard.shouldBlockSignal;
               const money = moneynessOf(optionType, p.strike, live?.price ?? pickPrice ?? null);
               // Action label is driven by the score (0–100). Blocked picks
               // are forced to AVOID so the language stays consistent.
