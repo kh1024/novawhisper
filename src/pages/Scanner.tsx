@@ -444,7 +444,7 @@ export default function Scanner() {
                 <tbody>
                   {filtered.map((r) => {
                     const { cls: bcls, Icon: BIcon } = biasMeta(r.bias);
-                    const ready = readinessMeta(r.readiness);
+                    // (readiness label is replaced by Final Rank column below)
                     const isOpen = expanded === r.symbol;
                     const exp = expiryStatus.get(`scanner:${r.symbol}`);
                     const baseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
