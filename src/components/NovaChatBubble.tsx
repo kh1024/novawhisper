@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/lib/settings";
 import { toast } from "sonner";
+import { Hint } from "@/components/Hint";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -189,13 +190,17 @@ export function NovaChatBubble() {
             </div>
             <div className="flex items-center gap-1">
               {messages.length > 0 && (
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clear} title="Clear chat">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                <Hint label="Clear this conversation">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={clear} aria-label="Clear chat">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </Hint>
               )}
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
+              <Hint label="Close Nova chat">
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setOpen(false)} aria-label="Close">
+                  <X className="h-4 w-4" />
+                </Button>
+              </Hint>
             </div>
           </div>
 
@@ -253,14 +258,17 @@ export function NovaChatBubble() {
               className="resize-none min-h-[40px] max-h-32 text-sm"
               disabled={sending}
             />
-            <Button
-              size="icon"
-              onClick={send}
-              disabled={sending || !input.trim()}
-              className="h-10 w-10 flex-shrink-0"
-            >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
+            <Hint label={sending ? "Nova is thinking…" : "Send message (Enter)"}>
+              <Button
+                size="icon"
+                onClick={send}
+                disabled={sending || !input.trim()}
+                className="h-10 w-10 flex-shrink-0"
+                aria-label="Send"
+              >
+                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </Hint>
           </div>
         </div>
       )}
