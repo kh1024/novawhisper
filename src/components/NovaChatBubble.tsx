@@ -163,12 +163,13 @@ export function NovaChatBubble() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-2xl shadow-primary/40 hover:scale-105 transition-transform flex items-center justify-center group"
+          style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
+          className="fixed right-3 sm:right-5 sm:bottom-5 z-50 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-transform flex items-center justify-center group"
           aria-label="Ask Nova"
         >
-          <Sparkles className="h-6 w-6" />
+          <Sparkles className="h-5 w-5 sm:h-6 sm:w-6" />
           <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-bullish ring-2 ring-background animate-pulse" />
-          <span className="absolute right-16 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md bg-popover text-popover-foreground border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <span className="hidden sm:inline absolute right-16 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md bg-popover text-popover-foreground border border-border text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             Ask Nova
           </span>
         </button>
@@ -176,7 +177,10 @@ export function NovaChatBubble() {
 
       {/* Panel */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-50 w-[380px] max-w-[calc(100vw-2.5rem)] h-[560px] max-h-[calc(100vh-2.5rem)] rounded-xl border border-border bg-popover/95 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden">
+        <div
+          style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+          className="fixed right-3 left-3 sm:left-auto sm:right-5 sm:bottom-5 z-50 w-auto sm:w-[380px] sm:max-w-[calc(100vw-2.5rem)] h-[70vh] sm:h-[560px] max-h-[calc(100vh-5rem)] rounded-xl border border-border bg-popover/95 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden"
+        >
           {/* Header */}
           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-gradient-to-r from-primary/10 to-transparent">
             <div className="flex items-center gap-2">

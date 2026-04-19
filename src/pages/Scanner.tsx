@@ -288,7 +288,7 @@ export default function Scanner() {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="p-4 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
+      <div className="p-3 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="min-w-0">
@@ -324,13 +324,13 @@ export default function Scanner() {
             { k: "WATCHLIST", v: counts.WATCHLIST, sub: "rank 60–69 · monitor",        cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
             { k: "PASS",      v: counts.PASS,     sub: "no edge",                     cls: "border-border text-muted-foreground", Icon: AlertTriangle },
           ].map((c) => (
-            <Card key={c.k} className={cn("glass-card p-4 border", c.cls)}>
+            <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">{c.k}</div>
-                <c.Icon className="h-4 w-4 opacity-70" />
+                <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">{c.k}</div>
+                <c.Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 opacity-70" />
               </div>
-              <div className="mono text-3xl font-semibold mt-1">{c.v}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">{c.sub}</div>
+              <div className="mono text-2xl sm:text-3xl font-semibold mt-1">{c.v}</div>
+              <div className="text-[10px] sm:text-[11px] text-muted-foreground mt-0.5 line-clamp-1 sm:line-clamp-none">{c.sub}</div>
             </Card>
           ))}
         </div>

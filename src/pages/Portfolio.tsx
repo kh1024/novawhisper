@@ -164,7 +164,7 @@ export default function Portfolio() {
   }, [open, closed, quoteMap, settings, simOffsets]);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-3 sm:space-y-6 sm:p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-muted-foreground">
