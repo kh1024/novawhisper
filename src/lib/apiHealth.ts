@@ -5,11 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 // Importing this module installs the one-time invoke instrumentation that
 // powers the rolling 60s request counter shown next to each source.
 import { getCount60s, subscribe } from "@/lib/requestRate";
+import { areAnyDisabled, subscribeDisabled } from "@/lib/disabledFunctions";
 
 export interface SourceHealth {
   name: string;
   description: string;
-  status: "ok" | "degraded" | "down";
+  status: "ok" | "degraded" | "down" | "off";
   latencyMs: number | null;
   detail: string;
   /** Edge-function names that contribute to this row's request count. */
@@ -69,14 +70,28 @@ export function useApiHealth() {
       ]);
       const toStatus = (r: { ok: boolean; ms: number }) =>
         !r.ok ? "down" : r.ms > 4000 ? "degraded" : "ok";
-      return [
+      const rows: SourceHealth[] = [
         { name: "Quotes (Finnhub + Alpha Vantage + Massive)", description: "Live verified prices — freshest-timestamp wins", status: toStatus(quotes),  latencyMs: quotes.ms,  detail: quotes.detail, functions: ["quotes-fetch"] },
         { name: "Massive (Options + Quotes backbone)",        description: "Throttled to 75 req/s/instance to stay under plan limits", status: toStatus(options), latencyMs: options.ms, detail: options.detail, functions: ["quotes-fetch", "options-fetch"] },
         { name: "Market News (Finnhub)",                      description: "Sentiment + headlines feed",                     status: toStatus(news),    latencyMs: news.ms,    detail: news.detail,    functions: ["news-fetch"] },
         { name: "Lovable AI Gateway",                         description: "Nova explanations",                              status: "ok",              latencyMs: null,       detail: "Routed via gateway — no key needed", functions: ["nova-chat", "ask-nova"] },
       ];
+      // Mark anything the user has disabled so the dot/label reads "off"
+      // instead of "down" (the ping fails synthetically on disabled fns).
+      return rows.map((r) =>
+        areAnyDisabled(r.functions)
+          ? { ...r, status: "off" as const, latencyMs: null, detail: "Disabled in Settings — no requests sent" }
+          : r,
+      );
     },
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
+}
+
+/** Re-renders when any function's disabled flag flips. */
+export function useDisabledFunctionsTick(): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => subscribeDisabled(() => setTick((n) => n + 1)), []);
+  return tick;
 }
