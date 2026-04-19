@@ -70,9 +70,7 @@ export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props
             )}
           </div>
           <div className="font-mono text-xs">
-            {pick.symbol} ${pick.strike}
-            {pick.strikeShort ? `/${pick.strikeShort}` : ""} {pick.optionType.toUpperCase()} ·{" "}
-            {pick.expiry}
+            {pick.symbol} ${pick.strike} {pick.optionType.toUpperCase()} · {pick.expiry}
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
