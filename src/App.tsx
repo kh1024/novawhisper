@@ -18,6 +18,7 @@ const Patterns = lazy(() => import("./pages/Patterns"));
 const Market = lazy(() => import("./pages/Market"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Strategy = lazy(() => import("./pages/Strategy"));
+const Performance = lazy(() => import("./pages/Performance"));
 const Landing = lazy(() => import("./pages/Landing"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/planning" element={<Planning />} />
               <Route path="/strategy" element={<Strategy />} />
+              <Route path="/performance" element={<Performance />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />
