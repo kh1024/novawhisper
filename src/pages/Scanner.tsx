@@ -154,6 +154,7 @@ export default function Scanner() {
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [maxLossBudget] = useBudget();
 
   const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
