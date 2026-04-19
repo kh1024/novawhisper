@@ -159,26 +159,40 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{w.symbol}</span>
                     <TickerPrice symbol={w.symbol} showChange />
-                    {w.strategy && (
-                      <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
-                        {w.strategy.replace(/-/g, " ")}
-                      </Badge>
-                    )}
-                    {w.tier && (
-                      <span className="pill pill-neutral text-[10px] capitalize">{w.tier}</span>
-                    )}
                     {w.source && (
                       <span className="text-[9px] uppercase tracking-widest text-muted-foreground/70">
                         from {w.source}
                       </span>
                     )}
                   </div>
-                  <div className="mono text-[11px] mt-1 font-semibold text-foreground/80">
-                    {w.strike ? `$${w.strike} ${isPut ? "PUT" : w.option_type === "call" ? "CALL" : w.option_type.toUpperCase()}` : w.option_type.toUpperCase()}
-                    {w.expiry ? ` · exp ${w.expiry}` : ""}
-                  </div>
+                  {(() => {
+                    const timing = timingLabel(v?.action, v?.status);
+                    const biasText = w.bias === "bullish" ? "Bullish" : w.bias === "bearish" ? "Bearish" : "Neutral";
+                    const biasCls = w.bias === "bullish" ? "text-bullish" : w.bias === "bearish" ? "text-bearish" : "text-foreground";
+                    return (
+                      <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 text-[11px] leading-tight">
+                        <div>
+                          <span className="text-muted-foreground">Bias:</span>{" "}
+                          <span className={`font-semibold ${biasCls}`}>{biasText}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Timing:</span>{" "}
+                          <span className={`font-semibold ${timing.cls}`}>{timing.label}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Risk:</span>{" "}
+                          <span className="font-semibold text-foreground">{riskLabel(w.tier)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Contract:</span>{" "}
+                          <span className="font-semibold mono text-foreground">{contractLabel(w.strike, w.option_type)}</span>
+                          {w.expiry ? <span className="text-muted-foreground"> · {w.expiry}</span> : null}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {w.thesis && (
-                    <div className="text-xs text-muted-foreground truncate mt-0.5">{w.thesis}</div>
+                    <div className="text-xs text-muted-foreground truncate mt-1">{w.thesis}</div>
                   )}
                 </div>
 
