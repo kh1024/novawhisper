@@ -180,15 +180,29 @@ Deno.serve(async (req) => {
     if (expirationLte) params.set("expiration_date.lte", expirationLte);
     const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}?${params}`;
 
-    const r = await fetch(url, {
-      headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
-    });
-    if (!r.ok) {
-      const text = await r.text().catch(() => "");
-      console.warn(`[massive options] ${underlying} HTTP ${r.status}: ${text}`);
+    // Retry transient upstream errors (502/503/504) with short exponential
+    // backoff — Massive occasionally hiccups for ~1s and surfacing those to
+    // the UI as red errors is misleading.
+    const TRANSIENT = new Set([502, 503, 504]);
+    let r: Response | null = null;
+    let lastText = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(url, {
+        headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
+      });
+      if (r.ok || !TRANSIENT.has(r.status)) break;
+      lastText = await r.text().catch(() => "");
+      console.warn(`[massive options] ${underlying} HTTP ${r.status} (attempt ${attempt + 1}/3) — backing off`);
+      // 250ms, 750ms — total <1.1s extra latency in the worst case
+      await new Promise((res) => setTimeout(res, 250 * (attempt === 0 ? 1 : 3)));
+    }
+    if (!r || !r.ok) {
+      const text = lastText || (r ? await r.text().catch(() => "") : "");
+      const status = r?.status ?? 502;
+      console.warn(`[massive options] ${underlying} HTTP ${status} after retries: ${text}`);
       return new Response(
-        JSON.stringify({ error: `Massive HTTP ${r.status}`, detail: text, underlying }),
-        { status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({ error: `Massive HTTP ${status}`, detail: text, underlying }),
+        { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const d = await r.json();
