@@ -38,6 +38,13 @@ async function ping(fn: string, body: Record<string, unknown>): Promise<{ ms: nu
     const { data, error } = await supabase.functions.invoke(fn, { body });
     const ms = Math.round(performance.now() - t0);
     if (error) return { ms, ok: false, detail: error.message };
+    if ((data as { ok?: boolean; degraded?: boolean })?.ok === false) {
+      return {
+        ms,
+        ok: false,
+        detail: (data as { error?: string; detail?: string }).detail || (data as { error?: string }).error || "upstream degraded",
+      };
+    }
     const count =
       (data as { quotes?: unknown[]; contracts?: unknown[]; items?: unknown[] })?.quotes?.length ??
       (data as { contracts?: unknown[] })?.contracts?.length ??
