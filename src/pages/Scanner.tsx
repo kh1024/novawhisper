@@ -404,20 +404,19 @@ export default function Scanner() {
   // (labelFor + RowLabel are declared earlier so the filter useMemo can use them.)
 
 
+  // Summary counts MIRROR the filtered/visible dataset so the cards at the top
+  // can never disagree with the rows below them. Filter active? Counts shrink.
   const counts = useMemo(() => {
-    const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
-    for (const r of rows) {
-      const l = labelFor(r);
-      if (l === "BUY NOW") tally["BUY NOW"]++;
-      else if (l === "WATCHLIST") tally.WATCHLIST++;
-      else if (l === "WAIT") tally.WAIT++;
-      else if (l === "EXIT") tally.EXIT++;
-      else tally.AVOID++; // AVOID + BLOCKED
-      if (r.warnings.length > 0) tally.warnings++;
+    const tally: Record<Verdict, number> = { "Buy Now": 0, Watchlist: 0, Wait: 0, Avoid: 0 };
+    for (const r of filtered) {
+      const v = verdictByRow.get(r.symbol)?.verdict ?? "Wait";
+      tally[v]++;
     }
     return tally;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, rankMap, expiryStatus, sma, ownedSymbols]);
+  }, [filtered, verdictByRow]);
+
+  const marketOpen = isMarketOpen();
+  const weekend = isWeekend();
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
@@ -452,14 +451,25 @@ export default function Scanner() {
         {/* NOVA AI filter — natural-language pick filter */}
         <NovaFilterBar />
 
-        {/* Unified action-label summary — same labels appear on every row. */}
+        {/* Weekend / closed-market banner — kills false "Buy Now" expectations. */}
+        {!marketOpen && (
+          <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 text-warning" />
+            <span className="text-foreground/90">
+              {weekend ? "Markets are closed for the weekend." : "Market is closed."} Live entry timing
+              resumes at the next open — verdicts default to <span className="font-semibold">Wait for Open</span>.
+            </span>
+          </div>
+        )}
+
+        {/* Unified verdict summary — counts mirror the FILTERED rows below. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { k: "BUY NOW",    v: counts["BUY NOW"],  sub: "Take the trade now",                cls: "border-bullish/60 text-bullish",     Icon: Zap },
-            { k: "WATCHLIST",  v: counts.WATCHLIST,   sub: "Setup close · wait for trigger",    cls: "border-primary/40 text-primary",     Icon: Clock },
-            { k: "WAIT",       v: counts.WAIT,        sub: "Mixed signals · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
-            { k: "AVOID",      v: counts.AVOID,       sub: "No edge · poor liquidity / IV",     cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
-          ].map((c) => (
+          {([
+            { k: "Buy Now",   v: counts["Buy Now"],  sub: "Take the trade now",                cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "Watchlist", v: counts.Watchlist,   sub: "Setup close · wait for trigger",    cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "Wait",      v: counts.Wait,        sub: "Mixed signals · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "Avoid",     v: counts.Avoid,       sub: "Hard blocker · no edge",            cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
+          ] as const).map((c) => (
             <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
                 <div className="text-[10px] sm:text-xs uppercase tracking-wider text-muted-foreground">{c.k}</div>
