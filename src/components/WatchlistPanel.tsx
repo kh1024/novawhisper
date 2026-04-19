@@ -61,6 +61,9 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
   const remove = useRemoveFromWatchlist();
   const pseudo = useMemo(() => items.map(toPseudoPosition), [items]);
   const verdictQ = useVerdicts(pseudo);
+  // Daily closes for sparklines — same 24h cache as the rest of the app.
+  const symbols = useMemo(() => Array.from(new Set(items.map((w) => w.symbol))), [items]);
+  const { map: smaMap } = useSma200(symbols);
 
   const verdictMap = useMemo(
     () => new Map((verdictQ.data?.verdicts ?? []).map((v) => [v.id, v])),
