@@ -15,6 +15,8 @@ import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest"
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { useQueryClient } from "@tanstack/react-query";
+import { labelFromWebPick, unifiedClasses, UNIFIED_HINTS } from "@/lib/unifiedLabel";
+import { Hint } from "@/components/Hint";
 import { cn } from "@/lib/utils";
 
 const INDICES = ["SPY", "QQQ", "DIA", "IWM", "VIX"];
@@ -58,6 +60,8 @@ function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; 
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
     : "text-muted-foreground border-border bg-surface/50";
+  // Unified action label — same vocabulary as Scanner / Top Opportunities / Portfolio.
+  const action = labelFromWebPick(p);
   return (
     <button
       onClick={onClick}
@@ -70,6 +74,11 @@ function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; 
             {p.grade}
           </span>
         )}
+        <Hint label={UNIFIED_HINTS[action]}>
+          <span className={cn("text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help", unifiedClasses(action))}>
+            {action}
+          </span>
+        </Hint>
         <span className={cn("text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded",
           isBull ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish")}>
           {p.optionType.replace("_", " ")}
