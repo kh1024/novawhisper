@@ -25,6 +25,7 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSettings } from "@/lib/settings";
+import { useBudget } from "@/lib/budget";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { Hint } from "@/components/Hint";
