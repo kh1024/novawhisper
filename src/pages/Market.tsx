@@ -173,6 +173,11 @@ export default function Market() {
     });
   }, [hotOptions, interestMap]);
 
+  // 200-SMA + quote maps for the gate validator on each Hottest Options card.
+  const hotSymbols = useMemo(() => Array.from(new Set(hotOptionsRanked.map((p) => p.symbol))), [hotOptionsRanked]);
+  const { map: smaMap } = useSma200(hotSymbols);
+  const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
+
   // Search suggestions
   const searchResults = search.trim().length >= 1
     ? TICKER_UNIVERSE.filter((u) =>
@@ -307,6 +312,8 @@ export default function Market() {
                 key={`${p.symbol}-${i}`}
                 p={p}
                 oi={interestMap.get(pickInterestKey(p))?.oi}
+                quote={quoteMap.get(p.symbol) ?? null}
+                sma={smaMap.get(p.symbol) ?? null}
                 onClick={() => setFocused(p.symbol)}
               />
             ))}
