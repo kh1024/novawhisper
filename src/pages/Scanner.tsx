@@ -162,9 +162,24 @@ export default function Scanner() {
     refetchMs: 60_000,
   });
 
+  // 200-day SMA gate — pulled once per session, cached 24h. Also feeds real
+  // EMA20/EMA50 distances + streak math into computeSetups via closesBySymbol.
+  const sma = useSma200(universe);
+
+  const closesBySymbol = useMemo(() => {
+    const m = new Map<string, number[]>();
+    sma.map.forEach((v, k) => {
+      if (Array.isArray(v.closes) && v.closes.length > 0) m.set(k, v.closes);
+    });
+    return m;
+  }, [sma.map]);
+
   // Compute setups, then attach the institutional rank (Setup × .40 +
   // Readiness × .30 + Options × .30 − Penalties). Default sort: Final Rank desc.
-  const rows: SetupRow[] = useMemo(() => computeSetups(quotes), [quotes]);
+  const rows: SetupRow[] = useMemo(
+    () => computeSetups(quotes, { closesBySymbol }),
+    [quotes, closesBySymbol],
+  );
 
   // Per-symbol Strategy + Rank. Stable map keyed by symbol so DetailPanel /
   // SetupCard can re-use the exact same decision the rank was computed against.
