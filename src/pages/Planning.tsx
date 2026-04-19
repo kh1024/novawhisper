@@ -23,6 +23,9 @@ import { dispatchPickAlerts } from "@/lib/webhook";
 import { useLiveQuotes } from "@/lib/liveData";
 import { usePickExpiration, type PickInputs, type PickStatus } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
+import { evaluateGuards, type GuardEval } from "@/lib/novaGuards";
+import { useSma200 } from "@/lib/sma200";
+import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
