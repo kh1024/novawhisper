@@ -237,6 +237,7 @@ Deno.serve(async (req) => {
       contracts,
       fetchedAt: new Date().toISOString(),
       source: "massive",
+      ivRecorderVersion: "v3-await", // marker to confirm deployed code
     };
     // Best-effort write-through to KV so subsequent loads (within 60s) skip Polygon.
     kvSet(cacheKey, payload, CACHE_TTL_MS);
