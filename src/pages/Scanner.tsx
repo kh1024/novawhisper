@@ -504,41 +504,36 @@ export default function Scanner() {
                             <div className={cn("mono font-semibold text-base", scoreColor(r.setupScore))}>{r.setupScore}</div>
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1">
-                                <Hint label="Verdict engine reconciling technicals, Greeks & risk">
-                                  <span className={cn(
-                                    "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit cursor-help",
-                                    verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                    verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                    (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                    verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                                  )}>{blocked ? "BLOCKED" : verdict === "GO" ? "BUY" : verdict}</span>
-                                </Hint>
-                              </div>
-                              {r.crl.riskBadge && (
-                                <span className={cn(
-                                  "text-[9px] px-1.5 py-0 rounded border w-fit",
-                                  r.crl.riskBadge === "Safe" && "text-bullish border-bullish/30",
-                                  r.crl.riskBadge === "Mild" && "text-warning border-warning/30",
-                                  r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
-                                )}>{r.crl.riskBadge}</span>
-                              )}
-                              <NovaGuardBadges guard={guard} compact />
-                              <PickExpiryChips status={exp} compact />
-                            </div>
-                          </td>
-                          <td className="px-3 py-3">
                             {(() => {
                               const rk = rankMap.get(r.symbol)?.rank;
-                              if (!rk) return <span className="text-muted-foreground text-xs">—</span>;
+                              const unified = labelFor(r);
+                              const displayLabel = unified === "BLOCKED" ? "BLOCKED" : unified;
+                              // Color: BLOCKED uses bearish styling, otherwise reuse labelClasses.
+                              const cls = unified === "BLOCKED"
+                                ? "bg-bearish/15 text-bearish border-bearish/40"
+                                : labelClasses(unified);
+                              const tip = rk
+                                ? `Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore} · CRL ${r.crl?.verdict ?? "—"}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`
+                                : "Computing…";
                               return (
-                                <Hint label={`Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`}>
+                                <Hint label={tip}>
                                   <div className="flex flex-col gap-1 cursor-help">
-                                    <span className={cn("text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit", labelClasses(rk.label))}>
-                                      {rk.label}
+                                    <span className={cn("text-[11px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit whitespace-nowrap", cls)}>
+                                      {displayLabel}
                                     </span>
-                                    <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
+                                    {rk && (
+                                      <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
+                                    )}
+                                    {r.crl?.riskBadge && (
+                                      <span className={cn(
+                                        "text-[9px] px-1.5 py-0 rounded border w-fit",
+                                        r.crl.riskBadge === "Safe" && "text-bullish border-bullish/30",
+                                        r.crl.riskBadge === "Mild" && "text-warning border-warning/30",
+                                        r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
+                                      )}>{r.crl.riskBadge}</span>
+                                    )}
+                                    <NovaGuardBadges guard={guard} compact />
+                                    <PickExpiryChips status={exp} compact />
                                   </div>
                                 </Hint>
                               );
