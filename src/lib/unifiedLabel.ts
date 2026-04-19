@@ -33,7 +33,7 @@ export function labelFromWebPick(p: ScoutPick, opts?: { blocked?: boolean }): Un
   if (opts?.blocked) return "BLOCKED";
   // Aggressive/lottery picks should never be "BUY NOW" by themselves — they
   // require active confirmation.
-  const isHotBucket = p.tier === "aggressive" || p.tier === "lottery";
+  const isHotBucket = p.riskLevel === "high";
   if (p.grade === "A") return isHotBucket ? "WATCHLIST" : "BUY NOW";
   if (p.grade === "B") return "WATCHLIST";
   if (p.grade === "C") return "WAIT";
