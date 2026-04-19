@@ -15,6 +15,7 @@ import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest"
 import { useSma200, type SymbolSma } from "@/lib/sma200";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { PickMetaRow } from "@/components/PickMetaRow";
 import { GateValidationDashboard } from "@/components/GateValidationDashboard";
 import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
