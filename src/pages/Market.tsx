@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
 import { useTopCoins } from "@/lib/cryptoData";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { useQueryClient } from "@tanstack/react-query";
