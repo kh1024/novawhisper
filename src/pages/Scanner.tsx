@@ -17,7 +17,8 @@ import {
 import { useLiveQuotes } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
-import { selectStrategy } from "@/lib/strategySelector";
+import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
+import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
