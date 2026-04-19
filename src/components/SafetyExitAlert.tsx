@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertOctagon, X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { usePortfolio, useClosePosition, getOwnerKey, type PortfolioPosition } from "@/lib/portfolio";
-import { useLiveQuotes } from "@/lib/liveData";
+import { usePortfolio, useClosePosition, type PortfolioPosition } from "@/lib/portfolio";
+import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
 import { gate7_SafetyExit } from "@/lib/gates";
 import type { OptionType } from "@/lib/gates";
 
@@ -50,8 +50,11 @@ export function SafetyExitAlert() {
     [positions],
   );
   const symbols = useMemo(() => Array.from(new Set(open.map((p) => p.symbol))), [open]);
-  const { quotes } = useLiveQuotes(symbols);
-  const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
+  const { data: quotes = [] } = useLiveQuotes(symbols);
+  const quoteMap = useMemo(
+    () => new Map<string, VerifiedQuote>((quotes as VerifiedQuote[]).map((q) => [q.symbol, q])),
+    [quotes],
+  );
 
   const [active, setActive] = useState<FiredAlert | null>(null);
   const close = useClosePosition();
