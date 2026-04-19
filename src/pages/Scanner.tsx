@@ -717,6 +717,7 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           </Button>
         </div>
       </div>
+      </div>
     </div>
   );
 }
