@@ -8,7 +8,7 @@ import { useWatchlist, useRemoveFromWatchlist, type WatchlistItem } from "@/lib/
 import { useVerdicts } from "@/lib/portfolioVerdict";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
-import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+
 
 interface Props {
   onOpenSymbol?: (symbol: string) => void;
@@ -168,19 +168,6 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                     </span>
                   </Hint>
                   <div className="flex items-center gap-1">
-                    {w.strike && w.expiry && (
-                      <SaveToPortfolioButton
-                        size="xs"
-                        symbol={w.symbol}
-                        optionType={w.option_type}
-                        direction={w.direction}
-                        strike={Number(w.strike)}
-                        strikeShort={w.strike_short != null ? Number(w.strike_short) : null}
-                        expiry={w.expiry}
-                        thesis={w.thesis ?? null}
-                        source={`watchlist:${w.source ?? "unknown"}`}
-                      />
-                    )}
                     <Hint label="Open research">
                       <Button
                         size="sm"

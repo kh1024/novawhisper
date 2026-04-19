@@ -27,7 +27,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useSettings } from "@/lib/settings";
 import { useBudget } from "@/lib/budget";
 import { dispatchPickAlerts } from "@/lib/webhook";
-import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
@@ -579,7 +578,7 @@ export default function Scanner() {
                                 source="scanner"
                                 meta={{ setupScore: r.setupScore }}
                               />
-                              <SaveToPortfolioButton {...deriveContractFromRow(r)} size="xs" />
+                              
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -796,7 +795,7 @@ function DetailPanel({ row, decision, rank, onOpen }: {
             source="scanner"
             meta={{ setupScore: row.setupScore }}
           />
-          <SaveToPortfolioButton {...deriveContractFromRow(row)} size="sm" />
+          
           <Button asChild variant="outline" size="sm" className="gap-1.5 flex-1 sm:flex-none min-w-[120px] sm:min-w-0">
             <a
               href={`https://robinhood.com/options/chains/${encodeURIComponent(row.symbol)}`}
@@ -909,7 +908,7 @@ function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | nu
           source="scanner"
           meta={{ setupScore: row.setupScore }}
         />
-        <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
+        
       </div>
     </Card>
   );

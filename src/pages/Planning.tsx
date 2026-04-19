@@ -14,7 +14,6 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePlanning, type PlanningPick, type SourceTicker } from "@/lib/planning";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { useWebPicksHistory } from "@/lib/webPicksHistory";
-import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { TickerPrice } from "@/components/TickerPrice";
 import { useQueryClient } from "@tanstack/react-query";
@@ -427,7 +426,7 @@ function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTi
           </ul>
         </div>
       )}
-      <div className="mt-3 flex justify-end gap-1.5">
+      <div className="mt-3 flex justify-end">
         <SaveToWatchlistButton
           symbol={pick.symbol}
           direction={pick.direction}
@@ -436,17 +435,6 @@ function PickCard({ pick, tier, slotIndex }: { pick: PlanningPick; tier?: RiskTi
           strikeShort={pick.strikeShort}
           expiry={pick.expiry}
           entryPrice={pick.playAt}
-          thesis={pick.thesis}
-          source="planning"
-        />
-        <SaveToPortfolioButton
-          symbol={pick.symbol}
-          optionType={pick.optionType}
-          direction={pick.direction}
-          strike={pick.strike}
-          strikeShort={pick.strikeShort}
-          expiry={pick.expiry}
-          entryUnderlying={pick.playAt}
           thesis={pick.thesis}
           source="planning"
         />
@@ -751,32 +739,18 @@ function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus, guardFor 
                     BLOCKED
                   </span>
                 ) : (
-                  <div className="flex items-center gap-1.5">
-                    <SaveToWatchlistButton
-                      size="xs"
-                      symbol={p.symbol}
-                      direction={p.direction}
-                      optionType={p.optionType}
-                      strike={p.strike}
-                      strikeShort={p.strikeShort}
-                      expiry={p.expiry}
-                      entryPrice={p.playAt}
-                      thesis={p.thesis}
-                      source="web-pick"
-                    />
-                    <SaveToPortfolioButton
-                      size="xs"
-                      symbol={p.symbol}
-                      optionType={p.optionType}
-                      direction={p.direction}
-                      strike={p.strike}
-                      strikeShort={p.strikeShort}
-                      expiry={p.expiry}
-                      entryUnderlying={p.playAt}
-                      thesis={p.thesis}
-                      source="web-pick"
-                    />
-                  </div>
+                  <SaveToWatchlistButton
+                    size="xs"
+                    symbol={p.symbol}
+                    direction={p.direction}
+                    optionType={p.optionType}
+                    strike={p.strike}
+                    strikeShort={p.strikeShort}
+                    expiry={p.expiry}
+                    entryPrice={p.playAt}
+                    thesis={p.thesis}
+                    source="web-pick"
+                  />
                 )}
               </div>
               {exp && (exp.isStale || exp.rsiFlipped || exp.thetaAccelerating) && (
