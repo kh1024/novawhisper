@@ -22,32 +22,89 @@ import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
+import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import type { OptionPick } from "@/lib/mockData";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
-type RiskBucket = "safe" | "mild" | "aggressive";
+type RiskBucket = "safe" | "mild" | "aggressive" | "lottery";
+
+// Map a NOVA scout pick (from the options-scout edge fn) into the OptionPick
+// shape the dashboard row renderer expects. This lets us share a single render
+// path between live scout picks and the mock fallback.
+function scoutToOptionPick(s: ScoutPick, bucket: RiskBucket, idx: number): OptionPick {
+  const isPut = s.optionType === "put";
+  const isLeaps = /leaps/i.test(s.strategy);
+  const strategy: OptionPick["strategy"] = isLeaps
+    ? (isPut ? "leaps-put" : "leaps-call")
+    : (isPut ? "long-put" : "long-call");
+  const expDate = new Date(s.expiry);
+  const dte = Math.max(1, Math.round((expDate.getTime() - Date.now()) / 86_400_000));
+  const premiumNum = Number(String(s.premiumEstimate ?? "").match(/[\d.]+/)?.[0] ?? 0);
+  const annualized = Number(String(s.expectedReturn ?? "").match(/[\d.]+/)?.[0] ?? 0);
+  const score = (s.confidenceScore ?? 7) * 10;
+  const grade: "A" | "B" | "C" = (s.grade as "A" | "B" | "C") ?? "B";
+  return {
+    id: `scout-${bucket}-${s.symbol}-${idx}`,
+    symbol: s.symbol,
+    strategy,
+    riskBucket: bucket,
+    expiration: s.expiry,
+    dte,
+    strike: s.strike,
+    premium: premiumNum,
+    premiumPct: 0,
+    annualized,
+    delta: 0, theta: 0, vega: 0, ivRank: 0, oi: 0, volume: 0, spreadPct: 0,
+    score,
+    confidence: grade,
+    bias: s.bias ?? (isPut ? "bearish" : "bullish"),
+    signals: [],
+    reason: s.thesis,
+  };
+}
 
 export default function Dashboard() {
   const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
+  const { data: scout } = useOptionsScout();
   const allPicks = useMemo(() => getMockPicks(60), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
 
+  // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   const picks = useMemo(() => {
-    // App is single-leg only — keep just long calls and long puts.
-    const singleLeg = allPicks.filter((p) => p.strategy === "long-call" || p.strategy === "long-put");
-    // When NOVA filter is active, ignore the risk tab so the user's natural-
-    // language ask drives the result set across all buckets.
-    const base = novaActive ? singleLeg : singleLeg.filter((p) => p.riskBucket === riskTab);
-    return base
+    const bucketMap: Record<RiskBucket, ScoutPick[]> = {
+      safe: scout?.conservative ?? [],
+      mild: scout?.moderate ?? [],
+      aggressive: scout?.aggressive ?? [],
+      lottery: scout?.lottery ?? [],
+    };
+    const singleLegMock = allPicks.filter((p) =>
+      p.strategy === "long-call" || p.strategy === "long-put" ||
+      p.strategy === "leaps-call" || p.strategy === "leaps-put"
+    );
+
+    let pool: OptionPick[];
+    if (novaActive) {
+      const allScout = (["safe", "mild", "aggressive", "lottery"] as RiskBucket[])
+        .flatMap((b) => bucketMap[b].map((s, i) => scoutToOptionPick(s, b, i)));
+      pool = allScout.length > 0 ? allScout : singleLegMock;
+    } else {
+      const liveBucket = bucketMap[riskTab].map((s, i) => scoutToOptionPick(s, riskTab, i));
+      pool = liveBucket.length > 0
+        ? liveBucket
+        : singleLegMock.filter((p) => p.riskBucket === riskTab);
+    }
+
+    return pool
       .filter((p) => pickMatchesFilter({
         symbol: p.symbol,
         strategy: p.strategy,
         riskBucket: p.riskBucket,
         bias: p.bias,
-        optionType: p.strategy === "long-put" ? "put" : "call",
+        optionType: p.strategy === "long-put" || p.strategy === "leaps-put" ? "put" : "call",
         expiration: p.expiration,
         dte: p.dte,
         premium: p.premium,
@@ -56,7 +113,7 @@ export default function Dashboard() {
         earningsInDays: p.earningsInDays ?? null,
       }, novaSpec))
       .slice(0, novaActive ? 12 : 6);
-  }, [allPicks, riskTab, novaSpec, novaActive]);
+  }, [allPicks, riskTab, novaSpec, novaActive, scout]);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
@@ -162,9 +219,10 @@ export default function Dashboard() {
             </div>
             <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
               <TabsList className="h-8 bg-surface/60">
-                <TabsTrigger value="safe" className="text-xs h-6">🟢 Safe</TabsTrigger>
-                <TabsTrigger value="mild" className="text-xs h-6">🟡 Mild</TabsTrigger>
+                <TabsTrigger value="safe" className="text-xs h-6">🟢 Conservative</TabsTrigger>
+                <TabsTrigger value="mild" className="text-xs h-6">🟡 Moderate</TabsTrigger>
                 <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
+                <TabsTrigger value="lottery" className="text-xs h-6">🎲 Lottery</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
