@@ -106,7 +106,7 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
         optionType={p.optionType}
         strike={p.strikeShort ? `${p.strike}/${p.strikeShort}` : p.strike}
         expiry={p.expiry}
-        tier={p.tier}
+        tier={p.risk}
         timing={blocked ? "avoid" : undefined}
       />
       <div className="text-[11px] text-muted-foreground line-clamp-2">{p.thesis}</div>
