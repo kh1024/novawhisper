@@ -47,7 +47,8 @@ async function kvSet(key: string, value: unknown, ttlMs: number): Promise<void> 
 // the migration. Uses the kv_cache as a same-day dedupe to avoid redundant
 // PostgREST round-trips for repeated chain fetches on the same symbol.
 async function recordAtmIv(symbol: string, atmIv: number | null): Promise<void> {
-  if (!SUPABASE_URL || !SERVICE_ROLE) return;
+  console.log(`[iv_history] recordAtmIv invoked symbol=${symbol} atmIv=${atmIv}`);
+  if (!SUPABASE_URL || !SERVICE_ROLE) { console.warn("[iv_history] missing SUPABASE_URL/SERVICE_ROLE"); return; }
   if (atmIv == null || !Number.isFinite(atmIv) || atmIv <= 0) return;
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
   const dedupeKey = `iv_history_written:${symbol}:${today}`;
@@ -148,6 +149,25 @@ Deno.serve(async (req) => {
     if (cached?.value) {
       const exp = cached.expires_at ? Date.parse(cached.expires_at) : 0;
       if (exp > Date.now()) {
+        // Even on cache hit, opportunistically record today's ATM IV.
+        // recordAtmIv is itself dedupe'd per UTC day, so this is cheap.
+        try {
+          const cachedContracts: OptionContract[] = (cached.value as any)?.contracts ?? [];
+          const callsWithGreeks = cachedContracts.filter(
+            (c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv) && c.delta != null && Number.isFinite(c.delta),
+          );
+          let best: OptionContract | null = null;
+          let bestDist = Infinity;
+          for (const c of callsWithGreeks) {
+            const d = Math.abs(Math.abs(c.delta as number) - 0.5);
+            if (d < bestDist) { best = c; bestDist = d; }
+          }
+          if (best?.iv != null) {
+            await recordAtmIv(underlying, best.iv);
+          }
+        } catch (e) {
+          console.warn("[iv_history] cache-path record skipped", e);
+        }
         return new Response(
           JSON.stringify({ ...cached.value, cached: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -212,27 +232,29 @@ Deno.serve(async (req) => {
       contracts,
       fetchedAt: new Date().toISOString(),
       source: "massive",
+      ivRecorderVersion: "v3-await", // marker to confirm deployed code
     };
     // Best-effort write-through to KV so subsequent loads (within 60s) skip Polygon.
     kvSet(cacheKey, payload, CACHE_TTL_MS);
 
     // Record today's ATM IV into iv_history (idempotent per UTC day per symbol).
-    // Only fires when we have a usable underlying price + a finite ATM IV.
+    // ATM is identified by |delta| closest to 0.5 — robust even when the
+    // snapshot omits underlying_asset.price (Polygon does this off-hours).
+    // Awaited so the write definitely lands before the response returns.
     try {
-      const spot = contracts.find((c) => Number.isFinite(c.underlyingPrice as number))?.underlyingPrice ?? null;
-      if (spot && spot > 0) {
-        const callsWithIv = contracts.filter((c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv));
-        let best: OptionContract | null = null;
-        let bestDist = Infinity;
-        for (const c of callsWithIv) {
-          const d = Math.abs(c.strike - spot);
-          if (d < bestDist) { best = c; bestDist = d; }
-        }
-        const atmIv = best?.iv ?? null;
-        if (atmIv != null) {
-          // Fire-and-forget; don't await — never block the chain response.
-          recordAtmIv(underlying, atmIv);
-        }
+      const callsWithGreeks = contracts.filter(
+        (c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv) && c.delta != null && Number.isFinite(c.delta),
+      );
+      let best: OptionContract | null = null;
+      let bestDist = Infinity;
+      for (const c of callsWithGreeks) {
+        const d = Math.abs(Math.abs(c.delta as number) - 0.5);
+        if (d < bestDist) { best = c; bestDist = d; }
+      }
+      const atmIv = best?.iv ?? null;
+      console.log(`[iv_history] ${underlying} chain=${contracts.length} candidates=${callsWithGreeks.length} bestDelta=${best?.delta ?? "none"} atmIv=${atmIv}`);
+      if (atmIv != null) {
+        await recordAtmIv(underlying, atmIv);
       }
     } catch (e) {
       console.warn("[iv_history] record skipped", e);
