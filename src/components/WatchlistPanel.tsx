@@ -8,6 +8,8 @@ import { useWatchlist, useRemoveFromWatchlist, type WatchlistItem } from "@/lib/
 import { useVerdicts } from "@/lib/portfolioVerdict";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
+import { Sparkline } from "@/components/Sparkline";
+import { useSma200 } from "@/lib/sma200";
 
 
 interface Props {
