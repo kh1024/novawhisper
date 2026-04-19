@@ -268,6 +268,10 @@ export default function Dashboard() {
                 sma200: sma.map.get(p.symbol)?.sma200 ?? null,
               });
               const blocked = guard.shouldBlockSignal;
+              const money = moneynessOf(optionType, p.strike, live?.price ?? pickPrice ?? null);
+              // Action label is driven by the score (0–100). Blocked picks
+              // are forced to DON'T BUY so the language stays consistent.
+              const action = blocked ? "DON'T BUY" as const : actionFromScore(p.score);
               return (
               <div
                 key={p.id}
