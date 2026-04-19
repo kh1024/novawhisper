@@ -56,6 +56,40 @@ function signalChip(action?: string, status?: string) {
   return { label: "WAIT", cls: "border-muted-foreground/40 bg-muted/40 text-foreground" };
 }
 
+/** Map the verdict signal into a plain-English Timing label. */
+function timingLabel(action?: string, status?: string): { label: string; cls: string } {
+  const chip = signalChip(action, status);
+  if (chip.label === "BUY NOW") return { label: "Ready", cls: "text-bullish" };
+  if (chip.label === "EXIT") return { label: "Exit Soon", cls: "text-warning" };
+  if (chip.label === "AVOID") return { label: "Avoid", cls: "text-bearish" };
+  // WAIT — distinguish "wait for open" vs "watch closely" by market clock.
+  const est = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const dow = est.getDay();
+  const min = est.getHours() * 60 + est.getMinutes();
+  const isOpen = dow >= 1 && dow <= 5 && min >= 9 * 60 + 30 && min < 16 * 60;
+  return isOpen
+    ? { label: "Watch Closely", cls: "text-warning" }
+    : { label: "Wait for Open", cls: "text-muted-foreground" };
+}
+
+/** Normalize the saved tier into a clean Risk label. */
+function riskLabel(tier?: string | null): string {
+  const t = (tier ?? "").toLowerCase();
+  if (t === "safe" || t.startsWith("conserv")) return "Conservative";
+  if (t === "mild" || t.startsWith("mod") || t === "mid") return "Mid";
+  if (t === "aggressive" || t === "lottery") return "Aggressive";
+  return tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "—";
+}
+
+/** Build the compact contract label, e.g. "$120C" or "$95P". */
+function contractLabel(strike: number | string | null | undefined, optionType: string): string {
+  if (strike == null || strike === "") return optionType.toUpperCase();
+  const n = Number(strike);
+  const s = Number.isFinite(n) ? (Number.isInteger(n) ? `${n}` : n.toFixed(2)) : `${strike}`;
+  const suffix = optionType === "put" ? "P" : optionType === "call" ? "C" : optionType.charAt(0).toUpperCase();
+  return `$${s}${suffix}`;
+}
+
 export function WatchlistPanel({ onOpenSymbol }: Props) {
   const { data: items = [], isLoading } = useWatchlist();
   const remove = useRemoveFromWatchlist();
@@ -125,26 +159,40 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{w.symbol}</span>
                     <TickerPrice symbol={w.symbol} showChange />
-                    {w.strategy && (
-                      <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
-                        {w.strategy.replace(/-/g, " ")}
-                      </Badge>
-                    )}
-                    {w.tier && (
-                      <span className="pill pill-neutral text-[10px] capitalize">{w.tier}</span>
-                    )}
                     {w.source && (
                       <span className="text-[9px] uppercase tracking-widest text-muted-foreground/70">
                         from {w.source}
                       </span>
                     )}
                   </div>
-                  <div className="mono text-[11px] mt-1 font-semibold text-foreground/80">
-                    {w.strike ? `$${w.strike} ${isPut ? "PUT" : w.option_type === "call" ? "CALL" : w.option_type.toUpperCase()}` : w.option_type.toUpperCase()}
-                    {w.expiry ? ` · exp ${w.expiry}` : ""}
-                  </div>
+                  {(() => {
+                    const timing = timingLabel(v?.action, v?.status);
+                    const biasText = w.bias === "bullish" ? "Bullish" : w.bias === "bearish" ? "Bearish" : "Neutral";
+                    const biasCls = w.bias === "bullish" ? "text-bullish" : w.bias === "bearish" ? "text-bearish" : "text-foreground";
+                    return (
+                      <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-0.5 text-[11px] leading-tight">
+                        <div>
+                          <span className="text-muted-foreground">Bias:</span>{" "}
+                          <span className={`font-semibold ${biasCls}`}>{biasText}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Timing:</span>{" "}
+                          <span className={`font-semibold ${timing.cls}`}>{timing.label}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Risk:</span>{" "}
+                          <span className="font-semibold text-foreground">{riskLabel(w.tier)}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Contract:</span>{" "}
+                          <span className="font-semibold mono text-foreground">{contractLabel(w.strike, w.option_type)}</span>
+                          {w.expiry ? <span className="text-muted-foreground"> · {w.expiry}</span> : null}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {w.thesis && (
-                    <div className="text-xs text-muted-foreground truncate mt-0.5">{w.thesis}</div>
+                    <div className="text-xs text-muted-foreground truncate mt-1">{w.thesis}</div>
                   )}
                 </div>
 
