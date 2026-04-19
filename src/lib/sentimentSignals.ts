@@ -111,7 +111,7 @@ function buildSignal(
   const detail = raw.topHeadline
     ? `${raw.hits} ${unit} · "${raw.topHeadline.slice(0, 60)}${raw.topHeadline.length > 60 ? "…" : ""}"`
     : zeroDetail;
-  return { key, label, tone, status, meter, detail, hits: raw.hits, topHeadline: raw.topHeadline };
+  return { key, label, tone, status, meter, detail, hits: raw.hits, topHeadline: raw.topHeadline, matches: raw.matches };
 }
 
 /** Pull the general news feed and derive Event-Risk signals. */
