@@ -590,14 +590,39 @@ function WebPicksPanel() {
       sma200: sma.map.get(p.symbol)?.sma200 ?? null,
     });
 
-  // Hide timed-out picks per tier.
+  // NOVA AI filter (shared across surfaces).
+  const [novaSpec] = useNovaFilter();
+  const todayMs = Date.now();
+  const dteOf = (iso?: string | null): number | null => {
+    if (!iso) return null;
+    const d = new Date(iso + "T00:00:00Z").getTime();
+    if (Number.isNaN(d)) return null;
+    return Math.max(0, Math.round((d - todayMs) / 86_400_000));
+  };
+
+  // Hide timed-out picks per tier + apply NOVA AI filter.
   const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
     const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
-    return (src ?? []).filter((p) => !expiryStatus.get(pickKey(p))?.isTimedOut);
+    return (src ?? []).filter((p) => {
+      if (expiryStatus.get(pickKey(p))?.isTimedOut) return false;
+      const premium = parsePremiumEstimate(p.premiumEstimate);
+      return pickMatchesFilter({
+        symbol: p.symbol,
+        strategy: p.strategy,
+        riskBucket: tier,
+        bias: p.bias,
+        optionType: p.optionType as "call" | "put",
+        expiration: p.expiry,
+        dte: dteOf(p.expiry),
+        premium,
+      }, novaSpec);
+    });
   };
 
   return (
     <div className="space-y-4">
+      <NovaFilterBar />
+
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Live web scout · Firecrawl + Nova</div>
