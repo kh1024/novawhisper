@@ -411,25 +411,9 @@ export default function Dashboard() {
                 </div>
                 <div className="text-right shrink-0 w-20">
                   <div className={`mono text-lg font-semibold ${blocked ? "text-muted-foreground" : ""}`}>{p.score}</div>
-                  <Hint label={
-                    action === "BUY NOW"
-                      ? "High conviction — score ≥ 80. Take the trade now."
-                      : action === "WATCHLIST"
-                      ? "Solid setup — score 70–79. Wait for a confirmed entry."
-                      : action === "WATCHLIST ONLY"
-                      ? "Decent setup but one concern (liquidity / IV / no edge). Track, don't trade."
-                      : action === "WAIT PULLBACK"
-                      ? "Strong thesis but price is extended. Wait for a pullback to support."
-                      : action === "EXPENSIVE ENTRY"
-                      ? "Thesis is good but the strike is deep ITM — capital-inefficient."
-                      : action === "OVEREXTENDED"
-                      ? "Already up big today — chase risk. Let it cool before entering."
-                      : action === "WAIT"
-                      ? "Mixed signals — score 50–69. Monitor, no action yet."
-                      : "Avoid — bearish setup or hard-blocked (liquidity / IV trap / earnings)."
-                  }>
+                  <Hint label={smartActionTooltip(action, { bias: p.bias })}>
                     <span className={`mt-0.5 inline-block text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${labelClasses(action)}`}>
-                      {action}
+                      {smartActionLabel(action, { bias: p.bias, score: p.score })}
                     </span>
                   </Hint>
                 </div>
