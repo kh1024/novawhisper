@@ -16,6 +16,8 @@ const base: SignalInput = {
   ivPercentile: 30,
   marketTime: new Date("2025-06-10T15:00:00Z"), // 11am EST weekday
   delta: 0.65,
+  accountBalance: 100_000, // big enough that Gate 8 is a no-op for these tests
+  contracts: 1,
 };
 
 describe("validateSignal — 7-gate pipeline", () => {

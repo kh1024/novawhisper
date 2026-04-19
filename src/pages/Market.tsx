@@ -16,7 +16,9 @@ import { useSma200, type SymbolSma } from "@/lib/sma200";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { GateValidationDashboard } from "@/components/GateValidationDashboard";
+import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
+import { useCapitalSettings } from "@/lib/budget";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -56,17 +58,18 @@ function MoverRow({ q, onClick }: { q: VerifiedQuote; onClick: () => void }) {
   );
 }
 
-function OptionPickRow({ p, onClick, oi, quote, sma }: {
+function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
   p: ScoutPick; onClick: () => void; oi?: number;
   quote?: VerifiedQuote | null; sma?: SymbolSma | null;
+  accountBalance: number;
 }) {
   const isBull = p.bias === "bullish" || p.optionType === "call";
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
     : "text-muted-foreground border-border bg-surface/50";
   const validation = useMemo(
-    () => validatePick({ pick: p, quote, sma }),
-    [p, quote, sma],
+    () => validatePick({ pick: p, quote, sma, accountBalance }),
+    [p, quote, sma, accountBalance],
   );
   const blocked = validation.finalStatus === "BLOCKED";
   return (
@@ -105,6 +108,7 @@ function OptionPickRow({ p, onClick, oi, quote, sma }: {
         {p.expectedReturn && <span className="text-bullish font-semibold">+{p.expectedReturn}</span>}
         {p.probability && <span className="text-muted-foreground">{p.probability} prob</span>}
         {p.premiumEstimate && <span className="text-muted-foreground mono">{p.premiumEstimate}</span>}
+        <BudgetImpactPill result={validation} />
       </div>
       <GateValidationDashboard result={validation} compact className="pt-1" />
     </button>
@@ -112,6 +116,7 @@ function OptionPickRow({ p, onClick, oi, quote, sma }: {
 }
 
 export default function Market() {
+  const { portfolio: accountBalance } = useCapitalSettings();
   const universe = useMemo(() => TICKER_UNIVERSE.map((u) => u.symbol), []);
   const watch = useMemo(() => Array.from(new Set([...INDICES, ...universe])), [universe]);
   const { data: quotes = [], isLoading, isFetching } = useLiveQuotes(watch);
@@ -314,6 +319,7 @@ export default function Market() {
                 oi={interestMap.get(pickInterestKey(p))?.oi}
                 quote={quoteMap.get(p.symbol) ?? null}
                 sma={smaMap.get(p.symbol) ?? null}
+                accountBalance={accountBalance}
                 onClick={() => setFocused(p.symbol)}
               />
             ))}
