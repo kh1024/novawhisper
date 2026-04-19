@@ -18,10 +18,16 @@ const POLITICAL_SUBS = [
   "moderatepolitics",
 ];
 
+// Firecrawl queries for actual platform posts. The trick:
+//   • Direct site:truthsocial.com/@realDonaldTrump returns post URLs but JS-blocked
+//     descriptions ("To use this website, please enable JavaScript"). We scrape
+//     each URL to get real post text.
+//   • @TrumpDailyPosts on X mirrors every Trump TS post with full text + timestamp,
+//     so it's the best source for previews when scraping fails.
 const FIRECRAWL_QUERIES = [
-  "site:truthsocial.com Trump post",
-  "site:x.com (from:realDonaldTrump OR from:elonmusk OR from:SpeakerJohnson) post",
-  "site:x.com (from:POTUS OR from:VP OR from:WhiteHouse) post",
+  "site:truthsocial.com/@realDonaldTrump",
+  "site:x.com TrumpDailyPosts Trump Truth Social Post",
+  "site:x.com (from:elonmusk OR from:SpeakerJohnson OR from:POTUS OR from:WhiteHouse)",
 ];
 
 interface NormalizedPost {
