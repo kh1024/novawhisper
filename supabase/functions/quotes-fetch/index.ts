@@ -401,6 +401,78 @@ async function fetchYahooSingle(symbol: string): Promise<SourceQuote | null> {
   return q;
 }
 
+// ── StockData.org (paid, 100/day free tier) ──
+// One batched HTTP call returns up to 100 tickers. Daily budget enforced
+// via kv_cache counter (`stockdata:usage:YYYY-MM-DD`). Hard cap = 95 to
+// leave a 5-call safety margin for Settings health pings & manual checks.
+const STOCKDATA_DAILY_CAP = 95;
+
+function todayUtc(): string { return new Date().toISOString().slice(0, 10); }
+
+function isMarketHoursET(): boolean {
+  const d = new Date();
+  const etHour = (d.getUTCHours() - 4 + 24) % 24; // approx ET, generous window
+  const day = d.getUTCDay();
+  if (day === 0 || day === 6) return false;
+  return etHour >= 9 && etHour < 20;
+}
+
+async function fetchStockDataBatch(symbols: string[]): Promise<Map<string, SourceQuote>> {
+  const out = new Map<string, SourceQuote>();
+  if (!STOCKDATA_KEY || symbols.length === 0) return out;
+  if (!isMarketHoursET()) return out;
+  const usageKey = `stockdata:usage:${todayUtc()}`;
+  const usageRow = await kvGet(usageKey);
+  const usage = (usageRow?.value as { count?: number } | null)?.count ?? 0;
+  if (usage >= STOCKDATA_DAILY_CAP) {
+    console.warn(`[stockdata] daily cap hit (${usage}/${STOCKDATA_DAILY_CAP}) — skipping`);
+    return out;
+  }
+  const sorted = [...symbols].sort();
+  const cacheKey = `stockdata:quotes:${sorted.join(",")}`;
+  const cached = await kvGet(cacheKey);
+  const cachedAt = cached?.expires_at ? Date.parse(cached.expires_at) : 0;
+  if (cached?.value && cachedAt > Date.now()) {
+    const arr = (cached.value as { quotes?: Array<{ symbol: string; price: number; ts: number; change: number | null }> }).quotes ?? [];
+    for (const q of arr) {
+      out.set(q.symbol, {
+        source: "stockdata", price: q.price, change: q.change ?? 0,
+        changePct: 0, volume: 0, ts: q.ts || Date.now(),
+      });
+    }
+    return out;
+  }
+  try {
+    const r = await fetch(`https://api.stockdata.org/v1/data/quote?symbols=${encodeURIComponent(sorted.join(","))}&api_token=${STOCKDATA_KEY}`);
+    await kvSet(usageKey, { count: usage + 1 }, 36 * 60 * 60_000);
+    if (!r.ok) {
+      console.warn(`[stockdata] HTTP ${r.status}`);
+      return out;
+    }
+    const j = await r.json() as { data?: Array<{ ticker?: string; price?: number; day_change?: number; last_trade_time?: string; previous_close_price?: number; volume?: number }> };
+    const cacheRows: Array<{ symbol: string; price: number; ts: number; change: number | null }> = [];
+    for (const row of j.data ?? []) {
+      if (!row.ticker || row.price == null) continue;
+      const price = Number(row.price);
+      if (!isFinite(price) || price <= 0) continue;
+      const sym = row.ticker.toUpperCase();
+      const ts = row.last_trade_time ? new Date(row.last_trade_time).getTime() : Date.now();
+      const prev = Number(row.previous_close_price);
+      const change = Number(row.day_change ?? (isFinite(prev) && prev > 0 ? price - prev : 0));
+      const changePct = isFinite(prev) && prev > 0 ? ((price - prev) / prev) * 100 : 0;
+      out.set(sym, {
+        source: "stockdata", price, change, changePct,
+        volume: Number(row.volume ?? 0), ts,
+      });
+      cacheRows.push({ symbol: sym, price, ts, change });
+    }
+    await kvSet(cacheKey, { quotes: cacheRows }, STOCKDATA_TTL_MS);
+  } catch (e) {
+    console.error("[stockdata] batch error", e);
+  }
+  return out;
+}
+
 // ── Stooq (free CSV, no key; reliable for ETFs/index ETFs) ──
 async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
   const cached = stooqCache.get(symbol);
