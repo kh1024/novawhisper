@@ -25,10 +25,15 @@ async function fetchFundamentals(symbol: string) {
   if (cached && Date.now() - cached.at < TTL_MS) return cached.data;
 
   const sym = encodeURIComponent(symbol);
-  const [profileRes, metricRes, recRes] = await Promise.all([
+  // Earnings calendar: look 120 days forward for the next scheduled report.
+  const today = new Date();
+  const from = today.toISOString().slice(0, 10);
+  const toDate = new Date(today.getTime() + 120 * 86_400_000).toISOString().slice(0, 10);
+  const [profileRes, metricRes, recRes, earnRes] = await Promise.all([
     fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${sym}&token=${FINNHUB_KEY}`),
     fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${sym}&metric=all&token=${FINNHUB_KEY}`),
     fetch(`https://finnhub.io/api/v1/stock/recommendation?symbol=${sym}&token=${FINNHUB_KEY}`),
+    fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${toDate}&symbol=${sym}&token=${FINNHUB_KEY}`),
   ]);
   if (!profileRes.ok) throw new Error(`Finnhub profile HTTP ${profileRes.status}`);
   if (!metricRes.ok) throw new Error(`Finnhub metric HTTP ${metricRes.status}`);
@@ -38,6 +43,26 @@ async function fetchFundamentals(symbol: string) {
   const m = metricBody?.metric ?? {};
   const recArr = recRes.ok ? await recRes.json() : [];
   const rec = Array.isArray(recArr) && recArr.length > 0 ? recArr[0] : null;
+
+  // Next earnings date — Finnhub returns { earningsCalendar: [{ date, symbol, ... }] }
+  // Pick the soonest future date.
+  let nextEarningsDate: string | null = null;
+  let earningsInDays: number | null = null;
+  if (earnRes.ok) {
+    const earnBody = await earnRes.json().catch(() => ({}));
+    const arr = Array.isArray(earnBody?.earningsCalendar) ? earnBody.earningsCalendar : [];
+    const todayMs = Date.now();
+    const future = arr
+      .map((e: any) => e?.date as string | undefined)
+      .filter((d: any): d is string => typeof d === "string" && d.length >= 10)
+      .map((d: string) => ({ d, ms: new Date(d).getTime() }))
+      .filter((x) => Number.isFinite(x.ms) && x.ms >= todayMs - 86_400_000)
+      .sort((a, b) => a.ms - b.ms);
+    if (future.length > 0) {
+      nextEarningsDate = future[0].d;
+      earningsInDays = Math.max(0, Math.floor((future[0].ms - todayMs) / 86_400_000));
+    }
+  }
 
   // Recommendation: derive a key from buy/hold/sell counts
   let recommendationKey: string | null = null;
@@ -109,6 +134,9 @@ async function fetchFundamentals(symbol: string) {
     targetLowPrice: null as number | null,
     recommendationKey,
     numberOfAnalystOpinions: analystCount,
+
+    nextEarningsDate,
+    earningsInDays,
 
     fetchedAt: new Date().toISOString(),
     source: "finnhub",
