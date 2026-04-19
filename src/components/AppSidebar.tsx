@@ -66,6 +66,9 @@ function SortableNavItem({
   collapsed: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+  // On mobile the sidebar opens as a Sheet overlay — auto-close it after the
+  // user picks a workspace so the page underneath becomes interactive again.
+  const { isMobile, setOpenMobile } = useSidebar();
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -89,6 +92,7 @@ function SortableNavItem({
           <NavLink
             to={item.url}
             end={item.url === "/"}
+            onClick={() => { if (isMobile) setOpenMobile(false); }}
             className="hover:bg-sidebar-accent/60 transition-colors"
             activeClassName="bg-sidebar-accent text-foreground font-medium border-l-2 border-primary"
           >
