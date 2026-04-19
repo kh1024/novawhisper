@@ -340,35 +340,8 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  // ── UNIFIED LABEL SYSTEM ─────────────────────────────────────────────
-  // ONE label per row, used by BOTH the top cards AND the row badge.
-  // Source of truth: Final Rank's ActionLabel (BUY NOW / WATCHLIST / WAIT /
-  // AVOID / EXIT) with three explicit overrides in priority order:
-  //   1. Guard block on a BUY NOW → BLOCKED (counts as AVOID)
-  //   2. CRL says EXIT + owned    → EXIT
-  //   3. Pick expiry STALE        → AVOID
-  // Everything else uses rank.label as-is. No more competing CRL/Setup pills.
-  type RowLabel = ActionLabel | "BLOCKED";
-  const labelFor = (r: SetupRow): RowLabel => {
-    const rk = rankMap.get(r.symbol)?.rank;
-    if (!rk) return "WAIT";
-    const exp = expiryStatus.get(`scanner:${r.symbol}`);
-    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
-    const guard = evaluateGuards({
-      symbol: r.symbol,
-      livePrice: r.price,
-      pickPrice: r.price,
-      optionType: r.bias === "bearish" ? "put" : "call",
-      direction: "long",
-      strike: r.price,
-      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
-      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
-    });
-    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
-    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
-    if (exp?.isStale) return "AVOID";
-    return rk.label;
-  };
+  // (labelFor + RowLabel are declared earlier so the filter useMemo can use them.)
+
 
   const counts = useMemo(() => {
     const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
