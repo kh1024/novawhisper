@@ -193,10 +193,18 @@ export default function Dashboard() {
       strike: p.strike,
       sma200: sma.map.get(p.symbol)?.sma200 ?? null,
     });
-    return { p, guard, blocked: guard.shouldBlockSignal, optionType, live, pickPrice };
-  }), [picks, quoteMap, sma]);
+    // Weekend Ghost: live quote older than 4h on a Sat/Sun = stale Friday data.
+    const ageH = live?.updatedAt ? (Date.now() - new Date(live.updatedAt).getTime()) / 3_600_000 : Infinity;
+    const isGhost = isWeekend && ageH > 4;
+    return { p, guard, blocked: guard.shouldBlockSignal, optionType, live, pickPrice, isGhost };
+  }), [picks, quoteMap, sma, isWeekend]);
   const blockedCount = picksWithGuard.filter((x) => x.blocked).length;
-  const visiblePicks = showBlocked ? picksWithGuard : picksWithGuard.filter((x) => !x.blocked);
+  const ghostCount = picksWithGuard.filter((x) => x.isGhost).length;
+  const visiblePicks = picksWithGuard.filter((x) => {
+    if (!showBlocked && x.blocked) return false;
+    if (hideWeekendGhosts && x.isGhost) return false;
+    return true;
+  });
 
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
