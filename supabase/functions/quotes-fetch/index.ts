@@ -18,6 +18,10 @@ interface SourceQuote {
   change: number;
   changePct: number;
   volume: number;
+  /** Epoch ms of the *quote*, not the fetch. Falls back to fetch time when
+   *  the upstream provider doesn't expose a timestamp. Used by `verify()` to
+   *  enforce the "freshest timestamp wins" rule. */
+  ts: number;
   // Extended hours (only Yahoo populates these today)
   preMarketPrice?: number | null;
   preMarketChangePct?: number | null;
