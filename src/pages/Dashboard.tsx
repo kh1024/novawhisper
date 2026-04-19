@@ -216,10 +216,14 @@ export default function Dashboard() {
                       </span>
                     </Hint>
                     <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
-                      {p.strategy.replace("-", " ")}
+                      {isLeaps ? `LEAPS ${isPut ? "PUT" : "CALL"}` : p.strategy.replace("-", " ")}
                     </Badge>
-                    <span className={`pill ${p.riskBucket === "safe" ? "pill-bullish" : p.riskBucket === "mild" ? "pill-neutral" : "pill-bearish"} capitalize`}>
-                      {p.riskBucket}
+                    <span className={`pill ${
+                      p.riskBucket === "safe" ? "pill-bullish" :
+                      p.riskBucket === "mild" ? "pill-neutral" :
+                      "pill-bearish"
+                    } capitalize`}>
+                      {p.riskBucket === "safe" ? "Conservative" : p.riskBucket === "mild" ? "Moderate" : p.riskBucket === "lottery" ? "🎲 Lottery" : "Aggressive"}
                     </span>
                     <NovaGuardBadges guard={guard} />
                   </div>
