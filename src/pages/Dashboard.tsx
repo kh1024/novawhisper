@@ -12,7 +12,6 @@ import { NewsFeed } from "@/components/NewsFeed";
 import { SectorBreakdown } from "@/components/SectorBreakdown";
 import { MarketHeroCards } from "@/components/MarketHeroCards";
 import { PlaybookCard } from "@/components/PlaybookCard";
-import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
 import { TickerPrice } from "@/components/TickerPrice";
@@ -359,35 +358,22 @@ export default function Dashboard() {
                     </span>
                   </Hint>
                 ) : (
-                  <div className="flex items-center gap-1.5">
-                    <SaveToWatchlistButton
-                      size="xs"
-                      symbol={p.symbol}
-                      optionType={optionType}
-                      direction={direction}
-                      strike={p.strike}
-                      expiry={p.expiration}
-                      bias={p.bias}
-                      strategy={p.strategy}
-                      tier={p.riskBucket}
-                      entryPrice={live?.price ?? pickPrice ?? null}
-                      premiumEstimate={p.premium != null ? `$${p.premium}` : null}
-                      thesis={p.reason}
-                      source="dashboard"
-                      meta={{ score: p.score, dte: p.dte, annualized: p.annualized }}
-                    />
-                    <SaveToPortfolioButton
-                      size="xs"
-                      symbol={p.symbol}
-                      optionType={optionType}
-                      direction={direction}
-                      strike={p.strike}
-                      expiry={p.expiration}
-                      entryPremium={p.premium}
-                      thesis={p.reason}
-                      source="dashboard"
-                    />
-                  </div>
+                  <SaveToWatchlistButton
+                    size="xs"
+                    symbol={p.symbol}
+                    optionType={optionType}
+                    direction={direction}
+                    strike={p.strike}
+                    expiry={p.expiration}
+                    bias={p.bias}
+                    strategy={p.strategy}
+                    tier={p.riskBucket}
+                    entryPrice={live?.price ?? pickPrice ?? null}
+                    premiumEstimate={p.premium != null ? `$${p.premium}` : null}
+                    thesis={p.reason}
+                    source="dashboard"
+                    meta={{ score: p.score, dte: p.dte, annualized: p.annualized }}
+                  />
                 )}
               </div>
             );})}
