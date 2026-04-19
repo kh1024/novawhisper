@@ -19,6 +19,7 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
 import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
 import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
+import { useSnapshotUploader } from "@/lib/useSnapshotUploader";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
@@ -176,6 +177,18 @@ export default function Scanner() {
     }
     return m;
   }, [rows]);
+
+  // Persist today's snapshot for the Performance dashboard (throttled to 1×/h).
+  const snapshotInputs = useMemo(
+    () => rows
+      .map((r) => {
+        const entry = rankMap.get(r.symbol);
+        return entry ? { setup: r, rank: entry.rank } : null;
+      })
+      .filter((v): v is { setup: SetupRow; rank: RankResult } => v !== null),
+    [rows, rankMap],
+  );
+  useSnapshotUploader(snapshotInputs);
 
   // Re-sort rows by Final Rank desc; ties broken by Setup Score.
   const sortedRows = useMemo(
