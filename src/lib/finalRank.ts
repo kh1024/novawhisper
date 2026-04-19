@@ -18,7 +18,20 @@
 import type { SetupRow } from "./setupScore";
 import type { StrategyDecision } from "./strategySelector";
 
-export type ActionLabel = "ELITE" | "GO NOW" | "GOOD" | "WATCHLIST" | "PASS";
+// Plain-English action language used across the whole app:
+//   BUY        — high conviction, take the trade now
+//   WATCHLIST  — solid setup, wait for a confirmed entry
+//   WAIT       — early / mixed signals, no action yet
+//   DON'T BUY  — no edge or actively negative — skip
+export type ActionLabel = "BUY" | "WATCHLIST" | "WAIT" | "DON'T BUY";
+
+/** Map any 0–100 confidence/rank score to the canonical action label. */
+export function actionFromScore(score: number): ActionLabel {
+  if (score >= 80) return "BUY";
+  if (score >= 65) return "WATCHLIST";
+  if (score >= 50) return "WAIT";
+  return "DON'T BUY";
+}
 
 export interface Penalty {
   /** Short tag used as a chip / log key. */
