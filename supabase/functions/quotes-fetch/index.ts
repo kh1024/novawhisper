@@ -8,10 +8,11 @@ import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
 const ALPHA_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
+const STOCKDATA_KEY = Deno.env.get("STOCKDATA_API_KEY");
 
 const BATCH_CONCURRENCY = 4;
 
-type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | "cnbc" | "google";
+type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | "cnbc" | "google" | "stockdata";
 
 interface SourceQuote {
   source: SourceName;
