@@ -524,13 +524,15 @@ export default function Scanner() {
                                     NOVA
                                   </span>
                                 </Hint>
-                                <span className={cn(
-                                  "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
-                                  verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                  verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                  (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                  verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                                )}>{blocked ? "BLOCKED" : verdict}</span>
+                                <Hint label={VERDICT_HINT[blocked ? "BLOCKED" : verdict] ?? "NOVA verdict for this setup."}>
+                                  <span className={cn(
+                                    "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit cursor-help",
+                                    verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
+                                    verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
+                                    (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
+                                    verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
+                                  )}>{blocked ? "BLOCKED" : verdict}</span>
+                                </Hint>
                               </div>
                               {r.crl.riskBadge && (
                                 <span className={cn(
