@@ -8,6 +8,8 @@ import { useLiveQuotes } from "@/lib/liveData";
 import { computeSetups } from "@/lib/setupScore";
 import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
+import { Hint } from "@/components/Hint";
+import { BIAS_HINT, ACTION_HINT } from "@/lib/glossary";
 
 export function LiveMiniScanner() {
   const query = useLiveQuotes(undefined, { refetchMs: 60_000 });
@@ -82,12 +84,18 @@ export function LiveMiniScanner() {
               return (
                 <tr key={s.symbol} className="border-b border-border/40 last:border-0 hover:bg-surface/40 transition-colors">
                   <td className="p-3 font-semibold mono">{s.symbol}</td>
-                  <td className="p-3"><span className={`pill ${tone}`}>{s.bias}</span></td>
+                  <td className="p-3">
+                    <Hint label={BIAS_HINT[s.bias] ?? "Directional read for this ticker."}>
+                      <span className={`pill ${tone} cursor-help`}>{s.bias}</span>
+                    </Hint>
+                  </td>
                   <td className="p-3 text-right mono">${s.price.toFixed(2)}</td>
                   <td className="p-3 text-right mono">{s.setupScore}</td>
                   <td className="p-3 text-right mono">{rank.readinessScore}</td>
                   <td className="p-3 pr-4 text-right">
-                    <span className={`pill ${rankTone}`}>{rank.label}</span>
+                    <Hint label={ACTION_HINT[rank.label] ?? "Recommended action based on the final score."}>
+                      <span className={`pill ${rankTone} cursor-help`}>{rank.label}</span>
+                    </Hint>
                   </td>
                 </tr>
               );
