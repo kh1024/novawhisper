@@ -155,6 +155,8 @@ export default function Scanner() {
   // 200-day SMA gate — pulled once per session, cached 24h.
   const sma = useSma200(rows.map((r) => r.symbol));
 
+  const [novaSpec] = useNovaFilter();
+
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
@@ -171,9 +173,23 @@ export default function Scanner() {
       if (r.changePct < filters.changeRange[0] || r.changePct > filters.changeRange[1]) return false;
       if (r.optionsLiquidity < filters.minOptionsLiq[0]) return false;
       if (filters.excludeEarnings && r.earningsInDays != null && r.earningsInDays <= 7) return false;
+
+      // NOVA natural-language filter — applied on top of UI filters.
+      // Scanner rows don't carry per-contract premium so the budget gate
+      // is skipped here; symbol/bias/optionType/score still apply.
+      const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
+      const ok = pickMatchesFilter({
+        symbol: r.symbol,
+        bias: r.bias === "neutral" || r.bias === "reversal" ? "neutral" : r.bias,
+        optionType,
+        score: r.setupScore,
+        earningsInDays: r.earningsInDays ?? null,
+      }, novaSpec);
+      if (!ok) return false;
+
       return true;
     });
-  }, [rows, filters, expiryStatus]);
+  }, [rows, filters, expiryStatus, novaSpec]);
 
   // Fire webhook for any NEW scanner row whose CRL verdict is GO.
   // Dedupe key includes the date so the same GO re-fires once per trading day.
