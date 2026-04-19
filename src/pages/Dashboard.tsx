@@ -15,6 +15,7 @@ import { PlaybookCard } from "@/components/PlaybookCard";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
 import { TickerPrice } from "@/components/TickerPrice";
+import { QuoteSourceChip } from "@/components/QuoteSourceChip";
 import { TipsRotator } from "@/components/TipsRotator";
 import { SortableList } from "@/components/SortableList";
 import { NovaStatusStrip } from "@/components/NovaStatusStrip";
