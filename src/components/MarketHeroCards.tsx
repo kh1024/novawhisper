@@ -269,20 +269,15 @@ export function MarketHeroCards() {
                     <span className={`text-2xl font-bold tracking-tight ${styles.text}`}>{c.status}</span>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <div className="h-2 rounded-full bg-muted/60 overflow-hidden relative">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${c.meter}%` }}
-                        transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 + i * 0.05 }}
-                        className={`h-full ${styles.bar} rounded-full`}
-                      />
-                    </div>
-                    <div className="flex justify-between text-[9px] tracking-wider uppercase text-muted-foreground/70">
-                      <span>Bad</span>
-                      <span>Good</span>
-                    </div>
+                  <div className="h-2 rounded-full bg-muted/60 overflow-hidden relative">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${c.meter}%` }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 + i * 0.05 }}
+                      className={`h-full ${styles.bar} rounded-full`}
+                    />
                   </div>
+
 
                   <div className="text-[11px] text-muted-foreground mt-3 leading-snug line-clamp-2">{c.detail}</div>
                   {clickable && c.event && c.event.matches.length > 0 && (
