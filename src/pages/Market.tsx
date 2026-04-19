@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
+import { useLiveQuotes, useOptionsChain, type VerifiedQuote } from "@/lib/liveData";
 import { useTopCoins } from "@/lib/cryptoData";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest";
@@ -67,9 +67,13 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
     : "text-muted-foreground border-border bg-surface/50";
+  // Lazy-load the live options chain for THIS pick so Gate 6 (IVP Guard)
+  // runs on a real ATM IV vs. the chain's IV envelope instead of a PRNG.
+  const { data: chainData } = useOptionsChain(p.symbol, 150);
+  const chain = chainData?.contracts ?? null;
   const validation = useMemo(
-    () => validatePick({ pick: p, quote, sma, accountBalance }),
-    [p, quote, sma, accountBalance],
+    () => validatePick({ pick: p, quote, sma, accountBalance, chain }),
+    [p, quote, sma, accountBalance, chain],
   );
   const blocked = validation.finalStatus === "BLOCKED";
   return (
