@@ -146,11 +146,15 @@ If hype is high but data is weak, set bias to "fade" and pick the contrarian put
     }
     const aiJson = await aiResp.json();
     const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
-    let synthesis: { marketTone: string; picks: unknown[] } = { marketTone: "", picks: [] };
+    let synthesis: { marketTone: string; picks: Array<Record<string, unknown>> } = { marketTone: "", picks: [] };
     if (toolCall?.function?.arguments) {
       try { synthesis = JSON.parse(toolCall.function.arguments); }
       catch (e) { console.error("[planning] parse tool args failed", e); }
     }
+    // Server-side guard: drop any non-call/put picks the model still produced.
+    synthesis.picks = (synthesis.picks ?? []).filter(
+      (p) => p.optionType === "call" || p.optionType === "put",
+    );
 
     return new Response(
       JSON.stringify({
