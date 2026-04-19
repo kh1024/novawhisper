@@ -250,7 +250,7 @@ export default function Scanner() {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
+      <div className="p-4 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
