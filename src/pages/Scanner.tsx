@@ -156,7 +156,35 @@ export default function Scanner() {
     refetchMs: 60_000,
   });
 
-  const rows: SetupRow[] = useMemo(() => computeSetups(quotes).sort((a, b) => b.setupScore - a.setupScore), [quotes]);
+  // Compute setups, then attach the institutional rank (Setup × .40 +
+  // Readiness × .30 + Options × .30 − Penalties). Default sort: Final Rank desc.
+  const rows: SetupRow[] = useMemo(() => computeSetups(quotes), [quotes]);
+
+  // Per-symbol Strategy + Rank. Stable map keyed by symbol so DetailPanel /
+  // SetupCard can re-use the exact same decision the rank was computed against.
+  const rankMap = useMemo(() => {
+    const m = new Map<string, { decision: StrategyDecision; rank: RankResult }>();
+    for (const r of rows) {
+      const decision = selectStrategy({
+        symbol: r.symbol, bias: r.bias, price: r.price, changePct: r.changePct,
+        ivRank: r.ivRank, atrPct: r.atrPct, rsi: r.rsi,
+        optionsLiquidity: r.optionsLiquidity, earningsInDays: r.earningsInDays,
+        setupScore: r.setupScore,
+      });
+      m.set(r.symbol, { decision, rank: rankSetup(r, decision) });
+    }
+    return m;
+  }, [rows]);
+
+  // Re-sort rows by Final Rank desc; ties broken by Setup Score.
+  const sortedRows = useMemo(
+    () => [...rows].sort((a, b) => {
+      const ra = rankMap.get(a.symbol)?.rank.finalRank ?? 0;
+      const rb = rankMap.get(b.symbol)?.rank.finalRank ?? 0;
+      return rb - ra || b.setupScore - a.setupScore;
+    }),
+    [rows, rankMap],
+  );
 
   // ── Pick Expiration Engine ────────────────────────────────────────────
   // Track first-seen price/time for every scanner row. Force WAIT when RSI > 75.
