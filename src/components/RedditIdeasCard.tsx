@@ -74,7 +74,7 @@ export function RedditIdeasCard({ onApply }: Props) {
       <div className="flex items-center justify-between gap-2">
         <div>
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
-            <Flame className="h-3.5 w-3.5 text-orange-500" /> Reddit Ideas · live
+            <Flame className="h-3.5 w-3.5 text-warning" /> Reddit Ideas · live
           </div>
           <h2 className="mt-1 text-base font-semibold">Trending option setups from r/options, WSB, ThetaGang…</h2>
           <p className="text-xs text-muted-foreground">
