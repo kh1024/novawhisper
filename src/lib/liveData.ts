@@ -94,17 +94,22 @@ function withMeta(q: VerifiedQuote): VerifiedQuote {
   return { ...q, name: meta?.name, sector: meta?.sector, marketCap: meta?.marketCap };
 }
 
+// IMPORTANT: do **not** fall back to MOCK prices here. Mock seeds are
+// hardcoded snapshots (e.g. GLD $242.60) that quickly drift out of date —
+// rendering them with a "Last known" badge made it look like real live data.
+// When live providers fail, surface "No data" so the UI shows an honest empty
+// state instead of a misleading stale price. React-query already preserves the
+// previous good payload via `keepPreviousData` for transient hiccups.
 function fallbackQuote(symbol: string, base?: Partial<VerifiedQuote>): VerifiedQuote {
-  const mock = MOCK.get(symbol);
   return withMeta({
     symbol,
-    price: mock?.price ?? 0,
-    change: mock?.change ?? 0,
-    changePct: mock?.changePct ?? 0,
-    volume: mock?.volume ?? 0,
+    price: 0,
+    change: 0,
+    changePct: 0,
+    volume: 0,
     sources: base?.sources ?? { finnhub: null, "alpha-vantage": null, massive: null, yahoo: null, stooq: null },
     consensusSource: base?.consensusSource ?? null,
-    status: "stale",
+    status: "unavailable",
     diffPct: base?.diffPct ?? null,
     updatedAt: base?.updatedAt ?? new Date().toISOString(),
   });
