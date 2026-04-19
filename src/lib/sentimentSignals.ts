@@ -35,6 +35,16 @@ const NEGATIVE_HINTS = ["miss", "warn", "warning", "cut", "fall", "drop", "halt"
 
 export type SentimentTone = "good" | "ok" | "bad";
 
+export interface EventRiskMatch {
+  id: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image?: string;
+  publishedAt: string;
+}
+
 export interface EventRiskSignal {
   key: "geopolitics" | "political" | "fed" | "earnings";
   label: string;
@@ -44,11 +54,23 @@ export interface EventRiskSignal {
   detail: string;       // small subtitle
   hits: number;
   topHeadline?: string;
+  matches: EventRiskMatch[];
 }
 
-function scoreFeed(items: { headline: string; summary: string }[], terms: string[]) {
+type FeedItem = {
+  id?: string;
+  headline: string;
+  summary: string;
+  source?: string;
+  url?: string;
+  image?: string;
+  publishedAt?: string;
+};
+
+function scoreFeed(items: FeedItem[], terms: string[]) {
   let hits = 0, pos = 0, neg = 0;
   let topHeadline: string | undefined;
+  const matches: EventRiskMatch[] = [];
   for (const it of items) {
     const text = `${it.headline} ${it.summary}`.toLowerCase();
     if (!terms.some((t) => text.includes(t))) continue;
@@ -56,8 +78,19 @@ function scoreFeed(items: { headline: string; summary: string }[], terms: string
     if (!topHeadline) topHeadline = it.headline;
     if (POSITIVE_HINTS.some((h) => text.includes(h))) pos += 1;
     if (NEGATIVE_HINTS.some((h) => text.includes(h))) neg += 1;
+    if (it.url) {
+      matches.push({
+        id: String(it.id ?? it.url),
+        headline: it.headline,
+        summary: it.summary ?? "",
+        source: it.source ?? "Unknown",
+        url: it.url,
+        image: it.image,
+        publishedAt: it.publishedAt ?? new Date().toISOString(),
+      });
+    }
   }
-  return { hits, pos, neg, topHeadline };
+  return { hits, pos, neg, topHeadline, matches };
 }
 
 function buildSignal(
@@ -78,7 +111,7 @@ function buildSignal(
   const detail = raw.topHeadline
     ? `${raw.hits} ${unit} · "${raw.topHeadline.slice(0, 60)}${raw.topHeadline.length > 60 ? "…" : ""}"`
     : zeroDetail;
-  return { key, label, tone, status, meter, detail, hits: raw.hits, topHeadline: raw.topHeadline };
+  return { key, label, tone, status, meter, detail, hits: raw.hits, topHeadline: raw.topHeadline, matches: raw.matches };
 }
 
 /** Pull the general news feed and derive Event-Risk signals. */
