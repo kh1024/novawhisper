@@ -218,8 +218,15 @@ function computePenalties(row: SetupRow, decision: StrategyDecision): Penalty[] 
 }
 
 // ── Action Label (Part 7) ───────────────────────────────────────────────────
-function labelFor(rank: number, decision: StrategyDecision): ActionLabel {
-  if (decision.action === "WAIT — no edge") return "DON'T BUY";
+// Spec mapping: Scanner only emits BUY NOW / WATCHLIST / WAIT / AVOID.
+// EXIT is portfolio-only and never produced here.
+function labelFor(rank: number, decision: StrategyDecision, penalties: Penalty[]): ActionLabel {
+  if (decision.action === "WAIT — no edge") return "AVOID";
+  // Hard-AVOID triggers — these dominate the score-based label.
+  const hardAvoid = penalties.some((p) =>
+    p.code === "ILLIQUID_OI" || p.code === "IV_TRAP" || p.code === "EARNINGS_48H" || p.code === "DEEP_ITM",
+  );
+  if (hardAvoid && rank < 75) return "AVOID";
   return actionFromScore(rank);
 }
 
@@ -230,14 +237,15 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
   const penalties = computePenalties(row, decision);
   const penaltyTotal = penalties.reduce((s, p) => s + p.points, 0);
 
-  // Part 6 — final rank formula.
+  // Part 6 — final rank formula. Reweighted to mirror the institutional spec:
+  // trend/regime/relVol live in readiness (45%), liquidity/IV-edge/R-R live in
+  // options (40%), raw setup quality (15%), then penalties.
   const baseRank = clamp(
-    Math.round(row.setupScore * 0.4 + readiness.total * 0.3 + options.total * 0.3 + penaltyTotal),
+    Math.round(row.setupScore * 0.15 + readiness.total * 0.45 + options.total * 0.40 + penaltyTotal),
   );
   // Self-learning bias: gently nudge the score per label using historical
-  // hit-rate multipliers (clamped to 0.85–1.15 in the DB), so the AI improves
-  // itself based on real-world outcomes. Provisional label uses base score.
-  const provisionalLabel = labelFor(baseRank, decision);
+  // hit-rate multipliers (clamped to 0.85–1.15 in the DB).
+  const provisionalLabel = labelFor(baseRank, decision, penalties);
   const mult = getLabelMultiplier(provisionalLabel);
   const rank = clamp(Math.round(baseRank * mult));
 
@@ -246,7 +254,7 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
     readinessScore: readiness.total,
     optionsScore: options.total,
     finalRank: rank,
-    label: labelFor(rank, decision),
+    label: labelFor(rank, decision, penalties),
     penalties,
     optionsBreakdown: {
       strikeEfficiency: options.strikeEfficiency,
@@ -271,9 +279,10 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
 /** Tailwind classes for an Action Label badge. */
 export function labelClasses(label: ActionLabel): string {
   switch (label) {
-    case "BUY":         return "bg-bullish/20 text-bullish border-bullish/50";
+    case "BUY NOW":     return "bg-bullish/20 text-bullish border-bullish/50";
     case "WATCHLIST":   return "bg-primary/10 text-primary border-primary/40";
     case "WAIT":        return "bg-warning/10 text-warning border-warning/40";
-    case "DON'T BUY":   return "bg-bearish/15 text-bearish border-bearish/40";
+    case "AVOID":       return "bg-bearish/15 text-bearish border-bearish/40";
+    case "EXIT":        return "bg-bearish/25 text-bearish border-bearish/60";
   }
 }
