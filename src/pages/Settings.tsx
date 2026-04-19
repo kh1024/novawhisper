@@ -20,6 +20,7 @@ import {
   type BrokerPreset,
 } from "@/lib/settings";
 import { useApiHealth, useRequestRate60s, type SourceHealth } from "@/lib/apiHealth";
+import { resetCounts } from "@/lib/requestRate";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { KvCacheAdminCard } from "@/components/KvCacheAdminCard";
 
@@ -51,10 +52,15 @@ function HealthRow({ h }: { h: SourceHealth }) {
         <div className="text-sm font-medium truncate">{h.name}</div>
         <div className="text-[11px] text-muted-foreground truncate">{h.description} · {h.detail}</div>
       </div>
-      <div className="text-right shrink-0 px-2" title="Requests in the last 60 seconds (this browser session)">
+      <button
+        type="button"
+        onClick={() => { resetCounts(h.functions); toast.success(`${h.name.split(" (")[0]} counter reset`); }}
+        className="text-right shrink-0 px-2 rounded hover:bg-surface/60 transition-colors"
+        title="Click to reset this row's 60s counter"
+      >
         <div className={`font-mono text-xs ${rateTone}`}>{rate}</div>
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground">/60s</div>
-      </div>
+      </button>
       <div className="text-right shrink-0">
         <div className="font-mono text-xs">
           {h.latencyMs == null ? "—" : `${h.latencyMs}ms`}

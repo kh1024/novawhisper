@@ -42,6 +42,12 @@ export function subscribe(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
+/** Clear the rolling counter for one or more function names. */
+export function resetCounts(fns: string[]): void {
+  for (const fn of fns) buckets.set(fn, []);
+  listeners.forEach((l) => { try { l(); } catch { /* ignore */ } });
+}
+
 // ── One-time instrumentation ─────────────────────────────────────────────
 // Guard against HMR double-patching in dev.
 const SUPA = supabase as unknown as {
