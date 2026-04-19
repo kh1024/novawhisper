@@ -294,17 +294,23 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  // Action-label counts derived from the institutional rank.
+  // Top-card counts now mirror the CRL signal shown in the row badge,
+  // so "BUY NOW" up top always equals the number of BUY rows in the table.
+  // GO → BUY NOW · WAIT → WATCHLIST · NEUTRAL → WAIT · NO/EXIT → AVOID.
   const counts = useMemo(() => {
-    const tally: Record<ActionLabel, number> = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0 };
-    let warnings = 0;
+    const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
     for (const r of rows) {
-      const lbl = rankMap.get(r.symbol)?.rank.label ?? "AVOID";
-      tally[lbl]++;
-      if (r.warnings.length > 0) warnings++;
+      const exp = expiryStatus.get(`scanner:${r.symbol}`);
+      const v = exp?.effectiveVerdict ?? r.crl?.verdict ?? "NEUTRAL";
+      if (v === "GO") tally["BUY NOW"]++;
+      else if (v === "WAIT") tally.WATCHLIST++;
+      else if (v === "EXIT") tally.EXIT++;
+      else if (v === "NO") tally.AVOID++;
+      else tally.WAIT++; // NEUTRAL
+      if (r.warnings.length > 0) tally.warnings++;
     }
-    return { ...tally, warnings };
-  }, [rows, rankMap]);
+    return tally;
+  }, [rows, expiryStatus]);
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
