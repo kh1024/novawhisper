@@ -4,7 +4,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, FileText, Youtube, TrendingUp, Newspaper, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
+import { Sparkles, FileText, Youtube, TrendingUp, Newspaper, RefreshCw, Loader2, AlertTriangle, BarChart3, Users } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useMemo, useState } from "react";
 import { ComposedChart, Area, Line, ReferenceLine, ReferenceDot, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -18,6 +18,8 @@ import { useSettings } from "@/lib/settings";
 import { NovaVerdictCard, type NovaCard } from "@/components/NovaVerdictCard";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { useEventRiskSignals } from "@/lib/sentimentSignals";
+import { FundamentalsPanel } from "@/components/FundamentalsPanel";
+import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
 
 type Props = {
   symbol: string | null;
@@ -379,9 +381,11 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
               </div>
 
               <Tabs defaultValue="why">
-                <TabsList className="bg-surface/60 w-full justify-start">
+                <TabsList className="bg-surface/60 w-full justify-start flex-wrap h-auto">
                   <TabsTrigger value="why">Ask Nova</TabsTrigger>
                   <TabsTrigger value="picks">Live Picks</TabsTrigger>
+                  <TabsTrigger value="fundamentals" className="gap-1"><BarChart3 className="h-3 w-3" />Fundamentals</TabsTrigger>
+                  <TabsTrigger value="insiders" className="gap-1"><Users className="h-3 w-3" />Insiders</TabsTrigger>
                   <TabsTrigger value="sym">Sympathy</TabsTrigger>
                 </TabsList>
 
