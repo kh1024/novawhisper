@@ -169,6 +169,28 @@ export default function Dashboard() {
   const pickSymbols = useMemo(() => Array.from(new Set(picks.map((p) => p.symbol))), [picks]);
   const sma = useSma200(pickSymbols);
 
+  // Pre-compute the guard verdict for each pick so we can hide the BLOCKED rows
+  // by default (they only clutter the list — users can opt-in to see them).
+  const picksWithGuard = useMemo(() => picks.map((p) => {
+    const isPut = p.strategy === "long-put" || p.strategy === "leaps-put";
+    const optionType = isPut ? ("put" as const) : ("call" as const);
+    const live = quoteMap.get(p.symbol);
+    const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
+    const guard = evaluateGuards({
+      symbol: p.symbol,
+      pickPrice,
+      livePrice: live?.price ?? null,
+      riskBucket: p.riskBucket,
+      optionType,
+      direction: "long",
+      strike: p.strike,
+      sma200: sma.map.get(p.symbol)?.sma200 ?? null,
+    });
+    return { p, guard, blocked: guard.shouldBlockSignal, optionType, live, pickPrice };
+  }), [picks, quoteMap, sma]);
+  const blockedCount = picksWithGuard.filter((x) => x.blocked).length;
+  const visiblePicks = showBlocked ? picksWithGuard : picksWithGuard.filter((x) => !x.blocked);
+
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex items-center justify-between px-1 gap-3 flex-wrap">
