@@ -294,23 +294,50 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  // Top-card counts now mirror the CRL signal shown in the row badge,
-  // so "BUY NOW" up top always equals the number of BUY rows in the table.
-  // GO → BUY NOW · WAIT → WATCHLIST · NEUTRAL → WAIT · NO/EXIT → AVOID.
+  // ── UNIFIED LABEL SYSTEM ─────────────────────────────────────────────
+  // ONE label per row, used by BOTH the top cards AND the row badge.
+  // Source of truth: Final Rank's ActionLabel (BUY NOW / WATCHLIST / WAIT /
+  // AVOID / EXIT) with three explicit overrides in priority order:
+  //   1. Guard block on a BUY NOW → BLOCKED (counts as AVOID)
+  //   2. CRL says EXIT + owned    → EXIT
+  //   3. Pick expiry STALE        → AVOID
+  // Everything else uses rank.label as-is. No more competing CRL/Setup pills.
+  type RowLabel = ActionLabel | "BLOCKED";
+  const labelFor = (r: SetupRow): RowLabel => {
+    const rk = rankMap.get(r.symbol)?.rank;
+    if (!rk) return "WAIT";
+    const exp = expiryStatus.get(`scanner:${r.symbol}`);
+    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
+    const guard = evaluateGuards({
+      symbol: r.symbol,
+      livePrice: r.price,
+      pickPrice: r.price,
+      optionType: r.bias === "bearish" ? "put" : "call",
+      direction: "long",
+      strike: r.price,
+      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
+    });
+    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
+    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
+    if (exp?.isStale) return "AVOID";
+    return rk.label;
+  };
+
   const counts = useMemo(() => {
     const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
     for (const r of rows) {
-      const exp = expiryStatus.get(`scanner:${r.symbol}`);
-      const v = exp?.effectiveVerdict ?? r.crl?.verdict ?? "NEUTRAL";
-      if (v === "GO") tally["BUY NOW"]++;
-      else if (v === "WAIT") tally.WATCHLIST++;
-      else if (v === "EXIT") tally.EXIT++;
-      else if (v === "NO") tally.AVOID++;
-      else tally.WAIT++; // NEUTRAL
+      const l = labelFor(r);
+      if (l === "BUY NOW") tally["BUY NOW"]++;
+      else if (l === "WATCHLIST") tally.WATCHLIST++;
+      else if (l === "WAIT") tally.WAIT++;
+      else if (l === "EXIT") tally.EXIT++;
+      else tally.AVOID++; // AVOID + BLOCKED
       if (r.warnings.length > 0) tally.warnings++;
     }
     return tally;
-  }, [rows, expiryStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, rankMap, expiryStatus, sma, ownedSymbols]);
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
@@ -345,13 +372,13 @@ export default function Scanner() {
         {/* NOVA AI filter — natural-language pick filter */}
         <NovaFilterBar />
 
-        {/* Action-label summary — institutional ranking buckets. */}
+        {/* Unified action-label summary — same labels appear on every row. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "CRL: GO · take the trade",         cls: "border-bullish/60 text-bullish",     Icon: Zap },
-            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "CRL: WAIT · trigger pending",      cls: "border-primary/40 text-primary",     Icon: Clock },
-            { k: "WAIT",       v: counts.WAIT,            sub: "CRL: NEUTRAL · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
-            { k: "AVOID",      v: counts.AVOID,           sub: "CRL: NO · no edge / IV trap",      cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
+            { k: "BUY NOW",    v: counts["BUY NOW"],  sub: "Take the trade now",                cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "WATCHLIST",  v: counts.WATCHLIST,   sub: "Setup close · wait for trigger",    cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WAIT",       v: counts.WAIT,        sub: "Mixed signals · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "AVOID",      v: counts.AVOID,       sub: "No edge · poor liquidity / IV",     cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
@@ -403,8 +430,7 @@ export default function Scanner() {
                       { k: "ATR%", tip: "Estimated — green <2% (calm), red >4% (volatile)" },
                       { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
                       { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
-                      { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
-                      { k: "Rank", tip: "Final Rank 0–100 = Setup×.40 + Readiness×.30 + Options×.30 − Penalties. ELITE ≥90, GO NOW ≥80, GOOD ≥70, WATCHLIST ≥60." }, { k: "" },
+                      { k: "Action", tip: "Unified verdict — BUY NOW / WATCHLIST / WAIT / AVOID / EXIT / BLOCKED. Combines Setup × Readiness × Options × Penalties × Guards into one call. Number = Final Rank 0–100." }, { k: "" },
                     ].map((h) => (
                       <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap bg-card">
                         {h.tip ? (
@@ -417,29 +443,19 @@ export default function Scanner() {
                 <tbody>
                   {filtered.map((r) => {
                     const { cls: bcls, Icon: BIcon } = biasMeta(r.bias);
-                    // (readiness label is replaced by Final Rank column below)
                     const isOpen = expanded === r.symbol;
                     const exp = expiryStatus.get(`scanner:${r.symbol}`);
-                    const rawBaseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
-                    const isOwned = ownedSymbols.has(r.symbol.toUpperCase());
-                    // EXIT only makes sense if the user holds the position. Otherwise show NO.
-                    const baseVerdict = (rawBaseVerdict === "EXIT" && !isOwned) ? "NO" : rawBaseVerdict;
-                    // NOVA Guards — 200-SMA gate is the relevant one for scanner long-call setups.
+                    // NOVA Guards — used for row tint + the guard chips inside the Action cell.
                     const guard = evaluateGuards({
                       symbol: r.symbol,
                       livePrice: r.price,
-                      pickPrice: r.price,                          // live = pick price in scanner
+                      pickPrice: r.price,
                       optionType: r.bias === "bearish" ? "put" : "call",
                       direction: "long",
-                      strike: r.price,                              // ATM for the gate
+                      strike: r.price,
                       sma200: sma.map.get(r.symbol)?.sma200 ?? null,
                       riskBucket: r.crl.riskBadge?.toLowerCase() ?? null,
                     });
-                    // If guard blocks a GO, downgrade. EXIT downgrade only fires for owned positions;
-                    // for non-owned tickers we surface BLOCKED but keep verdict as NO.
-                    const verdict = guard.shouldBlockSignal && baseVerdict === "GO"
-                      ? (isOwned ? "EXIT" : "NO")
-                      : baseVerdict;
                     const blocked = guard.shouldBlockSignal;
                     return (
                       <Fragment key={r.symbol}>
@@ -478,41 +494,36 @@ export default function Scanner() {
                             <div className={cn("mono font-semibold text-base", scoreColor(r.setupScore))}>{r.setupScore}</div>
                           </td>
                           <td className="px-3 py-3">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1">
-                                <Hint label="Verdict engine reconciling technicals, Greeks & risk">
-                                  <span className={cn(
-                                    "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit cursor-help",
-                                    verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                    verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                    (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                    verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                                  )}>{blocked ? "BLOCKED" : verdict === "GO" ? "BUY" : verdict}</span>
-                                </Hint>
-                              </div>
-                              {r.crl.riskBadge && (
-                                <span className={cn(
-                                  "text-[9px] px-1.5 py-0 rounded border w-fit",
-                                  r.crl.riskBadge === "Safe" && "text-bullish border-bullish/30",
-                                  r.crl.riskBadge === "Mild" && "text-warning border-warning/30",
-                                  r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
-                                )}>{r.crl.riskBadge}</span>
-                              )}
-                              <NovaGuardBadges guard={guard} compact />
-                              <PickExpiryChips status={exp} compact />
-                            </div>
-                          </td>
-                          <td className="px-3 py-3">
                             {(() => {
                               const rk = rankMap.get(r.symbol)?.rank;
-                              if (!rk) return <span className="text-muted-foreground text-xs">—</span>;
+                              const unified = labelFor(r);
+                              const displayLabel = unified === "BLOCKED" ? "BLOCKED" : unified;
+                              // Color: BLOCKED uses bearish styling, otherwise reuse labelClasses.
+                              const cls = unified === "BLOCKED"
+                                ? "bg-bearish/15 text-bearish border-bearish/40"
+                                : labelClasses(unified);
+                              const tip = rk
+                                ? `Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore} · CRL ${r.crl?.verdict ?? "—"}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`
+                                : "Computing…";
                               return (
-                                <Hint label={`Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`}>
+                                <Hint label={tip}>
                                   <div className="flex flex-col gap-1 cursor-help">
-                                    <span className={cn("text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit", labelClasses(rk.label))}>
-                                      {rk.label}
+                                    <span className={cn("text-[11px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit whitespace-nowrap", cls)}>
+                                      {displayLabel}
                                     </span>
-                                    <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
+                                    {rk && (
+                                      <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
+                                    )}
+                                    {r.crl?.riskBadge && (
+                                      <span className={cn(
+                                        "text-[9px] px-1.5 py-0 rounded border w-fit",
+                                        r.crl.riskBadge === "Safe" && "text-bullish border-bullish/30",
+                                        r.crl.riskBadge === "Mild" && "text-warning border-warning/30",
+                                        r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
+                                      )}>{r.crl.riskBadge}</span>
+                                    )}
+                                    <NovaGuardBadges guard={guard} compact />
+                                    <PickExpiryChips status={exp} compact />
                                   </div>
                                 </Hint>
                               );
