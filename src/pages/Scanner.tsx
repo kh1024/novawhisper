@@ -272,7 +272,7 @@ export default function Scanner() {
 
   // Action-label counts derived from the institutional rank.
   const counts = useMemo(() => {
-    const tally: Record<ActionLabel, number> = { ELITE: 0, "GO NOW": 0, GOOD: 0, WATCHLIST: 0, PASS: 0 };
+    const tally: Record<ActionLabel, number> = { BUY: 0, WATCHLIST: 0, WAIT: 0, "DON'T BUY": 0 };
     let warnings = 0;
     for (const r of rows) {
       const lbl = rankMap.get(r.symbol)?.rank.label ?? "PASS";
