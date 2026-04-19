@@ -71,7 +71,7 @@ export function useApiHealth() {
       const toStatus = (r: { ok: boolean; ms: number }) =>
         !r.ok ? "down" : r.ms > 4000 ? "degraded" : "ok";
       const rows: SourceHealth[] = [
-        { name: "Quotes (Finnhub + Alpha Vantage + Massive)", description: "Live verified prices — freshest-timestamp wins", status: toStatus(quotes),  latencyMs: quotes.ms,  detail: quotes.detail, functions: ["quotes-fetch"] },
+        { name: "Quotes (Finnhub + Alpha Vantage)", description: "Live verified prices — freshest-timestamp wins", status: toStatus(quotes),  latencyMs: quotes.ms,  detail: quotes.detail, functions: ["quotes-fetch"] },
         { name: "Massive (Options + Quotes backbone)",        description: "Throttled to 75 req/s/instance to stay under plan limits", status: toStatus(options), latencyMs: options.ms, detail: options.detail, functions: ["quotes-fetch", "options-fetch"] },
         { name: "Market News (Finnhub)",                      description: "Sentiment + headlines feed",                     status: toStatus(news),    latencyMs: news.ms,    detail: news.detail,    functions: ["news-fetch"] },
         { name: "Lovable AI Gateway",                         description: "Nova explanations",                              status: "ok",              latencyMs: null,       detail: "Routed via gateway — no key needed", functions: ["nova-chat", "ask-nova"] },
