@@ -588,38 +588,21 @@ export default function Scanner() {
                           <td className="px-3 py-3">
                             {(() => {
                               const rk = rankMap.get(r.symbol)?.rank;
-                              const unified = labelFor(r);
-                              const displayLabel = unified === "BLOCKED"
-                                ? "BLOCKED"
-                                : smartActionLabel(unified as ActionLabel, { bias: r.bias as "bullish" | "bearish" | "neutral" });
-                              // Color: BLOCKED uses bearish styling, otherwise reuse labelClasses.
-                              const cls = unified === "BLOCKED"
-                                ? "bg-bearish/15 text-bearish border-bearish/40"
-                                : labelClasses(unified);
-                              const tip = rk
-                                ? `Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore} · CRL ${r.crl?.verdict ?? "—"}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`
-                                : "Computing…";
+                              const vr = verdictByRow.get(r.symbol);
+                              if (!vr) return <span className="text-[11px] text-muted-foreground">…</span>;
                               return (
-                                <Hint label={tip}>
-                                  <div className="flex flex-col gap-1 cursor-help">
-                                    <span className={cn("text-[11px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit whitespace-nowrap", cls)}>
-                                      {displayLabel}
-                                    </span>
-                                    {rk && (
-                                      <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
-                                    )}
-                                    {r.crl?.riskBadge && (
-                                      <span className={cn(
-                                        "text-[9px] px-1.5 py-0 rounded border w-fit",
-                                        r.crl.riskBadge === "Safe" && "text-bullish border-bullish/30",
-                                        r.crl.riskBadge === "Mild" && "text-warning border-warning/30",
-                                        r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
-                                      )}>{r.crl.riskBadge}</span>
-                                    )}
-                                    <NovaGuardBadges guard={guard} compact />
-                                    <PickExpiryChips status={exp} compact />
-                                  </div>
-                                </Hint>
+                                <div className="flex flex-col gap-1">
+                                  <VerdictBadge verdict={vr.verdict} reason={vr.reason} />
+                                  <span className={cn("text-[10px]", vr.timing === "Ready" ? "text-bullish" : vr.timing === "Too Late" ? "text-bearish" : "text-muted-foreground")}>
+                                    {vr.timing}
+                                  </span>
+                                  <span className="text-[10px] text-muted-foreground">Risk: <span className="text-foreground font-semibold">{vr.risk}</span></span>
+                                  {rk && (
+                                    <span className={cn("mono text-xs font-semibold", scoreColor(rk.finalRank))}>Rank {rk.finalRank}</span>
+                                  )}
+                                  <NovaGuardBadges guard={guard} compact />
+                                  <PickExpiryChips status={exp} compact />
+                                </div>
                               );
                             })()}
                           </td>
