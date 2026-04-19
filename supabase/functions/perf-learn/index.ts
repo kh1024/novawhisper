@@ -75,9 +75,10 @@ Deno.serve(async (req) => {
       const hit = b.wins / b.total;
       const avg = b.sumReturn / b.total;
 
-      // Map [0.40, 0.60] → [-0.15, +0.15] linearly.
-      const raw = (hit - 0.5) * 1.5; // hit=0.6 → 0.15, hit=0.4 → -0.15
-      const mult = +clamp(1 + raw, 0.85, 1.15).toFixed(3);
+      // Linear map: hit_rate ∈ [0.40, 0.60] → multiplier ∈ [0.85, 1.15],
+      // hard-clamped to [0.70, 1.30] for safety on extreme inputs.
+      const linear = 0.85 + ((hit - 0.40) / (0.60 - 0.40)) * (1.15 - 0.85);
+      const mult = +clamp(linear, 0.70, 1.30).toFixed(3);
 
       const direction = mult > 1.01 ? "boosted" : mult < 0.99 ? "dampened" : "held";
       updates.push({
