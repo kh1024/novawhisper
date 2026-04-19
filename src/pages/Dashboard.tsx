@@ -96,6 +96,7 @@ export default function Dashboard() {
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
+  const [budget] = useBudget();
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   const picks = useMemo(() => {
@@ -321,7 +322,12 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{p.symbol}</span>
-                    <TickerPrice symbol={p.symbol} showChange />
+                    <TickerPrice symbol={p.symbol} showChange showFreshness />
+                    <BudgetAltSuggestion
+                      symbol={p.symbol}
+                      contractCost={(p.premium ?? 0) * 100}
+                      budget={budget}
+                    />
                     <Hint label="NOVA — verdict engine reconciling technicals, Greeks & risk">
                       <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/40 cursor-help">
                         NOVA
