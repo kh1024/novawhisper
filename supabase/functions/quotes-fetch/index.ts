@@ -66,6 +66,7 @@ const YAHOO_TTL_MS = 30_000;
 const STOOQ_TTL_MS = 60_000;
 const CNBC_TTL_MS = 60_000;
 const GOOGLE_TTL_MS = 60_000;
+const STOCKDATA_TTL_MS = 60_000;
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
@@ -74,6 +75,7 @@ const yahooCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const stooqCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const cnbcCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const googleCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const stockdataCache = new Map<string, { q: SourceQuote | null; at: number }>();
 
 let alphaChain: Promise<unknown> = Promise.resolve();
 function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
