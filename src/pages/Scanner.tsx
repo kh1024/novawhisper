@@ -42,6 +42,11 @@ import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
 import { ScannerToolbar } from "@/components/ScannerToolbar";
 import { Sparkline } from "@/components/Sparkline";
+import { VerdictBadge } from "@/components/PickMetaRow";
+import {
+  computeVerdict, isMarketOpen, isWeekend,
+  type VerdictResult, type Verdict,
+} from "@/lib/verdictModel";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
