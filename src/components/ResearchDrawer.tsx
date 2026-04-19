@@ -470,6 +470,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                       <NovaVerdictCard
                         card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }}
                         closes={novaCloses ?? undefined}
+                        symbol={symbol ?? undefined}
                       />
                     )}
                     {!novaLoading && !novaCard && novaText && (
