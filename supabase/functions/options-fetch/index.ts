@@ -163,12 +163,7 @@ Deno.serve(async (req) => {
             if (d < bestDist) { best = c; bestDist = d; }
           }
           if (best?.iv != null) {
-            const writePromise = recordAtmIv(underlying, best.iv);
-            // @ts-ignore
-            if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
-              // @ts-ignore
-              EdgeRuntime.waitUntil(writePromise);
-            }
+            await recordAtmIv(underlying, best.iv);
           }
         } catch (e) {
           console.warn("[iv_history] cache-path record skipped", e);
