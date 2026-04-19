@@ -19,7 +19,7 @@ import {
   type RiskProfile,
   type BrokerPreset,
 } from "@/lib/settings";
-import { useApiHealth } from "@/lib/apiHealth";
+import { useApiHealth, useRequestRate60s, type SourceHealth } from "@/lib/apiHealth";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { KvCacheAdminCard } from "@/components/KvCacheAdminCard";
 
@@ -30,6 +30,43 @@ function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
   if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-bullish" />;
   if (status === "degraded") return <AlertTriangle className="h-4 w-4 text-warning" />;
   return <XCircle className="h-4 w-4 text-bearish" />;
+}
+
+/**
+ * One row in the API-health card. Pulled into its own component so
+ * useRequestRate60s can subscribe per-source without re-rendering siblings
+ * every time a counter ticks.
+ */
+function HealthRow({ h }: { h: SourceHealth }) {
+  const rate = useRequestRate60s(h.functions);
+  // Massive's plan rejects above ~100 req/s. Yellow at 60+, red at 90+.
+  const rateTone =
+    rate >= 90 ? "text-bearish" :
+    rate >= 60 ? "text-warning" :
+    "text-muted-foreground";
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30">
+      <StatusDot status={h.status} />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{h.name}</div>
+        <div className="text-[11px] text-muted-foreground truncate">{h.description} · {h.detail}</div>
+      </div>
+      <div className="text-right shrink-0 px-2" title="Requests in the last 60 seconds (this browser session)">
+        <div className={`font-mono text-xs ${rateTone}`}>{rate}</div>
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">/60s</div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className="font-mono text-xs">
+          {h.latencyMs == null ? "—" : `${h.latencyMs}ms`}
+        </div>
+        <div className={`text-[10px] uppercase tracking-wider ${
+          h.status === "ok" ? "text-bullish" : h.status === "degraded" ? "text-warning" : "text-bearish"
+        }`}>
+          {h.status}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Settings() {
@@ -270,26 +307,7 @@ export default function Settings() {
             <div className="text-xs text-muted-foreground py-4 text-center">Pinging providers…</div>
           )}
           {health.map((h) => (
-            <div
-              key={h.name}
-              className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30"
-            >
-              <StatusDot status={h.status} />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{h.name}</div>
-                <div className="text-[11px] text-muted-foreground truncate">{h.description} · {h.detail}</div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="font-mono text-xs">
-                  {h.latencyMs == null ? "—" : `${h.latencyMs}ms`}
-                </div>
-                <div className={`text-[10px] uppercase tracking-wider ${
-                  h.status === "ok" ? "text-bullish" : h.status === "degraded" ? "text-warning" : "text-bearish"
-                }`}>
-                  {h.status}
-                </div>
-              </div>
-            </div>
+            <HealthRow key={h.name} h={h} />
           ))}
         </div>
       </Card>
