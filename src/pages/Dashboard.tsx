@@ -174,7 +174,8 @@ export default function Dashboard() {
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
             {picks.map((p) => {
-              const isPut = p.strategy === "long-put";
+              const isPut = p.strategy === "long-put" || p.strategy === "leaps-put";
+              const isLeaps = p.strategy === "leaps-call" || p.strategy === "leaps-put";
               const optionType = isPut ? "put" : "call";
               const direction = "long" as const;
               const live = quoteMap.get(p.symbol);
