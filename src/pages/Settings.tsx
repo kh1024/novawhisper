@@ -6,7 +6,7 @@ import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook"
 import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
 import { toast } from "sonner";
 
-import { useBudget } from "@/lib/budget";
+import { useCapitalSettings } from "@/lib/budget";
 import { useState, useEffect } from "react";
 import {
   useSettings,
