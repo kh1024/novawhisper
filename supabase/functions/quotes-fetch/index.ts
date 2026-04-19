@@ -512,7 +512,7 @@ function pickExtended(session: Session, yahoo: SourceQuote | null): { price: num
   return { price: null, pct: null };
 }
 
-// Pick consensus from up to 5 sources.
+// Pick consensus from up to 7 sources.
 function verify(
   symbol: string,
   finn: SourceQuote | null,
@@ -520,6 +520,8 @@ function verify(
   mass: SourceQuote | null,
   yahoo: SourceQuote | null,
   stooq: SourceQuote | null,
+  cnbc: SourceQuote | null,
+  google: SourceQuote | null,
 ): VerifiedQuote {
   const now = new Date().toISOString();
   const session = detectSession(yahoo?.marketState);
@@ -539,8 +541,10 @@ function verify(
     massive: mass?.price ?? null,
     yahoo: yahoo?.price ?? null,
     stooq: stooq?.price ?? null,
+    cnbc: cnbc?.price ?? null,
+    google: google?.price ?? null,
   };
-  const live = [finn, alpha, mass, yahoo, stooq].filter((x): x is SourceQuote => !!x && x.price > 0);
+  const live = [finn, alpha, mass, yahoo, stooq, cnbc, google].filter((x): x is SourceQuote => !!x && x.price > 0);
   if (live.length === 0) {
     return {
       symbol, price: 0, change: 0, changePct: 0, volume: 0,
@@ -561,8 +565,8 @@ function verify(
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const diff = ((maxP - minP) / minP) * 100;
-  // Prefer real-time intraday: Yahoo > Finnhub > Massive > Stooq > Alpha.
-  const order: SourceName[] = ["yahoo", "finnhub", "massive", "stooq", "alpha-vantage"];
+  // Prefer real-time intraday: Yahoo > Finnhub > Massive > CNBC > Google > Stooq > Alpha.
+  const order: SourceName[] = ["yahoo", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
   const chosen = order.map((n) => live.find((s) => s.source === n)).find(Boolean) ?? live[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
@@ -596,7 +600,18 @@ async function getQuote(
     fetchStooq(sym),
   ]);
   const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
-  const v = verify(sym, finn, alpha, mass, yahoo, stooq);
+
+  // Last-resort fallbacks. Only fire when the 5 primary sources are ALL empty —
+  // keeps happy-path latency unchanged but guarantees ETFs (GLD/TLT/ARKK/SOXL)
+  // never render "$0.00 No data" when Yahoo/Finnhub throttle in bulk.
+  const primaryHasPrice = [finn, mass, alpha, stooq, yahoo].some((q) => q && q.price > 0);
+  let cnbc: SourceQuote | null = cnbcCache.get(sym)?.q ?? null;
+  let google: SourceQuote | null = googleCache.get(sym)?.q ?? null;
+  if (!primaryHasPrice) {
+    [cnbc, google] = await Promise.all([fetchCnbc(sym), fetchGoogle(sym)]);
+  }
+
+  const v = verify(sym, finn, alpha, mass, yahoo, stooq, cnbc, google);
   // If every provider failed this round but we have a previous good price, keep
   // serving it (marked stale) instead of returning "unavailable" / no data.
   if (v.status === "unavailable" && cached?.quote && cached.quote.price > 0) {
