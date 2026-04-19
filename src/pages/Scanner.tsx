@@ -450,10 +450,10 @@ export default function Scanner() {
                               <BIcon className="h-3 w-3" />{r.bias}
                             </span>
                           </td>
-                          <td className="px-3 py-3 mono"><EstNum n={r.ivRank} est /></td>
-                          <td className="px-3 py-3 mono"><EstNum n={r.rsi} est /></td>
-                          <td className="px-3 py-3 mono"><EstNum n={r.atrPct} est suffix="%" /></td>
-                          <td className="px-3 py-3 mono">{r.optionsLiquidity}</td>
+                          <td className="px-3 py-3 mono"><EstNum n={r.ivRank} est className={ivrColor(r.ivRank)} /></td>
+                          <td className="px-3 py-3 mono"><EstNum n={r.rsi} est className={rsiColor(r.rsi)} /></td>
+                          <td className="px-3 py-3 mono"><EstNum n={r.atrPct} est suffix="%" className={atrColor(r.atrPct)} /></td>
+                          <td className={cn("px-3 py-3 mono font-semibold", liqColor(r.optionsLiquidity))}>{r.optionsLiquidity}</td>
                           <td className="px-3 py-3">
                             <div className={cn("mono font-semibold text-base", scoreColor(r.setupScore))}>{r.setupScore}</div>
                           </td>
@@ -580,11 +580,11 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   );
 }
 
-function EstNum({ n, est, suffix = "" }: { n: number; est?: boolean; suffix?: string }) {
+function EstNum({ n, est, suffix = "", className }: { n: number; est?: boolean; suffix?: string; className?: string }) {
   return (
-    <span className="inline-flex items-baseline gap-1">
+    <span className={cn("inline-flex items-baseline gap-1 font-semibold", className)}>
       {n}{suffix}
-      {est && <span className="text-[8px] text-warning/80">·est</span>}
+      {est && <span className="text-[8px] text-warning/80 font-normal">·est</span>}
     </span>
   );
 }
