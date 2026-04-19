@@ -187,9 +187,12 @@ async function fetchSocialPlatforms(): Promise<NormalizedPost[]> {
       const headline = title.includes("Truth Social") && platform === "truthsocial"
         ? "Donald J. Trump · Truth Social post"
         : (title || "(untitled post)");
+      // X-mirror summaries embed the actual TS post time, e.g.
+      //   "Donald J. Trump Truth Social Post of Video 09:26 PM EST 04.18.26 Chills."
+      const tsTime = extractMirrorTimestamp(`${title} ${rawDesc}`);
       drafts.push({
         id: url, headline, summary, source: hostFromUrl(url), url,
-        publishedAt: new Date().toISOString(), platform,
+        publishedAt: tsTime ?? new Date().toISOString(), platform,
       });
     }
   }
