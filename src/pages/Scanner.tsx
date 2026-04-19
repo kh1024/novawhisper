@@ -28,6 +28,7 @@ import { useSettings } from "@/lib/settings";
 import { useBudget } from "@/lib/budget";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
@@ -564,6 +565,20 @@ export default function Scanner() {
                                   </Hint>
                                 );
                               })()}
+                              <SaveToWatchlistButton
+                                size="xs"
+                                symbol={r.symbol}
+                                direction={deriveContractFromRow(r).direction}
+                                optionType={deriveContractFromRow(r).optionType}
+                                strike={deriveContractFromRow(r).strike}
+                                expiry={deriveContractFromRow(r).expiry}
+                                bias={r.bias}
+                                tier={r.readiness}
+                                entryPrice={r.price}
+                                thesis={r.warnings[0] ?? r.trendLabel}
+                                source="scanner"
+                                meta={{ setupScore: r.setupScore }}
+                              />
                               <SaveToPortfolioButton {...deriveContractFromRow(r)} size="xs" />
                               <Button
                                 size="sm"
@@ -767,6 +782,20 @@ function DetailPanel({ row, decision, rank, onOpen }: {
           <Button onClick={onOpen} className="flex-1 min-w-[140px]" size="sm">
             Open full research →
           </Button>
+          <SaveToWatchlistButton
+            size="sm"
+            symbol={row.symbol}
+            direction={deriveContractFromRow(row).direction}
+            optionType={deriveContractFromRow(row).optionType}
+            strike={deriveContractFromRow(row).strike}
+            expiry={deriveContractFromRow(row).expiry}
+            bias={row.bias}
+            tier={row.readiness}
+            entryPrice={row.price}
+            thesis={row.warnings[0] ?? row.trendLabel}
+            source="scanner"
+            meta={{ setupScore: row.setupScore }}
+          />
           <SaveToPortfolioButton {...deriveContractFromRow(row)} size="sm" />
           <Button asChild variant="outline" size="sm" className="gap-1.5 flex-1 sm:flex-none min-w-[120px] sm:min-w-0">
             <a
@@ -866,6 +895,20 @@ function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | nu
             </div>
           );
         })()}
+        <SaveToWatchlistButton
+          size="xs"
+          symbol={row.symbol}
+          direction={deriveContractFromRow(row).direction}
+          optionType={deriveContractFromRow(row).optionType}
+          strike={deriveContractFromRow(row).strike}
+          expiry={deriveContractFromRow(row).expiry}
+          bias={row.bias}
+          tier={row.readiness}
+          entryPrice={row.price}
+          thesis={row.warnings[0] ?? row.trendLabel}
+          source="scanner"
+          meta={{ setupScore: row.setupScore }}
+        />
         <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
       </div>
     </Card>
