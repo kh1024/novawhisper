@@ -110,7 +110,19 @@ const readinessMeta = (r: Readiness) => {
 };
 
 const scoreColor = (n: number) =>
-  n >= 75 ? "text-bullish" : n >= 55 ? "text-foreground" : n >= 40 ? "text-warning" : "text-bearish";
+  n >= 70 ? "text-bullish" : n >= 45 ? "text-foreground" : "text-bearish";
+
+// ── Metric color rules (red = bad, green = good, white = neutral) ─────────────
+// Uniform 3-tier coloring for the scanner table so the user can scan a row and
+// instantly read "good/neutral/bad" per metric without parsing numbers.
+const ivrColor = (n: number) =>
+  n < 30 ? "text-bullish" : n > 60 ? "text-bearish" : "text-foreground";
+const rsiColor = (n: number) =>
+  n < 30 || n > 70 ? "text-bearish" : n >= 45 && n <= 60 ? "text-bullish" : "text-foreground";
+const atrColor = (n: number) =>
+  n < 2 ? "text-bullish" : n > 4 ? "text-bearish" : "text-foreground";
+const liqColor = (n: number) =>
+  n >= 60 ? "text-bullish" : n < 30 ? "text-bearish" : "text-foreground";
 
 function ScoreBar({ label, value, Icon }: { label: string; value: number; Icon: any }) {
   return (
