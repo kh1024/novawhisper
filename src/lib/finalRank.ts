@@ -19,19 +19,22 @@ import type { SetupRow } from "./setupScore";
 import type { StrategyDecision } from "./strategySelector";
 import { getLabelMultiplier } from "./learningWeights";
 
-// Plain-English action language used across the whole app:
-//   BUY        — high conviction, take the trade now
-//   WATCHLIST  — solid setup, wait for a confirmed entry
-//   WAIT       — early / mixed signals, no action yet
-//   DON'T BUY  — no edge or actively negative — skip
-export type ActionLabel = "BUY" | "WATCHLIST" | "WAIT" | "DON'T BUY";
+// Plain-English action language used across the whole app (institutional spec):
+//   BUY NOW    — score ≥ 80, setup triggered now, take the trade
+//   WATCHLIST  — score 70–79, setup close, wait for confirmed trigger
+//   WAIT       — score 50–69, mixed signals, monitor
+//   AVOID      — score < 50 OR poor liquidity / IV trap / earnings risk
+//   EXIT       — only emitted for held portfolio positions whose thesis broke;
+//                Scanner never returns EXIT.
+export type ActionLabel = "BUY NOW" | "WATCHLIST" | "WAIT" | "AVOID" | "EXIT";
 
-/** Map any 0–100 confidence/rank score to the canonical action label. */
+/** Map any 0–100 confidence/rank score to the canonical action label.
+ *  Never returns EXIT — that label is reserved for portfolio-held positions. */
 export function actionFromScore(score: number): ActionLabel {
-  if (score >= 80) return "BUY";
-  if (score >= 65) return "WATCHLIST";
+  if (score >= 80) return "BUY NOW";
+  if (score >= 70) return "WATCHLIST";
   if (score >= 50) return "WAIT";
-  return "DON'T BUY";
+  return "AVOID";
 }
 
 export interface Penalty {
