@@ -17,7 +17,8 @@ import {
 import { useLiveQuotes } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
-import { selectStrategy } from "@/lib/strategySelector";
+import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
+import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
@@ -155,7 +156,35 @@ export default function Scanner() {
     refetchMs: 60_000,
   });
 
-  const rows: SetupRow[] = useMemo(() => computeSetups(quotes).sort((a, b) => b.setupScore - a.setupScore), [quotes]);
+  // Compute setups, then attach the institutional rank (Setup × .40 +
+  // Readiness × .30 + Options × .30 − Penalties). Default sort: Final Rank desc.
+  const rows: SetupRow[] = useMemo(() => computeSetups(quotes), [quotes]);
+
+  // Per-symbol Strategy + Rank. Stable map keyed by symbol so DetailPanel /
+  // SetupCard can re-use the exact same decision the rank was computed against.
+  const rankMap = useMemo(() => {
+    const m = new Map<string, { decision: StrategyDecision; rank: RankResult }>();
+    for (const r of rows) {
+      const decision = selectStrategy({
+        symbol: r.symbol, bias: r.bias, price: r.price, changePct: r.changePct,
+        ivRank: r.ivRank, atrPct: r.atrPct, rsi: r.rsi,
+        optionsLiquidity: r.optionsLiquidity, earningsInDays: r.earningsInDays,
+        setupScore: r.setupScore,
+      });
+      m.set(r.symbol, { decision, rank: rankSetup(r, decision) });
+    }
+    return m;
+  }, [rows]);
+
+  // Re-sort rows by Final Rank desc; ties broken by Setup Score.
+  const sortedRows = useMemo(
+    () => [...rows].sort((a, b) => {
+      const ra = rankMap.get(a.symbol)?.rank.finalRank ?? 0;
+      const rb = rankMap.get(b.symbol)?.rank.finalRank ?? 0;
+      return rb - ra || b.setupScore - a.setupScore;
+    }),
+    [rows, rankMap],
+  );
 
   // ── Pick Expiration Engine ────────────────────────────────────────────
   // Track first-seen price/time for every scanner row. Force WAIT when RSI > 75.
@@ -176,7 +205,7 @@ export default function Scanner() {
   const [novaSpec] = useNovaFilter();
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    return sortedRows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
       if (exp?.isTimedOut) return false;          // remove old setups
       if (filters.search && !r.symbol.includes(filters.search.toUpperCase()) && !r.name.toUpperCase().includes(filters.search.toUpperCase())) return false;
@@ -193,8 +222,6 @@ export default function Scanner() {
       if (filters.excludeEarnings && r.earningsInDays != null && r.earningsInDays <= 7) return false;
 
       // NOVA natural-language filter — applied on top of UI filters.
-      // Scanner rows don't carry per-contract premium so the budget gate
-      // is skipped here; symbol/bias/optionType/score still apply.
       const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
       const ok = pickMatchesFilter({
         symbol: r.symbol,
@@ -207,7 +234,7 @@ export default function Scanner() {
 
       return true;
     });
-  }, [rows, filters, expiryStatus, novaSpec]);
+  }, [sortedRows, filters, expiryStatus, novaSpec]);
 
   // Fire webhook for any NEW scanner row whose CRL verdict is GO.
   // Dedupe key includes the date so the same GO re-fires once per trading day.
@@ -243,12 +270,17 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  const counts = useMemo(() => ({
-    now: rows.filter((r) => r.readiness === "NOW").length,
-    wait: rows.filter((r) => r.readiness === "WAIT").length,
-    avoid: rows.filter((r) => r.readiness === "AVOID").length,
-    warnings: rows.filter((r) => r.warnings.length > 0).length,
-  }), [rows]);
+  // Action-label counts derived from the institutional rank.
+  const counts = useMemo(() => {
+    const tally: Record<ActionLabel, number> = { ELITE: 0, "GO NOW": 0, GOOD: 0, WATCHLIST: 0, PASS: 0 };
+    let warnings = 0;
+    for (const r of rows) {
+      const lbl = rankMap.get(r.symbol)?.rank.label ?? "PASS";
+      tally[lbl]++;
+      if (r.warnings.length > 0) warnings++;
+    }
+    return { ...tally, warnings };
+  }, [rows, rankMap]);
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
@@ -283,13 +315,14 @@ export default function Scanner() {
         {/* NOVA AI filter — natural-language pick filter */}
         <NovaFilterBar />
 
-        {/* Readiness summary */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Action-label summary — institutional ranking buckets. */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[
-            { k: "NOW",      v: counts.now,      sub: "high-conviction setups", cls: "border-bullish/40 text-bullish",   Icon: Zap },
-            { k: "WAIT",     v: counts.wait,     sub: "thesis valid, timing off", cls: "border-warning/40 text-warning",   Icon: Clock },
-            { k: "AVOID",    v: counts.avoid,    sub: "blocked or weak",        cls: "border-bearish/40 text-bearish",   Icon: ShieldAlert },
-            { k: "Warnings", v: counts.warnings, sub: "data / risk flags",      cls: "border-border text-foreground",    Icon: AlertTriangle },
+            { k: "ELITE",     v: counts.ELITE,     sub: "rank ≥ 90 · all aligned",     cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "GO NOW",    v: counts["GO NOW"], sub: "rank 80–89 · trade today",    cls: "border-bullish/40 text-bullish",     Icon: TrendingUp },
+            { k: "GOOD",      v: counts.GOOD,     sub: "rank 70–79 · wait for entry", cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WATCHLIST", v: counts.WATCHLIST, sub: "rank 60–69 · monitor",        cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "PASS",      v: counts.PASS,     sub: "no edge",                     cls: "border-border text-muted-foreground", Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
@@ -398,7 +431,7 @@ export default function Scanner() {
                       { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
                       { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
                       { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
-                      { k: "Readiness" }, { k: "" },
+                      { k: "Rank", tip: "Final Rank 0–100 = Setup×.40 + Readiness×.30 + Options×.30 − Penalties. ELITE ≥90, GO NOW ≥80, GOOD ≥70, WATCHLIST ≥60." }, { k: "" },
                     ].map((h) => (
                       <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap">
                         {h.tip ? (
@@ -411,7 +444,7 @@ export default function Scanner() {
                 <tbody>
                   {filtered.map((r) => {
                     const { cls: bcls, Icon: BIcon } = biasMeta(r.bias);
-                    const ready = readinessMeta(r.readiness);
+                    // (readiness label is replaced by Final Rank column below)
                     const isOpen = expanded === r.symbol;
                     const exp = expiryStatus.get(`scanner:${r.symbol}`);
                     const baseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
@@ -494,9 +527,20 @@ export default function Scanner() {
                             </div>
                           </td>
                           <td className="px-3 py-3">
-                            <span className={cn("text-[10px] px-2 py-1 rounded border font-semibold tracking-wider", ready.cls)}>
-                              {ready.label}
-                            </span>
+                            {(() => {
+                              const rk = rankMap.get(r.symbol)?.rank;
+                              if (!rk) return <span className="text-muted-foreground text-xs">—</span>;
+                              return (
+                                <Hint label={`Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`}>
+                                  <div className="flex flex-col gap-1 cursor-help">
+                                    <span className={cn("text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit", labelClasses(rk.label))}>
+                                      {rk.label}
+                                    </span>
+                                    <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
+                                  </div>
+                                </Hint>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-1.5">
@@ -533,7 +577,12 @@ export default function Scanner() {
                         {isOpen && (
                           <tr className="border-t border-border/30 bg-surface/20">
                             <td colSpan={13} className="px-4 py-4">
-                              <DetailPanel row={r} onOpen={() => setOpenSymbol(r.symbol)} />
+                              <DetailPanel
+                                row={r}
+                                decision={rankMap.get(r.symbol)?.decision ?? null}
+                                rank={rankMap.get(r.symbol)?.rank ?? null}
+                                onOpen={() => setOpenSymbol(r.symbol)}
+                              />
                             </td>
                           </tr>
                         )}
@@ -549,7 +598,14 @@ export default function Scanner() {
         {/* Card view */}
         {!isLoading && effectiveView === "cards" && filtered.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => <SetupCard key={r.symbol} row={r} onOpen={() => setOpenSymbol(r.symbol)} />)}
+            {filtered.map((r) => (
+              <SetupCard
+                key={r.symbol}
+                row={r}
+                rank={rankMap.get(r.symbol)?.rank ?? null}
+                onOpen={() => setOpenSymbol(r.symbol)}
+              />
+            ))}
           </div>
         )}
 
@@ -624,24 +680,23 @@ function ChartLinks({ symbol, className }: { symbol: string; className?: string 
   );
 }
 
-function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
-  // Institutional strategy plan derived from this row's metrics.
-  // Pure function — recomputes only when the row changes.
-  const decision = selectStrategy({
-    symbol: row.symbol,
-    bias: row.bias,
-    price: row.price,
-    changePct: row.changePct,
-    ivRank: row.ivRank,
-    atrPct: row.atrPct,
-    rsi: row.rsi,
-    optionsLiquidity: row.optionsLiquidity,
-    earningsInDays: row.earningsInDays,
+function DetailPanel({ row, decision, rank, onOpen }: {
+  row: SetupRow;
+  decision: StrategyDecision | null;
+  rank: RankResult | null;
+  onOpen: () => void;
+}) {
+  // Fall back to recomputing if the parent didn't pass them in (defensive).
+  const dec = decision ?? selectStrategy({
+    symbol: row.symbol, bias: row.bias, price: row.price, changePct: row.changePct,
+    ivRank: row.ivRank, atrPct: row.atrPct, rsi: row.rsi,
+    optionsLiquidity: row.optionsLiquidity, earningsInDays: row.earningsInDays,
     setupScore: row.setupScore,
   });
   return (
     <div className="space-y-4">
-      <StrategyPlaybookCard decision={decision} symbol={row.symbol} />
+      {rank && <RankSummaryCard rank={rank} />}
+      <StrategyPlaybookCard decision={dec} symbol={row.symbol} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Score breakdown */}
       <div className="lg:col-span-1 space-y-2">
@@ -726,8 +781,7 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
   );
 }
 
-function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
-  const ready = readinessMeta(row.readiness);
+function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | null; onOpen: () => void }) {
   const { cls: bcls, Icon: BIcon } = biasMeta(row.bias);
   return (
     <Card className={cn("glass-card p-4 space-y-3 cursor-pointer hover:border-primary/40 transition-all", row.readiness === "AVOID" && "opacity-75")} onClick={onOpen}>
@@ -737,8 +791,16 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">{row.name}</div>
         </div>
         <div className="text-right">
-          <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
-          <span className={cn("text-[10px] px-2 py-0.5 rounded border font-semibold tracking-wider", ready.cls)}>{ready.label}</span>
+          {rank ? (
+            <>
+              <div className={cn("mono text-2xl font-semibold", scoreColor(rank.finalRank))}>{rank.finalRank}</div>
+              <span className={cn("text-[10px] px-2 py-0.5 rounded border font-semibold tracking-wider", labelClasses(rank.label))}>
+                {rank.label}
+              </span>
+            </>
+          ) : (
+            <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
+          )}
         </div>
       </div>
 
@@ -751,17 +813,28 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
         )}
       </div>
 
+      {/* Score triplet — Setup / Readiness / Options — institutional view. */}
+      {rank && (
+        <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-border/40">
+          <div><div className="text-muted-foreground">Setup</div><div className={cn("mono font-semibold", scoreColor(rank.setupScore))}>{rank.setupScore}</div></div>
+          <div><div className="text-muted-foreground">Ready</div><div className={cn("mono font-semibold", scoreColor(rank.readinessScore))}>{rank.readinessScore}</div></div>
+          <div><div className="text-muted-foreground">Options</div><div className={cn("mono font-semibold", scoreColor(rank.optionsScore))}>{rank.optionsScore}</div></div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div><div className="text-muted-foreground">Last</div><div className="mono">${row.price.toFixed(2)}</div></div>
         <div><div className="text-muted-foreground">Chg</div><div className={cn("mono", row.changePct >= 0 ? "text-bullish" : "text-bearish")}>{row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(2)}%</div></div>
         <div><div className="text-muted-foreground">Opt liq</div><div className="mono">{row.optionsLiquidity}</div></div>
       </div>
 
-      <div className="space-y-1.5 pt-1">
-        <ScoreBar label="Liquidity"  value={row.breakdown.liquidity}  Icon={Activity} />
-        <ScoreBar label="Technical"  value={row.breakdown.technical}  Icon={TrendingUp} />
-        <ScoreBar label="Timing"     value={row.breakdown.timing}     Icon={Clock} />
-      </div>
+      {rank && rank.penalties.length > 0 && (
+        <div className="text-[10px] text-bearish/90 pt-1 border-t border-border/40 space-y-0.5">
+          {rank.penalties.slice(0, 2).map((p) => (
+            <div key={p.code} className="flex gap-1.5"><span>−{Math.abs(p.points)}</span><span className="text-foreground/80">{p.reason}</span></div>
+          ))}
+        </div>
+      )}
 
       {row.warnings[0] && (
         <div className="text-[11px] text-bearish/90 flex gap-1.5 pt-1 border-t border-border/40">
@@ -773,5 +846,50 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
         <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
       </div>
     </Card>
+  );
+}
+
+// ─────────── Rank Summary Card — shown above the playbook in DetailPanel ───────────
+function RankSummaryCard({ rank }: { rank: RankResult }) {
+  return (
+    <Card className="glass-card p-4 space-y-3 border border-border/60">
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div>
+          <div className="text-[10px] font-bold tracking-[0.18em] text-muted-foreground">FINAL RANK</div>
+          <div className="flex items-baseline gap-3 mt-0.5">
+            <span className={cn("mono text-3xl font-semibold", scoreColor(rank.finalRank))}>{rank.finalRank}</span>
+            <span className={cn("text-xs font-bold tracking-wider px-2 py-0.5 rounded border", labelClasses(rank.label))}>
+              {rank.label}
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <ScorePill label="Setup" v={rank.setupScore} />
+          <ScorePill label="Readiness" v={rank.readinessScore} />
+          <ScorePill label="Options" v={rank.optionsScore} />
+        </div>
+      </div>
+
+      {rank.penalties.length > 0 && (
+        <div className="pt-2 border-t border-border/40 space-y-1">
+          <div className="text-[10px] font-bold tracking-wider text-bearish">PENALTIES</div>
+          {rank.penalties.map((p) => (
+            <div key={p.code} className="text-[11px] flex gap-2">
+              <span className="mono text-bearish font-semibold w-8">{p.points}</span>
+              <span className="text-foreground/85">{p.reason}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ScorePill({ label, v }: { label: string; v: number }) {
+  return (
+    <div className="text-center">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={cn("mono text-lg font-semibold", scoreColor(v))}>{v}</div>
+    </div>
   );
 }
