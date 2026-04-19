@@ -17,6 +17,9 @@ import { TickerPrice } from "@/components/TickerPrice";
 import { TipsRotator } from "@/components/TipsRotator";
 import { SortableList } from "@/components/SortableList";
 import { NovaStatusStrip } from "@/components/NovaStatusStrip";
+import { NovaGuardBadges } from "@/components/NovaGuardBadges";
+import { evaluateGuards } from "@/lib/novaGuards";
+import { useSma200 } from "@/lib/sma200";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
@@ -35,6 +38,12 @@ export default function Dashboard() {
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
+
+  // Quote map for guard eval (Stale Quote + Intrinsic Audit) — live spot per symbol.
+  const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
+  // 200-day SMA cache (24h) — drives the long-term trend gate.
+  const pickSymbols = useMemo(() => Array.from(new Set(picks.map((p) => p.symbol))), [picks]);
+  const sma = useSma200(pickSymbols);
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
