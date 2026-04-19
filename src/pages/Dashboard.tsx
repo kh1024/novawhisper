@@ -147,8 +147,38 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
-      {/* NOVA status — adaptive regime + time-state read */}
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+          Drag the grip on the left of any section to reorder
+        </span>
+        <Hint label="Reset section order to default">
+          <button
+            onClick={() => { window.localStorage.removeItem(SECTIONS_STORAGE_KEY); window.location.reload(); }}
+            aria-label="Reset section order"
+            className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+          >
+            <RotateCcw className="h-3 w-3" />
+          </button>
+        </Hint>
+      </div>
+
+      <SortableList
+        storageKey={SECTIONS_STORAGE_KEY}
+        className="space-y-6"
+        renderItem={(item, handle) => (
+          <div className="relative group">
+            <div className="absolute -left-2 top-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+              {handle}
+            </div>
+            {item.node}
+          </div>
+        )}
+        items={[
+          { id: "nova-status", node: (
+      /* NOVA status — adaptive regime + time-state read */
       <NovaStatusStrip />
+          )},
+          { id: "nova-filter", node: (
 
       {/* NOVA AI filter — natural-language pick filter shared across surfaces */}
       <NovaFilterBar />
