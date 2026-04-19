@@ -168,6 +168,22 @@ function extractTruthSocialTimestamp(md: string): string | null {
   return null;
 }
 
+/** X-mirror posts (e.g. @TrumpDailyPosts) embed the original TS time as
+ *  "09:26 PM EST 04.18.26" inside the title/description. Decode it. */
+function extractMirrorTimestamp(text: string): string | null {
+  const m = text.match(/(\d{1,2}):(\d{2})\s*(AM|PM)\s*EST\s+(\d{2})\.(\d{2})\.(\d{2})/i);
+  if (!m) return null;
+  let hour = Number(m[1]) % 12;
+  if (m[3].toUpperCase() === "PM") hour += 12;
+  const minute = Number(m[2]);
+  const month = Number(m[4]);   // 1-indexed
+  const day = Number(m[5]);
+  const year = 2000 + Number(m[6]);
+  // EST is UTC-5. Convert to UTC.
+  const utc = Date.UTC(year, month - 1, day, hour + 5, minute);
+  return new Date(utc).toISOString();
+}
+
 async function fetchSocialPlatforms(): Promise<NormalizedPost[]> {
   if (!FIRECRAWL_KEY) return [];
   const settled = await Promise.allSettled(FIRECRAWL_QUERIES.map((q) => firecrawlSearch(q, 6)));
