@@ -116,7 +116,7 @@ function estimateOptionsLiquidity(symbol: string, marketCap?: number) {
   return 48;
 }
 
-export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; timeStateLabel?: string; timeState?: ReturnType<typeof detectTimeState> }): SetupRow {
+export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; timeStateLabel?: string; timeState?: ReturnType<typeof detectTimeState>; realIvp?: number | null }): SetupRow {
   const meta = TICKER_UNIVERSE.find((t) => t.symbol === q.symbol);
   const sector = q.sector ?? meta?.sector ?? "—";
   const name = q.name ?? meta?.name ?? q.symbol;
@@ -151,7 +151,12 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   const atrBase = SECTOR_ATR[sector] ?? 2.2;
   const atrPct = +(atrBase * (0.85 + r() * 0.4)).toFixed(2);
 
-  const ivRank = Math.round(clamp(40 + r() * 50 + Math.abs(effectiveChangePct) * 2, 5, 98));
+  // Real IVP wins when provided (e.g. from a live options chain via the
+  // adapter); otherwise we fall back to the deterministic estimate.
+  const ivRankReal = ctx?.realIvp != null && Number.isFinite(ctx.realIvp);
+  const ivRank = ivRankReal
+    ? Math.round(Math.max(0, Math.min(100, ctx!.realIvp as number)))
+    : Math.round(clamp(40 + r() * 50 + Math.abs(effectiveChangePct) * 2, 5, 98));
 
   const earningsInDays = r() > 0.78 ? Math.floor(r() * 21) : null;
 
@@ -303,7 +308,7 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   return {
     symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
-    ivRank, ivRankEst: true, atrPct, atrPctEst: true, rsi, rsiEst: true,
+    ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst: true,
     emaDist20, emaDist50, emaEst: true,
     optionsLiquidity, earningsInDays, bias, trendLabel,
     setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
