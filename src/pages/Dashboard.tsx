@@ -15,6 +15,7 @@ import { MarketHeroCards } from "@/components/MarketHeroCards";
 import { PlaybookCard } from "@/components/PlaybookCard";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
+import { PickMetaRow } from "@/components/PickMetaRow";
 import { TickerPrice } from "@/components/TickerPrice";
 import { QuoteSourceChip } from "@/components/QuoteSourceChip";
 import { TipsRotator } from "@/components/TipsRotator";
