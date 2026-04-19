@@ -442,12 +442,20 @@ export default function Dashboard() {
                   </div>
                   <PickMetaRow
                     className="mt-1.5"
-                    bias={p.bias}
-                    optionType={isPut ? "put" : "call"}
-                    strike={p.strike}
+                    inputs={{
+                      symbol: p.symbol,
+                      rawBias: p.bias,
+                      optionType: isPut ? "put" : "call",
+                      strike: p.strike,
+                      premium: p.premium ?? null,
+                      budget,
+                      finalRank: p.score,
+                      setupScore: p.score,
+                      riskBucket: p.riskBucket,
+                      isHardBlocked: blocked,
+                      upstreamLabel: action,
+                    }}
                     expiry={p.expiration}
-                    tier={p.riskBucket}
-                    timing={blocked ? "avoid" : action === "BUY NOW" ? "ready" : action === "AVOID" ? "avoid" : undefined}
                   />
                   <div className="text-xs text-muted-foreground truncate mt-0.5">{p.reason}</div>
                 </div>
