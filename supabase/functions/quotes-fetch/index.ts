@@ -648,12 +648,21 @@ Deno.serve(async (req) => {
       });
     }
 
-    symbols = Array.from(new Set(symbols.map((x) => String(x).trim().toUpperCase()).filter(Boolean))).slice(0, 30);
+    // Cap to a sane upper bound — the default universe is 64 symbols and users
+    // can add a handful of custom tickers. Previous 30-symbol cap was silently
+    // dropping the tail (GLD/TLT/ARKK/SOXL → "$0.00 No data"). 80 covers both.
+    symbols = Array.from(new Set(symbols.map((x) => String(x).trim().toUpperCase()).filter(Boolean))).slice(0, 80);
 
     const useAlpha = verifyAll || symbols.length === 1;
 
-    // One Yahoo batch call covers all symbols at once — much faster than per-symbol.
-    const yahooMap = await fetchYahooBatch(symbols);
+    // Yahoo's quote endpoint comfortably handles ~50 symbols per call. Chunk
+    // larger universes so we don't get truncated server-side.
+    const yahooMap = new Map<string, SourceQuote>();
+    for (let i = 0; i < symbols.length; i += 50) {
+      const chunk = symbols.slice(i, i + 50);
+      const part = await fetchYahooBatch(chunk);
+      for (const [k, v] of part) yahooMap.set(k, v);
+    }
 
     // Bulk requests were fanning out too many provider calls in parallel and
     // hitting 429s, which surfaced as "No data" in the UI. Keep a small,
