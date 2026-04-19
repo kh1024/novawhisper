@@ -112,9 +112,12 @@ export default function Dashboard() {
           </div>
         </div>
         {etfs.length === 0 && !quotesLoading ? (
-          <div className="text-xs text-muted-foreground py-6 text-center">No ETF quotes available right now.</div>
+          <div className="text-xs text-muted-foreground py-6 text-center min-h-[88px] flex items-center justify-center">No ETF quotes available right now.</div>
+        ) : etfs.length === 0 && quotesLoading ? (
+          // Reserve space while quotes load so content below doesn't jump (CLS fix).
+          <div className="min-h-[88px]" aria-hidden />
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 min-h-[88px]">
             {etfs.map((e) => {
               const up = e.change >= 0;
               const meta = statusMeta(e.status);
