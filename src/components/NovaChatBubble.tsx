@@ -179,10 +179,10 @@ export function NovaChatBubble() {
       {open && (
         <div
           style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
-          className="fixed right-3 left-3 sm:left-auto sm:right-5 sm:bottom-5 z-50 w-auto sm:w-[380px] sm:max-w-[calc(100vw-2.5rem)] h-[70vh] sm:h-[560px] max-h-[calc(100vh-5rem)] rounded-xl border border-border bg-popover/95 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden"
+          className="fixed right-3 left-3 sm:left-auto sm:right-5 sm:bottom-5 z-[100] w-auto sm:w-[380px] sm:max-w-[calc(100vw-2.5rem)] h-[70vh] sm:h-[560px] max-h-[calc(100vh-5rem)] rounded-xl border-2 border-primary/40 bg-popover shadow-2xl shadow-primary/20 flex flex-col overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-gradient-to-r from-primary/10 to-transparent">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface">
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
                 <Sparkles className="h-3.5 w-3.5 text-primary-foreground" />
@@ -235,17 +235,17 @@ export function NovaChatBubble() {
             {messages.map((m, i) => (
               <div
                 key={i}
-                className={`text-sm leading-relaxed ${
+                className={`text-sm leading-relaxed shadow-sm ${
                   m.role === "user"
-                    ? "ml-6 px-3 py-2 rounded-lg bg-primary/15 border border-primary/30 text-foreground"
-                    : "mr-6 px-3 py-2 rounded-lg bg-surface/60 border border-border/50 text-foreground/95 [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-background/60 [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono"
+                    ? "ml-6 px-3 py-2 rounded-lg bg-primary text-primary-foreground border border-primary"
+                    : "mr-6 px-3 py-2 rounded-lg bg-surface border border-border text-foreground [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-background [&_code]:px-1 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono"
                 }`}
               >
                 {m.role === "assistant" ? <ReactMarkdown>{m.content || "…"}</ReactMarkdown> : m.content}
               </div>
             ))}
             {sending && messages[messages.length - 1]?.role === "user" && (
-              <div className="mr-6 px-3 py-2 rounded-lg bg-surface/60 border border-border/50 text-muted-foreground text-xs flex items-center gap-2">
+              <div className="mr-6 px-3 py-2 rounded-lg bg-surface border border-border text-muted-foreground text-xs flex items-center gap-2 shadow-sm">
                 <Loader2 className="h-3 w-3 animate-spin" /> Nova is thinking…
               </div>
             )}
