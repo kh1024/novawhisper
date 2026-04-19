@@ -22,8 +22,15 @@ export type Quote = {
 export type OptionPick = {
   id: string;
   symbol: string;
-  strategy: "covered-call" | "csp" | "long-call" | "long-put" | "wheel" | "leaps";
-  riskBucket: "safe" | "mild" | "aggressive";
+  // App is BUY-PREMIUM ONLY. No short premium / income strategies are emitted.
+  // - long-call / long-put: standard directional buys (14-90 DTE)
+  // - leaps-call / leaps-put: long-dated thesis trades (>180 DTE)
+  // Legacy values ("covered-call" | "csp" | "wheel" | "leaps") remain in the
+  // type union for back-compat with persisted rows but are NEVER produced.
+  strategy: "long-call" | "long-put" | "leaps-call" | "leaps-put" | "covered-call" | "csp" | "wheel" | "leaps";
+  // riskBucket buckets the trade. "lottery" = tiny-size, high-IV, ≤30 DTE.
+  // "mild" is the legacy alias for "moderate" — kept for Planning.tsx etc.
+  riskBucket: "safe" | "mild" | "aggressive" | "lottery";
   expiration: string;
   dte: number;
   strike: number;
