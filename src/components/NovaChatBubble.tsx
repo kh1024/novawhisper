@@ -179,10 +179,10 @@ export function NovaChatBubble() {
       {open && (
         <div
           style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
-          className="fixed right-3 left-3 sm:left-auto sm:right-5 sm:bottom-5 z-50 w-auto sm:w-[380px] sm:max-w-[calc(100vw-2.5rem)] h-[70vh] sm:h-[560px] max-h-[calc(100vh-5rem)] rounded-xl border border-border bg-popover/95 backdrop-blur-xl shadow-2xl flex flex-col overflow-hidden"
+          className="fixed right-3 left-3 sm:left-auto sm:right-5 sm:bottom-5 z-[100] w-auto sm:w-[380px] sm:max-w-[calc(100vw-2.5rem)] h-[70vh] sm:h-[560px] max-h-[calc(100vh-5rem)] rounded-xl border-2 border-primary/40 bg-popover shadow-2xl shadow-primary/20 flex flex-col overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-gradient-to-r from-primary/10 to-transparent">
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface">
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
                 <Sparkles className="h-3.5 w-3.5 text-primary-foreground" />
