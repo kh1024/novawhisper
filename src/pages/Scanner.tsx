@@ -348,10 +348,10 @@ export default function Scanner() {
         {/* Action-label summary — institutional ranking buckets. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "score ≥ 80 · take the trade",     cls: "border-bullish/60 text-bullish",     Icon: Zap },
-            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "score 70–79 · wait for trigger",  cls: "border-primary/40 text-primary",     Icon: Clock },
-            { k: "WAIT",       v: counts.WAIT,            sub: "score 50–69 · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
-            { k: "AVOID",      v: counts.AVOID,           sub: "no edge · liquidity / IV trap",   cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
+            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "CRL: GO · take the trade",         cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "CRL: WAIT · trigger pending",      cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WAIT",       v: counts.WAIT,            sub: "CRL: NEUTRAL · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "AVOID",      v: counts.AVOID,           sub: "CRL: NO · no edge / IV trap",      cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
