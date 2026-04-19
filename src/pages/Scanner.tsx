@@ -882,7 +882,26 @@ function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | nu
         </div>
       )}
 
-      <div className="flex justify-end pt-1" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+        {(() => {
+          const c = deriveContractFromRow(row);
+          const isCall = c.optionType === "call";
+          const expDate = new Date(c.expiry + "T00:00:00");
+          const expShort = isNaN(expDate.getTime())
+            ? c.expiry
+            : expDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+          const dte = isNaN(expDate.getTime())
+            ? null
+            : Math.max(0, Math.round((expDate.getTime() - Date.now()) / 86400000));
+          return (
+            <div className="text-[11px]">
+              <span className={cn("mono font-semibold", isCall ? "text-bullish" : "text-bearish")}>
+                ${c.strike}{isCall ? "C" : "P"}
+              </span>
+              <span className="text-muted-foreground"> · exp {expShort}{dte != null && ` (${dte}d)`}</span>
+            </div>
+          );
+        })()}
         <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
       </div>
     </Card>
