@@ -12,8 +12,11 @@ export default function AppLayout() {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <TickerTape />
-          <NewsTicker />
+          {/* Secondary header strips eat too much vertical space on phones — hide under sm. */}
+          <div className="hidden sm:block">
+            <TickerTape />
+            <NewsTicker />
+          </div>
           <MarketHeader />
           <main className="flex-1 overflow-auto">
             <Outlet />
