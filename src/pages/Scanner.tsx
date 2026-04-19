@@ -36,6 +36,7 @@ import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
+import { ScannerToolbar } from "@/components/ScannerToolbar";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
