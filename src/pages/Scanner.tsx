@@ -358,70 +358,14 @@ export default function Scanner() {
           ))}
         </div>
 
-        {/* Filters */}
-        <Card className="glass-card p-4 sm:p-5 space-y-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
-              <Badge variant="outline" className="text-[10px] ml-1">
-                {filtered.length} / {rows.length} match
-              </Badge>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setFilters(DEFAULT_FILTERS)} className="h-7 gap-1.5 text-xs">
-              <RotateCcw className="h-3 w-3" /> Reset
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div className="relative">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Ticker or name…"
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="pl-9 bg-surface/60"
-              />
-            </div>
-
-            <Select value={filters.sector} onValueChange={(v) => setFilters({ ...filters, sector: v })}>
-              <SelectTrigger className="bg-surface/60"><SelectValue placeholder="Sector" /></SelectTrigger>
-              <SelectContent>
-                {SECTORS.map((s) => <SelectItem key={s} value={s as string}>{s === "all" ? "All sectors" : s}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
-            <Select value={filters.bias} onValueChange={(v) => setFilters({ ...filters, bias: v as any })}>
-              <SelectTrigger className="bg-surface/60"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {BIAS_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}>{o.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
-            <Select value={filters.readiness} onValueChange={(v) => setFilters({ ...filters, readiness: v as any })}>
-              <SelectTrigger className="bg-surface/60"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {READINESS_OPTIONS.map((o) => <SelectItem key={o.v} value={o.v}><span className={o.cls}>{o.label}</span></SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-            <RangeSlider label="Min Setup Score" value={filters.minScore} onChange={(v) => setFilters({ ...filters, minScore: v })} min={0} max={100} display={`${filters.minScore[0]}+`} />
-            <RangeSlider label="Min Relative Volume" value={filters.minRelVol} onChange={(v) => setFilters({ ...filters, minRelVol: v })} min={0} max={5} step={0.1} display={`${filters.minRelVol[0].toFixed(1)}×`} />
-            <RangeSlider label="Min Options Liquidity" value={filters.minOptionsLiq} onChange={(v) => setFilters({ ...filters, minOptionsLiq: v })} min={0} max={100} display={`${filters.minOptionsLiq[0]}+`} />
-            <RangeSlider label="IV Rank" value={filters.ivrRange} onChange={(v) => setFilters({ ...filters, ivrRange: v })} min={0} max={100} display={`${filters.ivrRange[0]} – ${filters.ivrRange[1]}`} estimated />
-            <RangeSlider label="RSI" value={filters.rsiRange} onChange={(v) => setFilters({ ...filters, rsiRange: v })} min={0} max={100} display={`${filters.rsiRange[0]} – ${filters.rsiRange[1]}`} estimated />
-            <RangeSlider label="Daily % change" value={filters.changeRange} onChange={(v) => setFilters({ ...filters, changeRange: v })} min={-15} max={15} step={0.5} display={`${filters.changeRange[0]}% – ${filters.changeRange[1]}%`} />
-          </div>
-
-          <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pt-2 border-t border-border/40">
-            <Toggle label="Exclude earnings ≤ 7d" checked={filters.excludeEarnings} onChange={(v) => setFilters({ ...filters, excludeEarnings: v })} />
-            <Toggle label="Hide AVOID" checked={filters.hideAvoid} onChange={(v) => setFilters({ ...filters, hideAvoid: v })} />
-            <span className="text-[10px] text-muted-foreground w-full sm:w-auto sm:ml-auto">
-              IVR · RSI · ATR · EMA distance are <span className="text-warning">estimated</span> until live indicators wired in.
-            </span>
-          </div>
-        </Card>
+        <ScannerToolbar
+          filters={filters}
+          defaults={DEFAULT_FILTERS}
+          onChange={setFilters}
+          sectors={SECTORS as string[]}
+          matchCount={filtered.length}
+          totalCount={rows.length}
+        />
 
         {/* Loading / Empty */}
         {isLoading && (
