@@ -443,29 +443,19 @@ export default function Scanner() {
                 <tbody>
                   {filtered.map((r) => {
                     const { cls: bcls, Icon: BIcon } = biasMeta(r.bias);
-                    // (readiness label is replaced by Final Rank column below)
                     const isOpen = expanded === r.symbol;
                     const exp = expiryStatus.get(`scanner:${r.symbol}`);
-                    const rawBaseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
-                    const isOwned = ownedSymbols.has(r.symbol.toUpperCase());
-                    // EXIT only makes sense if the user holds the position. Otherwise show NO.
-                    const baseVerdict = (rawBaseVerdict === "EXIT" && !isOwned) ? "NO" : rawBaseVerdict;
-                    // NOVA Guards — 200-SMA gate is the relevant one for scanner long-call setups.
+                    // NOVA Guards — used for row tint + the guard chips inside the Action cell.
                     const guard = evaluateGuards({
                       symbol: r.symbol,
                       livePrice: r.price,
-                      pickPrice: r.price,                          // live = pick price in scanner
+                      pickPrice: r.price,
                       optionType: r.bias === "bearish" ? "put" : "call",
                       direction: "long",
-                      strike: r.price,                              // ATM for the gate
+                      strike: r.price,
                       sma200: sma.map.get(r.symbol)?.sma200 ?? null,
                       riskBucket: r.crl.riskBadge?.toLowerCase() ?? null,
                     });
-                    // If guard blocks a GO, downgrade. EXIT downgrade only fires for owned positions;
-                    // for non-owned tickers we surface BLOCKED but keep verdict as NO.
-                    const verdict = guard.shouldBlockSignal && baseVerdict === "GO"
-                      ? (isOwned ? "EXIT" : "NO")
-                      : baseVerdict;
                     const blocked = guard.shouldBlockSignal;
                     return (
                       <Fragment key={r.symbol}>
