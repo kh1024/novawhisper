@@ -95,17 +95,22 @@ async function fetchRedditPolitical(): Promise<NormalizedPost[]> {
 }
 
 async function firecrawlSearch(query: string, limit: number) {
-  if (!FIRECRAWL_KEY) return [];
+  if (!FIRECRAWL_KEY) { console.warn("[political-posts] FIRECRAWL_API_KEY missing"); return []; }
   try {
     const r = await fetch("https://api.firecrawl.dev/v2/search", {
       method: "POST",
       headers: { Authorization: `Bearer ${FIRECRAWL_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ query, limit, tbs: "qdr:d" }),
     });
-    if (!r.ok) { console.warn("[political-posts] firecrawl", r.status); return []; }
+    if (!r.ok) { console.warn("[political-posts] firecrawl HTTP", r.status, await r.text().catch(() => "")); return []; }
     const j = await r.json();
     const arr =
-      j?.data?.web?.results ?? j?.web?.results ?? j?.data ?? j?.results ?? [];
+      j?.data?.web?.results ?? j?.data?.web ?? j?.web?.results ?? j?.web ?? j?.data ?? j?.results ?? [];
+    if (!Array.isArray(arr) || arr.length === 0) {
+      console.warn("[political-posts] firecrawl empty for query:", query, "shape keys:", Object.keys(j ?? {}), "data keys:", Object.keys(j?.data ?? {}));
+    } else {
+      console.log("[political-posts] firecrawl", query, "→", arr.length, "hits, sample:", arr[0]?.url);
+    }
     return Array.isArray(arr) ? arr : [];
   } catch (e) { console.warn("[political-posts] firecrawl error", e); return []; }
 }
