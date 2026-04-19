@@ -577,7 +577,12 @@ export default function Scanner() {
                         {isOpen && (
                           <tr className="border-t border-border/30 bg-surface/20">
                             <td colSpan={13} className="px-4 py-4">
-                              <DetailPanel row={r} onOpen={() => setOpenSymbol(r.symbol)} />
+                              <DetailPanel
+                                row={r}
+                                decision={rankMap.get(r.symbol)?.decision ?? null}
+                                rank={rankMap.get(r.symbol)?.rank ?? null}
+                                onOpen={() => setOpenSymbol(r.symbol)}
+                              />
                             </td>
                           </tr>
                         )}
@@ -668,24 +673,23 @@ function ChartLinks({ symbol, className }: { symbol: string; className?: string 
   );
 }
 
-function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
-  // Institutional strategy plan derived from this row's metrics.
-  // Pure function — recomputes only when the row changes.
-  const decision = selectStrategy({
-    symbol: row.symbol,
-    bias: row.bias,
-    price: row.price,
-    changePct: row.changePct,
-    ivRank: row.ivRank,
-    atrPct: row.atrPct,
-    rsi: row.rsi,
-    optionsLiquidity: row.optionsLiquidity,
-    earningsInDays: row.earningsInDays,
+function DetailPanel({ row, decision, rank, onOpen }: {
+  row: SetupRow;
+  decision: StrategyDecision | null;
+  rank: RankResult | null;
+  onOpen: () => void;
+}) {
+  // Fall back to recomputing if the parent didn't pass them in (defensive).
+  const dec = decision ?? selectStrategy({
+    symbol: row.symbol, bias: row.bias, price: row.price, changePct: row.changePct,
+    ivRank: row.ivRank, atrPct: row.atrPct, rsi: row.rsi,
+    optionsLiquidity: row.optionsLiquidity, earningsInDays: row.earningsInDays,
     setupScore: row.setupScore,
   });
   return (
     <div className="space-y-4">
-      <StrategyPlaybookCard decision={decision} symbol={row.symbol} />
+      {rank && <RankSummaryCard rank={rank} />}
+      <StrategyPlaybookCard decision={dec} symbol={row.symbol} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Score breakdown */}
       <div className="lg:col-span-1 space-y-2">
