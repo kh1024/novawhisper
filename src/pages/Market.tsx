@@ -18,6 +18,7 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { GateValidationDashboard } from "@/components/GateValidationDashboard";
 import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
+import { useResolvedIvp } from "@/lib/gates/useResolvedIvp";
 import { useCapitalSettings } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
