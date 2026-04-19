@@ -187,6 +187,18 @@ export function gate7_SafetyExit(i: SignalInput): GateResult {
   };
 }
 
+// ── Helper: is the quote stale weekend data? ────────────────────────────────
+// We can't trust premium math when the underlying market has been closed for
+// hours and the chain is frozen at Friday's close. The threshold (4h) matches
+// the dashboard "Weekend Ghost" filter so the UI and gates agree.
+function isStaleWeekendQuote(i: SignalInput): boolean {
+  const est = new Date(i.marketTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const dow = est.getDay();
+  if (dow !== 0 && dow !== 6) return false; // weekday — ORB / market handles freshness
+  const ageH = (Date.now() - i.quoteTimestamp.getTime()) / 3_600_000;
+  return ageH > 4;
+}
+
 // ── GATE 8: Affordability (Position Sizing — the 2% Rule) ───────────────────
 // Two thresholds, both relative to the user's total account:
 //   • MAX_RISK_PCT (2%)        — target per-trade dollar risk ($200 on $10k)
