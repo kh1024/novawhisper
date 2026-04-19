@@ -80,6 +80,7 @@ export const GATE_ORDER = [
   "IVP_GUARD",
   "SAFETY_EXIT",
   "AFFORDABILITY",
+  "DATE_VALIDATOR",
 ] as const;
 export type GateName = (typeof GATE_ORDER)[number];
 
@@ -91,7 +92,8 @@ export const GATE_LABELS: Record<GateName, string> = {
   ORB_LOCK: "ORB Lock (10:30 EST)",
   IVP_GUARD: "IVP Guard",
   SAFETY_EXIT: "Safety Exit (-30%)",
-  AFFORDABILITY: "Affordability (5% cap)",
+  AFFORDABILITY: "Affordability (10% cap)",
+  DATE_VALIDATOR: "Date Validator",
 };
 
 /** HARD BLOCK: a single trade may not consume more than this % of account. */
