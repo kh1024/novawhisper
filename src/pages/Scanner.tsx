@@ -517,7 +517,9 @@ export default function Scanner() {
                             {(() => {
                               const rk = rankMap.get(r.symbol)?.rank;
                               const unified = labelFor(r);
-                              const displayLabel = unified === "BLOCKED" ? "BLOCKED" : unified;
+                              const displayLabel = unified === "BLOCKED"
+                                ? "BLOCKED"
+                                : smartActionLabel(unified as ActionLabel, { bias: r.bias as "bullish" | "bearish" | "neutral" });
                               // Color: BLOCKED uses bearish styling, otherwise reuse labelClasses.
                               const cls = unified === "BLOCKED"
                                 ? "bg-bearish/15 text-bearish border-bearish/40"
