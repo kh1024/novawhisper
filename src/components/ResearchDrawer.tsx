@@ -40,7 +40,7 @@ const SYMPATHY_MAP: Record<string, string[]> = {
 function genSeries(symbol: string, base: number, n = 60) {
   let h = 0;
   for (let i = 0; i < symbol.length; i++) h = (h * 31 + symbol.charCodeAt(i)) >>> 0;
-  const out: { d: number; v: number }[] = [];
+  const out: { d: number; v: number; sma?: number }[] = [];
   let v = base * 0.92;
   for (let i = 0; i < n; i++) {
     h = (h * 1664525 + 1013904223) >>> 0;
@@ -49,7 +49,26 @@ function genSeries(symbol: string, base: number, n = 60) {
   }
   // anchor end to current spot
   out[out.length - 1].v = +base.toFixed(2);
+  // 20-period simple moving average — shown as a reference trend line
+  const window = Math.min(20, Math.max(5, Math.floor(n / 3)));
+  for (let i = 0; i < out.length; i++) {
+    const start = Math.max(0, i - window + 1);
+    let sum = 0;
+    for (let j = start; j <= i; j++) sum += out[j].v;
+    out[i].sma = +(sum / (i - start + 1)).toFixed(2);
+  }
   return out;
+}
+
+/** Min/max bookmarks so we can pin them on the chart. */
+function seriesExtents(s: { d: number; v: number }[]) {
+  if (!s.length) return null;
+  let lo = s[0], hi = s[0];
+  for (const p of s) {
+    if (p.v < lo.v) lo = p;
+    if (p.v > hi.v) hi = p;
+  }
+  return { lo, hi };
 }
 
 /** Pick top scored contracts for the drawer's "Picks" tab. */
