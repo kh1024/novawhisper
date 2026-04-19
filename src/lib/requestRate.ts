@@ -5,6 +5,7 @@
 // is counted — not just the ones inside apiHealth.ts. This gives the Settings
 // API-health card an accurate "are we under 100 req/s on Massive?" readout.
 import { supabase } from "@/integrations/supabase/client";
+import { isDisabled } from "@/lib/disabledFunctions";
 
 const WINDOW_MS = 60_000;
 /** function-name → array of timestamp (ms) for calls in the last WINDOW_MS */
@@ -59,6 +60,14 @@ const SUPA = supabase as unknown as {
 if (!SUPA.functions.__rateInstrumented) {
   const orig = SUPA.functions.invoke.bind(SUPA.functions);
   SUPA.functions.invoke = ((fn: string, opts?: unknown) => {
+    if (isDisabled(fn)) {
+      // Short-circuit: pretend the call happened but never hit the network.
+      // Match the supabase-js shape so callers' `if (error)` branches fire.
+      return Promise.resolve({
+        data: null,
+        error: { message: `${fn} is disabled in Settings`, name: "FunctionDisabledError" },
+      }) as ReturnType<typeof orig>;
+    }
     record(fn);
     return orig(fn, opts);
   }) as typeof SUPA.functions.invoke;
