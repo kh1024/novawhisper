@@ -1,8 +1,10 @@
-// Derives EVENT RISK signals from the live news feed.
-// Replaces the old Memory/Energy thesis signals — focuses on real, immediate
-// market-moving events: geopolitics/war, political posts (Trump/Xi/etc.),
-// Fed/rates, and earnings/macro prints.
+// Derives EVENT RISK signals.
+// Geopolitics / Fed / Earnings come from the news feed.
+// Political Posts comes from REAL social media (Reddit political subs +
+// Truth Social / X via the political-posts edge function).
 import { useNews } from "./liveData";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 
 const GEOPOLITICS_TERMS = [
