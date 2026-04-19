@@ -1,111 +1,92 @@
-// Free fundamentals via Yahoo Finance quoteSummary (no key required).
-// Returns: market cap, P/E (trailing/forward), EPS, dividend yield, beta,
-// 52w range, sector/industry, target price, recommendation key.
-//
-// Yahoo's quoteSummary endpoint is unofficial — we set a UA and cache 6h
-// since fundamentals don't change intraday.
+// Free fundamentals via Yahoo's v7/quote endpoint (no crumb required, no key).
+// quoteSummary v10 now returns 401 without a session cookie/crumb, but the
+// /v7/finance/quote endpoint exposes most of the same fields and is reliable
+// from server contexts. Cached 6h since fundamentals don't change intraday.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
-const TTL_MS = 6 * 60 * 60_000; // 6h
+const TTL_MS = 6 * 60 * 60_000;
 const cache = new Map<string, { data: any; at: number }>();
 
-const MODULES = [
-  "summaryDetail",
-  "defaultKeyStatistics",
-  "financialData",
-  "assetProfile",
-  "price",
-].join(",");
-
-function v(x: any): number | null {
-  if (x == null) return null;
-  if (typeof x === "number") return isFinite(x) ? x : null;
-  if (typeof x === "object" && "raw" in x) {
-    const n = Number(x.raw);
-    return isFinite(n) ? n : null;
-  }
-  const n = Number(x);
-  return isFinite(n) ? n : null;
+function n(x: any): number | null {
+  if (x == null || x === "") return null;
+  const v = Number(x);
+  return isFinite(v) ? v : null;
 }
-
 function s(x: any): string | null {
   if (x == null) return null;
-  if (typeof x === "string") return x || null;
-  if (typeof x === "object" && "fmt" in x) return String(x.fmt) || null;
-  return String(x) || null;
+  const v = String(x).trim();
+  return v || null;
 }
 
 async function fetchFundamentals(symbol: string) {
   const cached = cache.get(symbol);
   if (cached && Date.now() - cached.at < TTL_MS) return cached.data;
 
-  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${MODULES}`;
+  // v7/quote returns ~80 fields per symbol — covers everything we need
+  // except long business summary (which we leave out — link to website instead).
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}&fields=symbol,longName,shortName,fullExchangeName,marketCap,sharesOutstanding,floatShares,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,bookValue,dividendYield,trailingAnnualDividendYield,dividendRate,trailingAnnualDividendRate,payoutRatio,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,averageDailyVolume3Month,averageDailyVolume10Day,fiftyDayAverage,twoHundredDayAverage,profitMargins,returnOnEquity,revenueGrowth,earningsGrowth,debtToEquity,quickRatio,currentRatio,totalCash,totalDebt,targetMeanPrice,targetHighPrice,targetLowPrice,recommendationKey,recommendationMean,numberOfAnalystOpinions`;
   const r = await fetch(url, {
     headers: {
       "User-Agent": "Mozilla/5.0 (compatible; NovaTerminal/1.0)",
       Accept: "application/json",
+      "Accept-Language": "en-US,en;q=0.9",
     },
   });
-  if (!r.ok) {
-    throw new Error(`Yahoo quoteSummary HTTP ${r.status}`);
-  }
+  if (!r.ok) throw new Error(`Yahoo v7/quote HTTP ${r.status}`);
   const d = await r.json();
-  const result = d?.quoteSummary?.result?.[0];
-  if (!result) throw new Error("No fundamentals returned");
-
-  const sd = result.summaryDetail ?? {};
-  const ks = result.defaultKeyStatistics ?? {};
-  const fd = result.financialData ?? {};
-  const ap = result.assetProfile ?? {};
-  const pr = result.price ?? {};
+  const row = d?.quoteResponse?.result?.[0];
+  if (!row) throw new Error("No fundamentals returned");
 
   const out = {
     symbol,
-    name: s(pr.longName) ?? s(pr.shortName),
-    sector: s(ap.sector),
-    industry: s(ap.industry),
-    country: s(ap.country),
-    employees: v(ap.fullTimeEmployees),
-    website: s(ap.website),
-    summary: s(ap.longBusinessSummary),
+    name: s(row.longName) ?? s(row.shortName),
+    exchange: s(row.fullExchangeName),
+    sector: null as string | null,    // not in v7/quote — exposed via separate scraper if needed
+    industry: null as string | null,
+    country: null as string | null,
+    employees: null as number | null,
+    website: null as string | null,
+    summary: null as string | null,
 
-    marketCap: v(sd.marketCap) ?? v(pr.marketCap),
-    sharesOutstanding: v(ks.sharesOutstanding),
-    floatShares: v(ks.floatShares),
+    marketCap: n(row.marketCap),
+    sharesOutstanding: n(row.sharesOutstanding),
+    floatShares: n(row.floatShares),
 
-    peTrailing: v(sd.trailingPE),
-    peForward: v(sd.forwardPE) ?? v(ks.forwardPE),
-    pegRatio: v(ks.pegRatio),
-    priceToBook: v(ks.priceToBook),
-    priceToSales: v(sd.priceToSalesTrailing12Months),
+    peTrailing: n(row.trailingPE),
+    peForward: n(row.forwardPE),
+    pegRatio: null,
+    priceToBook: n(row.priceToBook),
+    priceToSales: n(row.priceToSalesTrailing12Months),
 
-    epsTrailing: v(ks.trailingEps),
-    epsForward: v(ks.forwardEps),
+    epsTrailing: n(row.epsTrailingTwelveMonths),
+    epsForward: n(row.epsForward),
 
-    dividendYield: v(sd.dividendYield),
-    dividendRate: v(sd.dividendRate),
-    payoutRatio: v(sd.payoutRatio),
+    // Yahoo v7 returns dividendYield as a percent (e.g. 0.45 = 0.45%, NOT 45%).
+    // Normalize to a fraction so client formatter (which multiplies × 100) works.
+    dividendYield: n(row.dividendYield) != null ? (n(row.dividendYield) as number) / 100 : null,
+    dividendRate: n(row.dividendRate) ?? n(row.trailingAnnualDividendRate),
+    payoutRatio: n(row.payoutRatio),
 
-    beta: v(sd.beta) ?? v(ks.beta),
-    week52High: v(sd.fiftyTwoWeekHigh),
-    week52Low: v(sd.fiftyTwoWeekLow),
-    avgVolume: v(sd.averageVolume),
+    beta: n(row.beta),
+    week52High: n(row.fiftyTwoWeekHigh),
+    week52Low: n(row.fiftyTwoWeekLow),
+    avgVolume: n(row.averageDailyVolume3Month) ?? n(row.averageDailyVolume10Day),
 
-    profitMargins: v(fd.profitMargins) ?? v(ks.profitMargins),
-    operatingMargins: v(fd.operatingMargins),
-    returnOnEquity: v(fd.returnOnEquity),
-    revenueGrowth: v(fd.revenueGrowth),
-    earningsGrowth: v(fd.earningsGrowth),
-    debtToEquity: v(fd.debtToEquity),
-    currentRatio: v(fd.currentRatio),
-    totalCash: v(fd.totalCash),
-    totalDebt: v(fd.totalDebt),
+    profitMargins: n(row.profitMargins),
+    operatingMargins: null,
+    returnOnEquity: n(row.returnOnEquity),
+    revenueGrowth: n(row.revenueGrowth),
+    earningsGrowth: n(row.earningsGrowth),
+    debtToEquity: n(row.debtToEquity),
+    currentRatio: n(row.currentRatio),
+    totalCash: n(row.totalCash),
+    totalDebt: n(row.totalDebt),
 
-    targetMeanPrice: v(fd.targetMeanPrice),
-    targetHighPrice: v(fd.targetHighPrice),
-    targetLowPrice: v(fd.targetLowPrice),
-    recommendationKey: s(fd.recommendationKey),
-    numberOfAnalystOpinions: v(fd.numberOfAnalystOpinions),
+    targetMeanPrice: n(row.targetMeanPrice),
+    targetHighPrice: n(row.targetHighPrice),
+    targetLowPrice: n(row.targetLowPrice),
+    recommendationKey: s(row.recommendationKey),
+    numberOfAnalystOpinions: n(row.numberOfAnalystOpinions),
 
     fetchedAt: new Date().toISOString(),
     source: "yahoo-finance",
@@ -120,7 +101,7 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     let symbol = url.searchParams.get("symbol");
-    if (!symbol && (req.method === "POST")) {
+    if (!symbol && req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       symbol = body.symbol;
     }
