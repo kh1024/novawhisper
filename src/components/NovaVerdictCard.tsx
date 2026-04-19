@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Sparkline } from "@/components/Sparkline";
+import { computeRSI14 } from "@/lib/streak";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
@@ -39,10 +41,29 @@ const DATA_ICON = {
   FAIL:    <ShieldX className="h-3 w-3" />,
 };
 
-export function NovaVerdictCard({ card }: { card: NovaCard }) {
+export function NovaVerdictCard({
+  card,
+  closes,
+}: {
+  card: NovaCard;
+  /** Optional recent daily closes — last 20 are used for a tiny trend sparkline. */
+  closes?: number[];
+}) {
   const [showFull, setShowFull] = useState(false);
+  const [sparkMode, setSparkMode] = useState<"price" | "rsi">("price");
   const style = ACTION_STYLES[card.action];
   const c = card.best_contract;
+
+  // Last 20 closes for the sparkline (price mode) and a 14-step RSI walk (rsi mode).
+  const priceTail = closes && closes.length >= 2 ? closes.slice(-20) : null;
+  const rsiSeries =
+    closes && closes.length >= 16
+      ? Array.from({ length: Math.min(20, closes.length - 14) }, (_, i) => {
+          const end = closes.length - (Math.min(20, closes.length - 14) - 1 - i);
+          return computeRSI14(closes.slice(0, end));
+        })
+      : null;
+  const sparkValues = sparkMode === "rsi" ? rsiSeries : priceTail;
 
   return (
     <Card className={`glass-card p-5 ring-1 ${style.ring}`}>
@@ -58,6 +79,26 @@ export function NovaVerdictCard({ card }: { card: NovaCard }) {
         <div className="mt-2 text-sm text-foreground/90 max-w-md mx-auto">
           {card.one_line_reason}
         </div>
+        {sparkValues && sparkValues.length >= 2 && (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <Sparkline
+              values={sparkValues}
+              width={120}
+              height={28}
+              domain={sparkMode === "rsi" ? [0, 100] : undefined}
+              refs={sparkMode === "rsi" ? [30, 70] : undefined}
+              ariaLabel={sparkMode === "rsi" ? "RSI(14) sparkline" : "Recent close sparkline"}
+            />
+            <button
+              type="button"
+              onClick={() => setSparkMode((m) => (m === "price" ? "rsi" : "price"))}
+              className="text-[9px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+              title="Toggle sparkline mode"
+            >
+              {sparkMode === "price" ? "Price" : "RSI"}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* The single play (or no-trade reason) */}

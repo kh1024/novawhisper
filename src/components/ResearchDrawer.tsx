@@ -20,6 +20,7 @@ import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { useEventRiskSignals } from "@/lib/sentimentSignals";
 import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
+import { useSma200 } from "@/lib/sma200";
 
 type Props = {
   symbol: string | null;
@@ -120,6 +121,9 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
 
   // Live options chain → top picks
   const { data: chain, isLoading: chainLoading } = useOptionsChain(symbol, 200);
+  // Daily closes — feeds the sparkline on NovaVerdictCard.
+  const { map: smaMap } = useSma200(symbol ? [symbol] : []);
+  const novaCloses = symbol ? smaMap.get(symbol)?.closes ?? null : null;
   const topPicks = useMemo(
     () => (chain && q ? pickTopContracts(chain.contracts, q.price) : []),
     [chain, q]
@@ -463,7 +467,10 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                       </div>
                     )}
                     {novaCard && (
-                      <NovaVerdictCard card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }} />
+                      <NovaVerdictCard
+                        card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }}
+                        closes={novaCloses ?? undefined}
+                      />
                     )}
                     {!novaLoading && !novaCard && novaText && (
                       <div className="text-sm text-foreground/90 leading-relaxed space-y-2 [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1.5 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-surface/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_em]:text-muted-foreground [&_em]:not-italic">
