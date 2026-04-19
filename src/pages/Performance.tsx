@@ -20,19 +20,29 @@ import { toast } from "sonner";
 interface SnapRow { id: string; snapshot_date: string; symbol: string; label: string; final_rank: number; bias: string; entry_price: number }
 interface OutRow { snapshot_id: string; window_days: number; return_pct: number; is_win: boolean; exit_price: number }
 
-const LABELS = ["BUY", "WATCHLIST", "WAIT", "DON'T BUY"] as const;
+const LABELS = ["BUY NOW", "WATCHLIST", "WAIT", "AVOID"] as const;
 const PRIMARY_WINDOW = 5;
 
+// Back-compat: older snapshots may still be stored under the legacy label
+// names. Normalize at read-time so the dashboard always speaks the new spec.
+function normalizeLabel(label: string): string {
+  if (label === "BUY") return "BUY NOW";
+  if (label === "DON'T BUY") return "AVOID";
+  return label;
+}
+
 function labelTone(label: string): string {
-  if (label === "BUY") return "text-bullish";
-  if (label === "WATCHLIST") return "text-primary";
-  if (label === "WAIT") return "text-warning";
+  const l = normalizeLabel(label);
+  if (l === "BUY NOW") return "text-bullish";
+  if (l === "WATCHLIST") return "text-primary";
+  if (l === "WAIT") return "text-warning";
   return "text-bearish";
 }
 function labelBg(label: string): string {
-  if (label === "BUY") return "bg-bullish/15 border-bullish/40";
-  if (label === "WATCHLIST") return "bg-primary/10 border-primary/40";
-  if (label === "WAIT") return "bg-warning/10 border-warning/40";
+  const l = normalizeLabel(label);
+  if (l === "BUY NOW") return "bg-bullish/15 border-bullish/40";
+  if (l === "WATCHLIST") return "bg-primary/10 border-primary/40";
+  if (l === "WAIT") return "bg-warning/10 border-warning/40";
   return "bg-bearish/10 border-bearish/40";
 }
 
