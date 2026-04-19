@@ -56,6 +56,14 @@ export interface StrategyInputs {
   optionsLiquidity: number;
   earningsInDays: number | null;
   setupScore: number;
+  /**
+   * Optional per-trade dollar cap (Settings → Portfolio capital × Risk %).
+   * If 1 contract at the chosen DTE costs more than this, the selector
+   * will iteratively shorten DTE (down to a 7-day floor) to find a fit.
+   * If even the shortest DTE exceeds the cap, the original DTE is kept and
+   * a warning is appended.
+   */
+  maxLossBudget?: number;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
