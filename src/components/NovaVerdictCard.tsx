@@ -2,9 +2,10 @@
 // Shows: huge action label (BUY / WAIT / SKIP), one contract OR a skip reason,
 // stop price, and tiny meta chips. Long analysis is hidden behind a toggle.
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX, LayoutList } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
