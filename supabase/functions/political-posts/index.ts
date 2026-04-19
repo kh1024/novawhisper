@@ -117,24 +117,55 @@ async function firecrawlSearch(query: string, limit: number) {
 
 // Truth Social blocks scrapers without JS, so search descriptions come back as
 // "To use this website, please enable JavaScript." For those URLs we fire a
-// Firecrawl scrape (which renders JS) to pull the actual post text.
+// Firecrawl scrape (which renders JS) to pull the actual post text + timestamp.
 const JS_PLACEHOLDER = /enable javascript/i;
 
-async function firecrawlScrape(url: string): Promise<string | null> {
-  if (!FIRECRAWL_KEY) return null;
+interface ScrapeResult { text: string | null; publishedAt: string | null }
+
+async function firecrawlScrape(url: string): Promise<ScrapeResult> {
+  if (!FIRECRAWL_KEY) return { text: null, publishedAt: null };
   try {
     const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
       method: "POST",
       headers: { Authorization: `Bearer ${FIRECRAWL_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, waitFor: 1500 }),
+      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, waitFor: 2000 }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) return { text: null, publishedAt: null };
     const j = await r.json();
-    const md: string = j?.data?.markdown ?? j?.markdown ?? "";
-    if (!md) return null;
-    // Strip nav junk + collapse whitespace, keep first 280 chars.
-    return md.replace(/\s+/g, " ").trim().slice(0, 280);
-  } catch { return null; }
+    const md: string = (j?.data?.markdown ?? j?.markdown ?? "") as string;
+    if (!md) return { text: null, publishedAt: null };
+    return { text: cleanTruthSocialMarkdown(md), publishedAt: extractTruthSocialTimestamp(md) };
+  } catch { return { text: null, publishedAt: null }; }
+}
+
+/** Strip Truth Social UI chrome (nav, avatar, reply counts, links) and return
+ *  just the post body text. */
+function cleanTruthSocialMarkdown(md: string): string {
+  let s = md;
+  const verifiedIdx = s.indexOf("Verified Account");
+  if (verifiedIdx >= 0) s = s.slice(verifiedIdx + "Verified Account".length);
+  s = s.replace(/!\[[^\]]*\]\([^)]+\)/g, " ");        // image markdown
+  s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");       // link markdown → text
+  s = s.replace(/\b(Back|# ?Truth Details|\d+\s+replies|ReTruths?|Likes?|Reply|Boost|Quote|Favorite|More|Share|Bookmark|Translate post|@realDonaldTrump|Donald J\.? ?Trump)\b/gi, " ");
+  s = s.replace(/[\\|]+/g, " ").replace(/\s+/g, " ").trim();
+  return s.slice(0, 280);
+}
+
+/** Find a relative ("2h", "5m ago") or absolute timestamp in the rendered page. */
+function extractTruthSocialTimestamp(md: string): string | null {
+  const rel = md.match(/\b(\d+)\s*(s|m|h|d)\b(?!\w)/i);
+  if (rel) {
+    const n = Number(rel[1]);
+    const unit = rel[2].toLowerCase();
+    const mult = unit === "s" ? 1000 : unit === "m" ? 60_000 : unit === "h" ? 3_600_000 : 86_400_000;
+    return new Date(Date.now() - n * mult).toISOString();
+  }
+  const abs = md.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s*\d{4}[^A-Za-z]+\d{1,2}:\d{2}\s*(AM|PM)/i);
+  if (abs) {
+    const t = Date.parse(abs[0]);
+    if (!Number.isNaN(t)) return new Date(t).toISOString();
+  }
+  return null;
 }
 
 async function fetchSocialPlatforms(): Promise<NormalizedPost[]> {
@@ -152,8 +183,6 @@ async function fetchSocialPlatforms(): Promise<NormalizedPost[]> {
       seen.add(url);
       const rawDesc = ((h.description ?? h.markdown ?? "") as string).trim();
       const summary = JS_PLACEHOLDER.test(rawDesc) ? "" : rawDesc.slice(0, 280);
-      // Title from search is generic ("Donald J. Trump (@realDonaldTrump) - Truth Social")
-      // — replace with something more useful when we don't have a real summary yet.
       const title = (h.title ?? "").trim();
       const headline = title.includes("Truth Social") && platform === "truthsocial"
         ? "Donald J. Trump · Truth Social post"
@@ -164,17 +193,19 @@ async function fetchSocialPlatforms(): Promise<NormalizedPost[]> {
       });
     }
   }
-  // For Truth Social posts with empty summaries, scrape (max 4 in parallel to limit credits).
-  const needsScrape = drafts.filter((p) => p.platform === "truthsocial" && !p.summary).slice(0, 4);
+  // Scrape Truth Social posts (max 6 in parallel) for cleaned text + real timestamp.
+  const needsScrape = drafts.filter((p) => p.platform === "truthsocial").slice(0, 6);
   await Promise.all(needsScrape.map(async (p) => {
-    const text = await firecrawlScrape(p.url);
-    if (text) {
+    const { text, publishedAt } = await firecrawlScrape(p.url);
+    if (text && text.length > 8) {
       p.summary = text;
-      // Try to pull a better headline from the first line of the post.
       const firstLine = text.split(/[.!?\n]/)[0].trim();
       if (firstLine.length > 8 && firstLine.length < 120) p.headline = firstLine;
     }
+    if (publishedAt) p.publishedAt = publishedAt;
   }));
+  // Most recent first so freshest social posts top the merged feed.
+  drafts.sort((a, b) => +new Date(b.publishedAt) - +new Date(a.publishedAt));
   return drafts;
 }
 
