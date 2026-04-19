@@ -148,6 +148,30 @@ Deno.serve(async (req) => {
     if (cached?.value) {
       const exp = cached.expires_at ? Date.parse(cached.expires_at) : 0;
       if (exp > Date.now()) {
+        // Even on cache hit, opportunistically record today's ATM IV.
+        // recordAtmIv is itself dedupe'd per UTC day, so this is cheap.
+        try {
+          const cachedContracts: OptionContract[] = (cached.value as any)?.contracts ?? [];
+          const callsWithGreeks = cachedContracts.filter(
+            (c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv) && c.delta != null && Number.isFinite(c.delta),
+          );
+          let best: OptionContract | null = null;
+          let bestDist = Infinity;
+          for (const c of callsWithGreeks) {
+            const d = Math.abs(Math.abs(c.delta as number) - 0.5);
+            if (d < bestDist) { best = c; bestDist = d; }
+          }
+          if (best?.iv != null) {
+            const writePromise = recordAtmIv(underlying, best.iv);
+            // @ts-ignore
+            if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+              // @ts-ignore
+              EdgeRuntime.waitUntil(writePromise);
+            }
+          }
+        } catch (e) {
+          console.warn("[iv_history] cache-path record skipped", e);
+        }
         return new Response(
           JSON.stringify({ ...cached.value, cached: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
