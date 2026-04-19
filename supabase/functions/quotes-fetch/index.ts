@@ -10,7 +10,7 @@ const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 
 const BATCH_CONCURRENCY = 4;
 
-type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq";
+type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | "cnbc" | "google";
 
 interface SourceQuote {
   source: SourceName;
@@ -58,12 +58,16 @@ const MASSIVE_TTL_MS = 30_000;
 const ALPHA_TTL_MS = 60 * 60_000; // Alpha free is 25/day
 const YAHOO_TTL_MS = 30_000;
 const STOOQ_TTL_MS = 60_000;
+const CNBC_TTL_MS = 60_000;
+const GOOGLE_TTL_MS = 60_000;
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const massiveCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const yahooCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const stooqCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const cnbcCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const googleCache = new Map<string, { q: SourceQuote | null; at: number }>();
 
 let alphaChain: Promise<unknown> = Promise.resolve();
 function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
@@ -405,7 +409,69 @@ async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
   }
 }
 
-// ── Session detection ─────────────────────────────────────────────────
+// ── CNBC quote API (free JSON, no key; great ETF coverage) ──
+async function fetchCnbc(symbol: string): Promise<SourceQuote | null> {
+  const cached = cnbcCache.get(symbol);
+  if (cached && Date.now() - cached.at < CNBC_TTL_MS) return cached.q;
+  try {
+    const url = `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${encodeURIComponent(symbol)}&requestMethod=quick&noform=1&output=json`;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 NovaTerminal", Accept: "application/json" } });
+    if (!r.ok) {
+      cnbcCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
+      return cached?.q ?? null;
+    }
+    const d = await r.json();
+    const row = d?.FormattedQuoteResult?.FormattedQuote?.[0];
+    const price = Number(row?.last);
+    if (!isFinite(price) || price <= 0) {
+      cnbcCache.set(symbol, { q: null, at: Date.now() });
+      return null;
+    }
+    const change = Number(String(row?.change ?? "0").replace(/[+,]/g, ""));
+    const changePct = Number(String(row?.change_pct ?? "0").replace(/[+%,]/g, ""));
+    const volume = Number(String(row?.volume ?? "0").replace(/,/g, ""));
+    const q: SourceQuote = { source: "cnbc", price, change: isFinite(change) ? change : 0, changePct: isFinite(changePct) ? changePct : 0, volume: isFinite(volume) ? volume : 0 };
+    cnbcCache.set(symbol, { q, at: Date.now() });
+    return q;
+  } catch (e) {
+    console.error(`[cnbc] ${symbol}`, e);
+    return cached?.q ?? null;
+  }
+}
+
+// ── Google Finance HTML scrape (free, no key; bulletproof for US ETFs) ──
+// Tries NYSEARCA → NASDAQ → NYSE in order. We pull `data-last-price` from the
+// rendered DOM, which Google ships in the initial HTML response.
+async function fetchGoogle(symbol: string): Promise<SourceQuote | null> {
+  const cached = googleCache.get(symbol);
+  if (cached && Date.now() - cached.at < GOOGLE_TTL_MS) return cached.q;
+  const exchanges = ["NYSEARCA", "NASDAQ", "NYSE"];
+  for (const ex of exchanges) {
+    try {
+      const url = `https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`;
+      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 NovaTerminal", Accept: "text/html" } });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const m = html.match(/data-last-price="([0-9.]+)"/);
+      const prevMatch = html.match(/data-last-normal-market-timestamp="\d+"\s+data-previous-close-price="([0-9.]+)"/)
+        ?? html.match(/data-previous-close-price="([0-9.]+)"/);
+      const price = m ? Number(m[1]) : NaN;
+      if (!isFinite(price) || price <= 0) continue;
+      const prev = prevMatch ? Number(prevMatch[1]) : NaN;
+      const change = isFinite(prev) ? price - prev : 0;
+      const changePct = isFinite(prev) && prev ? ((price - prev) / prev) * 100 : 0;
+      const q: SourceQuote = { source: "google", price, change, changePct, volume: 0 };
+      googleCache.set(symbol, { q, at: Date.now() });
+      return q;
+    } catch (e) {
+      console.error(`[google] ${symbol}@${ex}`, e);
+    }
+  }
+  googleCache.set(symbol, { q: null, at: Date.now() });
+  return null;
+}
+
+
 // US equities: pre 04:00–09:30 ET, regular 09:30–16:00 ET, post 16:00–20:00 ET.
 // We compute the current minute in America/New_York from the UTC clock.
 function detectSession(yahooState?: string | null): Session {
@@ -446,7 +512,7 @@ function pickExtended(session: Session, yahoo: SourceQuote | null): { price: num
   return { price: null, pct: null };
 }
 
-// Pick consensus from up to 5 sources.
+// Pick consensus from up to 7 sources.
 function verify(
   symbol: string,
   finn: SourceQuote | null,
@@ -454,6 +520,8 @@ function verify(
   mass: SourceQuote | null,
   yahoo: SourceQuote | null,
   stooq: SourceQuote | null,
+  cnbc: SourceQuote | null,
+  google: SourceQuote | null,
 ): VerifiedQuote {
   const now = new Date().toISOString();
   const session = detectSession(yahoo?.marketState);
@@ -473,8 +541,10 @@ function verify(
     massive: mass?.price ?? null,
     yahoo: yahoo?.price ?? null,
     stooq: stooq?.price ?? null,
+    cnbc: cnbc?.price ?? null,
+    google: google?.price ?? null,
   };
-  const live = [finn, alpha, mass, yahoo, stooq].filter((x): x is SourceQuote => !!x && x.price > 0);
+  const live = [finn, alpha, mass, yahoo, stooq, cnbc, google].filter((x): x is SourceQuote => !!x && x.price > 0);
   if (live.length === 0) {
     return {
       symbol, price: 0, change: 0, changePct: 0, volume: 0,
@@ -495,8 +565,8 @@ function verify(
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const diff = ((maxP - minP) / minP) * 100;
-  // Prefer real-time intraday: Yahoo > Finnhub > Massive > Stooq > Alpha.
-  const order: SourceName[] = ["yahoo", "finnhub", "massive", "stooq", "alpha-vantage"];
+  // Prefer real-time intraday: Yahoo > Finnhub > Massive > CNBC > Google > Stooq > Alpha.
+  const order: SourceName[] = ["yahoo", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
   const chosen = order.map((n) => live.find((s) => s.source === n)).find(Boolean) ?? live[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
@@ -530,7 +600,18 @@ async function getQuote(
     fetchStooq(sym),
   ]);
   const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
-  const v = verify(sym, finn, alpha, mass, yahoo, stooq);
+
+  // Last-resort fallbacks. Only fire when the 5 primary sources are ALL empty —
+  // keeps happy-path latency unchanged but guarantees ETFs (GLD/TLT/ARKK/SOXL)
+  // never render "$0.00 No data" when Yahoo/Finnhub throttle in bulk.
+  const primaryHasPrice = [finn, mass, alpha, stooq, yahoo].some((q) => q && q.price > 0);
+  let cnbc: SourceQuote | null = cnbcCache.get(sym)?.q ?? null;
+  let google: SourceQuote | null = googleCache.get(sym)?.q ?? null;
+  if (!primaryHasPrice) {
+    [cnbc, google] = await Promise.all([fetchCnbc(sym), fetchGoogle(sym)]);
+  }
+
+  const v = verify(sym, finn, alpha, mass, yahoo, stooq, cnbc, google);
   // If every provider failed this round but we have a previous good price, keep
   // serving it (marked stale) instead of returning "unavailable" / no data.
   if (v.status === "unavailable" && cached?.quote && cached.quote.price > 0) {
