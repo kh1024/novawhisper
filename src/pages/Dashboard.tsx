@@ -28,6 +28,8 @@ import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { actionFromScore, labelClasses } from "@/lib/finalRank";
+import { smartActionLabel, smartActionTooltip, emptyStateCopy } from "@/lib/actionCopy";
+import { detectTimeState } from "@/lib/novaBrain";
 import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
 import { useBudget } from "@/lib/budget";
 import type { OptionPick } from "@/lib/mockData";
@@ -296,9 +298,24 @@ export default function Dashboard() {
               </TabsList>
             </Tabs>
           </div>
-          {picks.length === 0 && (
-            <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
-          )}
+          {picks.length === 0 && (() => {
+            const ts = detectTimeState();
+            const closed = ts.state === "weekend" || ts.state === "closed" || ts.state === "holiday";
+            const copy = emptyStateCopy(riskTab, { isWeekendOrClosed: closed });
+            const fallback: RiskBucket = riskTab === "safe" ? "mild" : riskTab === "mild" ? "safe" : riskTab === "aggressive" ? "mild" : "aggressive";
+            return (
+              <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-5 text-center space-y-2">
+                <div className="text-sm font-semibold">{copy.headline}</div>
+                <div className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">{copy.sub}</div>
+                <button
+                  onClick={() => setRiskTab(fallback)}
+                  className="mt-2 text-[11px] font-semibold tracking-wide text-primary hover:underline underline-offset-2"
+                >
+                  Show {fallback === "safe" ? "Conservative" : fallback === "mild" ? "Moderate" : fallback === "aggressive" ? "Aggressive" : "Lottery"} picks instead →
+                </button>
+              </div>
+            );
+          })()}
           {allOverBudget && (
             <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[11px] leading-snug">
               No {riskTab} contracts fit your <span className="font-mono">${budget.toLocaleString()}</span> per-trade cap right now — showing the cheapest options below. Each row suggests a budget-friendly alt ticker. Adjust capital/risk in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
@@ -394,25 +411,9 @@ export default function Dashboard() {
                 </div>
                 <div className="text-right shrink-0 w-20">
                   <div className={`mono text-lg font-semibold ${blocked ? "text-muted-foreground" : ""}`}>{p.score}</div>
-                  <Hint label={
-                    action === "BUY NOW"
-                      ? "High conviction — score ≥ 80. Take the trade now."
-                      : action === "WATCHLIST"
-                      ? "Solid setup — score 70–79. Wait for a confirmed entry."
-                      : action === "WATCHLIST ONLY"
-                      ? "Decent setup but one concern (liquidity / IV / no edge). Track, don't trade."
-                      : action === "WAIT PULLBACK"
-                      ? "Strong thesis but price is extended. Wait for a pullback to support."
-                      : action === "EXPENSIVE ENTRY"
-                      ? "Thesis is good but the strike is deep ITM — capital-inefficient."
-                      : action === "OVEREXTENDED"
-                      ? "Already up big today — chase risk. Let it cool before entering."
-                      : action === "WAIT"
-                      ? "Mixed signals — score 50–69. Monitor, no action yet."
-                      : "Avoid — bearish setup or hard-blocked (liquidity / IV trap / earnings)."
-                  }>
+                  <Hint label={smartActionTooltip(action, { bias: p.bias })}>
                     <span className={`mt-0.5 inline-block text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${labelClasses(action)}`}>
-                      {action}
+                      {smartActionLabel(action, { bias: p.bias, score: p.score })}
                     </span>
                   </Hint>
                 </div>
