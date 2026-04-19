@@ -110,32 +110,67 @@ async function firecrawlSearch(query: string, limit: number) {
   } catch (e) { console.warn("[political-posts] firecrawl error", e); return []; }
 }
 
+// Truth Social blocks scrapers without JS, so search descriptions come back as
+// "To use this website, please enable JavaScript." For those URLs we fire a
+// Firecrawl scrape (which renders JS) to pull the actual post text.
+const JS_PLACEHOLDER = /enable javascript/i;
+
+async function firecrawlScrape(url: string): Promise<string | null> {
+  if (!FIRECRAWL_KEY) return null;
+  try {
+    const r = await fetch("https://api.firecrawl.dev/v2/scrape", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${FIRECRAWL_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url, formats: ["markdown"], onlyMainContent: true, waitFor: 1500 }),
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const md: string = j?.data?.markdown ?? j?.markdown ?? "";
+    if (!md) return null;
+    // Strip nav junk + collapse whitespace, keep first 280 chars.
+    return md.replace(/\s+/g, " ").trim().slice(0, 280);
+  } catch { return null; }
+}
+
 async function fetchSocialPlatforms(): Promise<NormalizedPost[]> {
   if (!FIRECRAWL_KEY) return [];
-  const settled = await Promise.allSettled(FIRECRAWL_QUERIES.map((q) => firecrawlSearch(q, 4)));
+  const settled = await Promise.allSettled(FIRECRAWL_QUERIES.map((q) => firecrawlSearch(q, 6)));
   const seen = new Set<string>();
-  const out: NormalizedPost[] = [];
+  const drafts: NormalizedPost[] = [];
   for (const s of settled) {
     if (s.status !== "fulfilled") continue;
     for (const h of s.value) {
       const url = h?.url as string | undefined;
       if (!url || seen.has(url)) continue;
       const platform = platformFromUrl(url);
-      // Only keep actual platform posts, drop generic web pages
       if (platform !== "truthsocial" && platform !== "x") continue;
       seen.add(url);
-      out.push({
-        id: url,
-        headline: (h.title ?? "").trim() || "(untitled post)",
-        summary: ((h.description ?? h.markdown ?? "") as string).slice(0, 280),
-        source: hostFromUrl(url),
-        url,
-        publishedAt: new Date().toISOString(),
-        platform,
+      const rawDesc = ((h.description ?? h.markdown ?? "") as string).trim();
+      const summary = JS_PLACEHOLDER.test(rawDesc) ? "" : rawDesc.slice(0, 280);
+      // Title from search is generic ("Donald J. Trump (@realDonaldTrump) - Truth Social")
+      // — replace with something more useful when we don't have a real summary yet.
+      const title = (h.title ?? "").trim();
+      const headline = title.includes("Truth Social") && platform === "truthsocial"
+        ? "Donald J. Trump · Truth Social post"
+        : (title || "(untitled post)");
+      drafts.push({
+        id: url, headline, summary, source: hostFromUrl(url), url,
+        publishedAt: new Date().toISOString(), platform,
       });
     }
   }
-  return out;
+  // For Truth Social posts with empty summaries, scrape (max 4 in parallel to limit credits).
+  const needsScrape = drafts.filter((p) => p.platform === "truthsocial" && !p.summary).slice(0, 4);
+  await Promise.all(needsScrape.map(async (p) => {
+    const text = await firecrawlScrape(p.url);
+    if (text) {
+      p.summary = text;
+      // Try to pull a better headline from the first line of the post.
+      const firstLine = text.split(/[.!?\n]/)[0].trim();
+      if (firstLine.length > 8 && firstLine.length < 120) p.headline = firstLine;
+    }
+  }));
+  return drafts;
 }
 
 Deno.serve(async (req) => {
