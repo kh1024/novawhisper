@@ -441,7 +441,7 @@ export default function Scanner() {
           <Card className="glass-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-background text-[11px] uppercase tracking-wider text-muted-foreground sticky top-0 z-20 shadow-[0_1px_0_0_hsl(var(--border))]">
+                <thead className="bg-card text-[11px] uppercase tracking-wider text-muted-foreground sticky top-0 z-30 shadow-[0_2px_4px_-2px_hsl(var(--background))] border-b border-border">
                   <tr>
                     {[
                       { k: "Ticker" }, { k: "Last" }, { k: "% Chg" },
