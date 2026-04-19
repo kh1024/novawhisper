@@ -56,16 +56,49 @@ export default function Settings() {
     flashSaved();
   };
 
+  const customTickers = settings.customTickers ?? [];
+  const mergedUniverseSymbols = useMemo(
+    () => Array.from(new Set([...TICKER_UNIVERSE.map((u) => u.symbol), ...customTickers])),
+    [customTickers],
+  );
+
   const toggleSymbol = (sym: string) => {
-    const set = new Set(settings.tickerSymbols.length ? settings.tickerSymbols : TICKER_UNIVERSE.map((u) => u.symbol));
+    const set = new Set(settings.tickerSymbols.length ? settings.tickerSymbols : mergedUniverseSymbols);
     if (set.has(sym)) set.delete(sym);
     else set.add(sym);
     updateSettings({ tickerSymbols: Array.from(set) });
     flashSaved();
   };
 
+  const [newTicker, setNewTicker] = useState("");
+  const addCustomTicker = () => {
+    const sym = newTicker.trim().toUpperCase();
+    if (!sym) return;
+    if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(sym)) {
+      toast.error("Invalid ticker — use 1–10 letters/digits (e.g. AAPL, BRK.B).");
+      return;
+    }
+    if (mergedUniverseSymbols.includes(sym)) {
+      toast.message(`${sym} is already in the list.`);
+      setNewTicker("");
+      return;
+    }
+    updateSettings({ customTickers: [...customTickers, sym] });
+    setNewTicker("");
+    toast.success(`${sym} added`);
+    flashSaved();
+  };
+
+  const removeCustomTicker = (sym: string) => {
+    updateSettings({
+      customTickers: customTickers.filter((s) => s !== sym),
+      tickerSymbols: settings.tickerSymbols.filter((s) => s !== sym),
+    });
+    flashSaved();
+  };
+
   const activeTickerSet = new Set(
-    settings.tickerSymbols.length ? settings.tickerSymbols : TICKER_UNIVERSE.map((u) => u.symbol)
+    settings.tickerSymbols.length ? settings.tickerSymbols : mergedUniverseSymbols
   );
 
   return (
