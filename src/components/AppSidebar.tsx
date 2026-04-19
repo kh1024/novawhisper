@@ -30,6 +30,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { reconcileOrder } from "@/components/SortableList";
+import { Hint } from "@/components/Hint";
 
 const items = [
   { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard },
