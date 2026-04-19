@@ -118,50 +118,96 @@ export default function Settings() {
         </div>
       </Card>
 
-      {/* ───────────── Budget ───────────── */}
-      <Card className="glass-card p-6 space-y-4">
+      {/* ───────────── Capital & per-trade risk ───────────── */}
+      <Card className="glass-card p-6 space-y-5">
         <div>
           <h2 className="text-sm font-semibold flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-primary" /> Default trade budget
+            <Wallet className="h-4 w-4 text-primary" /> Portfolio capital & per-trade risk
           </h2>
-          <p className="text-xs text-muted-foreground mt-1 max-w-md">
-            Max you'd spend on a single options trade. Used to filter picks and pre-fill every Research drawer.
+          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+            Nova caps every recommendation at <span className="font-semibold text-foreground">{riskPct}%</span> of your portfolio.
+            No single trade — regardless of NOVA's score — will ever exceed this dollar amount.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-            <input
-              type="number"
-              min={50}
-              step={50}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onBlur={() => commit(Math.max(50, Number(draft) || 500))}
-              onKeyDown={(e) => e.key === "Enter" && commit(Math.max(50, Number(draft) || 500))}
-              className="w-40 h-10 pl-7 pr-3 text-base font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div className="flex gap-1.5 flex-wrap">
-            {PRESETS.map((v) => (
-              <button
-                key={v}
-                onClick={() => commit(v)}
-                className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
-                  budget === v
-                    ? "bg-primary/20 border-primary text-primary"
-                    : "border-border text-muted-foreground hover:bg-surface"
-                }`}
-              >
-                ${v >= 1000 ? `${v / 1000}k` : v}
-              </button>
-            ))}
+        {/* Portfolio size */}
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Total portfolio capital</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                min={100}
+                step={500}
+                value={portfolioDraft}
+                onChange={(e) => setPortfolioDraft(e.target.value)}
+                onBlur={() => commitPortfolio(Number(portfolioDraft) || 25000)}
+                onKeyDown={(e) => e.key === "Enter" && commitPortfolio(Number(portfolioDraft) || 25000)}
+                className="w-44 h-10 pl-7 pr-3 text-base font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {PORTFOLIO_PRESETS.map((v) => (
+                <button
+                  key={v}
+                  onClick={() => commitPortfolio(v)}
+                  className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                    portfolio === v
+                      ? "bg-primary/20 border-primary text-primary"
+                      : "border-border text-muted-foreground hover:bg-surface"
+                  }`}
+                >
+                  ${v >= 1000 ? `${v / 1000}k` : v}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3">
-          Current default: <span className="font-mono text-foreground">${budget.toLocaleString()}</span>
+        {/* Risk percent */}
+        <div className="space-y-2 pt-2 border-t border-border/40">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Max % of capital per trade</div>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <input
+                type="number"
+                min={0.1}
+                max={100}
+                step={0.5}
+                value={riskDraft}
+                onChange={(e) => setRiskDraft(e.target.value)}
+                onBlur={() => commitRisk(Number(riskDraft) || 2)}
+                onKeyDown={(e) => e.key === "Enter" && commitRisk(Number(riskDraft) || 2)}
+                className="w-28 h-10 pr-7 pl-3 text-base font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {RISK_PRESETS.map((v) => (
+                <button
+                  key={v}
+                  onClick={() => commitRisk(v)}
+                  className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                    riskPct === v
+                      ? "bg-primary/20 border-primary text-primary"
+                      : "border-border text-muted-foreground hover:bg-surface"
+                  }`}
+                >
+                  {v}%
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            Conservative traders typically risk 1–2% per trade. 5%+ is aggressive.
+          </div>
+        </div>
+
+        <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3 flex flex-wrap gap-x-4 gap-y-1">
+          <span>Portfolio: <span className="font-mono text-foreground">${portfolio.toLocaleString()}</span></span>
+          <span>Risk: <span className="font-mono text-foreground">{riskPct}%</span></span>
+          <span>→ Max per trade: <span className="font-mono text-primary font-semibold">${budget.toLocaleString()}</span></span>
         </div>
       </Card>
 
