@@ -2,9 +2,10 @@
 // Shows: huge action label (BUY / WAIT / SKIP), one contract OR a skip reason,
 // stop price, and tiny meta chips. Long analysis is hidden behind a toggle.
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX, LayoutList } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
@@ -44,11 +45,15 @@ const DATA_ICON = {
 export function NovaVerdictCard({
   card,
   closes,
+  symbol,
 }: {
   card: NovaCard;
   /** Optional recent daily closes — last 20 are used for a tiny trend sparkline. */
   closes?: number[];
+  /** Optional underlying symbol — enables the "Chain" jump button when present. */
+  symbol?: string;
 }) {
+  const navigate = useNavigate();
   const [showFull, setShowFull] = useState(false);
   const [sparkMode, setSparkMode] = useState<"price" | "rsi">("price");
   const style = ACTION_STYLES[card.action];
@@ -163,24 +168,45 @@ export function NovaVerdictCard({
         </span>
       </div>
 
-      {/* Toggle full analysis */}
-      {card.full_analysis_md && (
-        <>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-3 w-full justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-            onClick={() => setShowFull((v) => !v)}
-          >
-            {showFull ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            {showFull ? "Hide" : "Show"} full analysis
-          </Button>
-          {showFull && (
-            <div className="mt-3 pt-3 border-t border-border text-sm text-foreground/85 leading-relaxed [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1.5 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-surface/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono">
-              <ReactMarkdown>{card.full_analysis_md}</ReactMarkdown>
-            </div>
+      {/* Footer actions: Chain jump + toggle full analysis */}
+      {(card.full_analysis_md || (symbol && c)) && (
+        <div className="mt-3 flex items-center gap-2">
+          {symbol && c && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() =>
+                navigate(
+                  `/chains?symbol=${encodeURIComponent(symbol)}&strike=${encodeURIComponent(
+                    String(c.strike),
+                  )}&expiry=${encodeURIComponent(c.expiry)}`,
+                )
+              }
+              title={`Open chain for ${symbol} ${c.strike} ${c.expiry}`}
+              aria-label={`Open chain for ${symbol} strike ${c.strike} expiry ${c.expiry}`}
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              Chain
+            </Button>
           )}
-        </>
+          {card.full_analysis_md && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1 justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              onClick={() => setShowFull((v) => !v)}
+            >
+              {showFull ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              {showFull ? "Hide" : "Show"} full analysis
+            </Button>
+          )}
+        </div>
+      )}
+      {showFull && card.full_analysis_md && (
+        <div className="mt-3 pt-3 border-t border-border text-sm text-foreground/85 leading-relaxed [&_strong]:text-foreground [&_strong]:font-semibold [&_p]:my-1.5 [&_ul]:my-1 [&_ul]:pl-4 [&_li]:list-disc [&_li]:my-0.5 [&_code]:bg-surface/60 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono">
+          <ReactMarkdown>{card.full_analysis_md}</ReactMarkdown>
+        </div>
       )}
     </Card>
   );
