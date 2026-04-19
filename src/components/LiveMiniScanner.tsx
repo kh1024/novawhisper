@@ -6,18 +6,19 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
 import { computeSetups } from "@/lib/setupScore";
+import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
 
 export function LiveMiniScanner() {
   const query = useLiveQuotes(undefined, { refetchMs: 60_000 });
-  const quotes = query.data ?? [];
+  const quotes = query.data;
   const loading = query.isLoading;
 
   const rows = useMemo(() => {
-    if (!quotes.length) return [];
+    if (!quotes?.length) return [];
     const setups = computeSetups(quotes);
     return setups
-      .map((s) => ({ s, rank: rankSetup(s) }))
+      .map((s) => ({ s, rank: rankSetup(s, selectStrategy(s)) }))
       .sort((a, b) => b.rank.finalRank - a.rank.finalRank)
       .slice(0, 5);
   }, [quotes]);
