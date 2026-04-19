@@ -18,6 +18,8 @@ import { feeOneSide, feeRoundTrip } from "@/lib/fees";
 import { buildSamplePaperTrades } from "@/lib/seedPaperTrades";
 import { toast } from "@/hooks/use-toast";
 import { Hint } from "@/components/Hint";
+import { evaluateGuards, CAPITAL_STOP_PCT } from "@/lib/novaGuards";
+import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -440,6 +442,25 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
           </div>
         )}
       </div>
+
+      {/* Capital Guard badge — fires when long position down ≥30% from entry */}
+      {(() => {
+        const guard = evaluateGuards({
+          symbol: p.symbol,
+          optionType: p.option_type,
+          direction: p.direction as "long" | "short",
+          strike: Number(p.strike),
+          position: {
+            entryPremium: p.entry_premium != null ? Number(p.entry_premium) : null,
+            estimatedUnrealized: unrealizedReal ?? unrealized,
+            contracts: p.contracts,
+            direction: p.direction as "long" | "short",
+          },
+        });
+        return guard.flags.length > 0 ? (
+          <div className="mt-2"><NovaGuardBadges guard={guard} /></div>
+        ) : null;
+      })()}
 
       {/* P&L band */}
       {unrealized != null && (

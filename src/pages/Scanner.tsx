@@ -25,6 +25,9 @@ import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
+import { evaluateGuards } from "@/lib/novaGuards";
+import { useSma200 } from "@/lib/sma200";
+import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -147,6 +150,9 @@ export default function Scanner() {
   })), [rows]);
   const expiryStatus = usePickExpiration(expiryInputs);
 
+  // 200-day SMA gate — pulled once per session, cached 24h.
+  const sma = useSma200(rows.map((r) => r.symbol));
+
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
@@ -172,10 +178,20 @@ export default function Scanner() {
   const [settings] = useSettings();
   useEffect(() => {
     // Use effectiveVerdict so RSI-flipped rows don't fire false GO alerts.
+    // Also drop rows whose NOVA Guards block the signal (200-SMA gate, etc.).
     const goRows = rows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
       const v = exp?.effectiveVerdict ?? r.crl?.verdict;
-      return v === "GO" && !exp?.isStale && !exp?.isTimedOut;
+      const g = evaluateGuards({
+        symbol: r.symbol,
+        livePrice: r.price,
+        pickPrice: r.price,
+        optionType: r.bias === "bearish" ? "put" : "call",
+        direction: "long",
+        strike: r.price,
+        sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+      });
+      return v === "GO" && !exp?.isStale && !exp?.isTimedOut && !g.shouldBlockSignal;
     });
     if (goRows.length === 0) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -189,7 +205,7 @@ export default function Scanner() {
         risk: r.crl?.riskBadge,
       })),
     });
-  }, [rows, settings, expiryStatus]);
+  }, [rows, settings, expiryStatus, sma]);
 
   const counts = useMemo(() => ({
     now: rows.filter((r) => r.readiness === "NOW").length,
@@ -357,7 +373,21 @@ export default function Scanner() {
                     const ready = readinessMeta(r.readiness);
                     const isOpen = expanded === r.symbol;
                     const exp = expiryStatus.get(`scanner:${r.symbol}`);
-                    const verdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
+                    const baseVerdict = (exp?.effectiveVerdict ?? r.crl.verdict) as typeof r.crl.verdict;
+                    // NOVA Guards — 200-SMA gate is the relevant one for scanner long-call setups.
+                    const guard = evaluateGuards({
+                      symbol: r.symbol,
+                      livePrice: r.price,
+                      pickPrice: r.price,                          // live = pick price in scanner
+                      optionType: r.bias === "bearish" ? "put" : "call",
+                      direction: "long",
+                      strike: r.price,                              // ATM for the gate
+                      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+                      riskBucket: r.crl.riskBadge?.toLowerCase() ?? null,
+                    });
+                    // If guard blocks, downgrade GO → BLOCKED so the user can't act.
+                    const verdict = guard.shouldBlockSignal && baseVerdict === "GO" ? "EXIT" : baseVerdict;
+                    const blocked = guard.shouldBlockSignal;
                     return (
                       <Fragment key={r.symbol}>
                         <tr
@@ -366,6 +396,7 @@ export default function Scanner() {
                             "border-t border-border/60 hover:bg-surface/40 cursor-pointer transition-colors",
                             isOpen && "bg-surface/40",
                             r.readiness === "AVOID" && "opacity-70",
+                            blocked && "bg-bearish/5",
                           )}
                         >
                           <td className="px-3 py-3">
@@ -407,7 +438,7 @@ export default function Scanner() {
                                   verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
                                   (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
                                   verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                                )}>{verdict}</span>
+                                )}>{blocked ? "BLOCKED" : verdict}</span>
                               </div>
                               {r.crl.riskBadge && (
                                 <span className={cn(
@@ -417,6 +448,7 @@ export default function Scanner() {
                                   r.crl.riskBadge === "Aggressive" && "text-bearish border-bearish/30",
                                 )}>{r.crl.riskBadge}</span>
                               )}
+                              <NovaGuardBadges guard={guard} compact />
                               <PickExpiryChips status={exp} compact />
                             </div>
                           </td>

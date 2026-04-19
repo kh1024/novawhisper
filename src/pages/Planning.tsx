@@ -23,6 +23,9 @@ import { dispatchPickAlerts } from "@/lib/webhook";
 import { useLiveQuotes } from "@/lib/liveData";
 import { usePickExpiration, type PickInputs, type PickStatus } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
+import { evaluateGuards, type GuardEval } from "@/lib/novaGuards";
+import { useSma200 } from "@/lib/sma200";
+import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
@@ -558,6 +561,23 @@ function WebPicksPanel() {
     );
   }
 
+
+  // 200-day SMA cache for the long-term trend gate.
+  const sma = useSma200(symbols);
+
+  // Build per-pick guard evaluation (stale price, intrinsic audit, 200-SMA, etc.)
+  const guardForPick = (p: ScoutPick, tier: "safe" | "mild" | "aggressive"): GuardEval =>
+    evaluateGuards({
+      symbol: p.symbol,
+      pickPrice: p.playAt ?? null,
+      livePrice: quoteMap.get(p.symbol)?.price ?? null,
+      riskBucket: tier,
+      optionType: p.optionType,
+      direction: p.direction,
+      strike: p.strike,
+      sma200: sma.map.get(p.symbol)?.sma200 ?? null,
+    });
+
   // Hide timed-out picks per tier.
   const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
     const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
@@ -578,9 +598,9 @@ function WebPicksPanel() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={tierPicks("safe")} expiryStatus={expiryStatus} />
-        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={tierPicks("mild")} expiryStatus={expiryStatus} />
-        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={tierPicks("aggressive")} expiryStatus={expiryStatus} />
+        <BucketColumn title="Safe" tone="bullish" icon={<Shield className="h-3.5 w-3.5" />} blurb="Income & hedging" picks={tierPicks("safe")} expiryStatus={expiryStatus} guardFor={(p) => guardForPick(p, "safe")} />
+        <BucketColumn title="Mild" tone="neutral" icon={<Target className="h-3.5 w-3.5" />} blurb="Defined-risk directional" picks={tierPicks("mild")} expiryStatus={expiryStatus} guardFor={(p) => guardForPick(p, "mild")} />
+        <BucketColumn title="Aggressive" tone="bearish" icon={<Zap className="h-3.5 w-3.5" />} blurb="High risk / high reward" picks={tierPicks("aggressive")} expiryStatus={expiryStatus} guardFor={(p) => guardForPick(p, "aggressive")} />
       </div>
 
       {data?.sources && data.sources.length > 0 && (
@@ -597,13 +617,14 @@ function WebPicksPanel() {
   );
 }
 
-function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus }: {
+function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus, guardFor }: {
   title: string;
   tone: "bullish" | "neutral" | "bearish";
   icon: React.ReactNode;
   blurb: string;
   picks: ScoutPick[];
   expiryStatus?: Map<string, PickStatus>;
+  guardFor?: (p: ScoutPick) => GuardEval;
 }) {
   const toneClass =
     tone === "bullish" ? "border-bullish/40 bg-bullish/5" :
@@ -629,8 +650,17 @@ function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus }: {
           <div className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">No ideas in this bucket right now.</div>
         ) : picks.map((p, i) => {
           const exp = expiryStatus?.get(pickKey(p));
+          const guard = guardFor?.(p);
+          const blocked = guard?.shouldBlockSignal ?? false;
           return (
-          <div key={i} className={cn("rounded-md border border-border/60 bg-background/40 p-2.5", exp?.isStale && "opacity-70")}>
+          <div
+            key={i}
+            className={cn(
+              "rounded-md border p-2.5",
+              blocked ? "border-bearish/50 bg-bearish/10" : "border-border/60 bg-background/40",
+              exp?.isStale && "opacity-70",
+            )}
+          >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="font-mono text-sm font-semibold">{p.symbol}</span>
@@ -649,22 +679,31 @@ function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus }: {
               playAt={p.playAt}
               premiumEstimate={p.premiumEstimate}
             />
+            {guard && guard.flags.length > 0 && (
+              <div className="mt-2"><NovaGuardBadges guard={guard} /></div>
+            )}
             <div className="mt-2 space-y-1 text-[11px]">
               <div><span className="text-muted-foreground">Risk: </span><span className="text-foreground/80">{p.risk}</span></div>
               <div className="flex items-center justify-between gap-2">
                 <SourceBadge source={p.source} />
-                <SaveToPortfolioButton
-                  size="xs"
-                  symbol={p.symbol}
-                  optionType={p.optionType}
-                  direction={p.direction}
-                  strike={p.strike}
-                  strikeShort={p.strikeShort}
-                  expiry={p.expiry}
-                  entryUnderlying={p.playAt}
-                  thesis={p.thesis}
-                  source="web-pick"
-                />
+                {blocked ? (
+                  <span className="text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-bearish/50 bg-bearish/15 text-bearish">
+                    BLOCKED
+                  </span>
+                ) : (
+                  <SaveToPortfolioButton
+                    size="xs"
+                    symbol={p.symbol}
+                    optionType={p.optionType}
+                    direction={p.direction}
+                    strike={p.strike}
+                    strikeShort={p.strikeShort}
+                    expiry={p.expiry}
+                    entryUnderlying={p.playAt}
+                    thesis={p.thesis}
+                    source="web-pick"
+                  />
+                )}
               </div>
               {exp && (exp.isStale || exp.rsiFlipped || exp.thetaAccelerating) && (
                 <div className="mt-1.5"><PickExpiryChips status={exp} compact /></div>
