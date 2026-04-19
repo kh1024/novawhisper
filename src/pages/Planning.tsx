@@ -593,8 +593,7 @@ function WebPicksPanel() {
       sma200: sma.map.get(p.symbol)?.sma200 ?? null,
     });
 
-  // NOVA AI filter (shared across surfaces).
-  const [novaSpec] = useNovaFilter();
+  // NOVA filter spec already pulled above (must live before early returns).
   const todayMs = Date.now();
   const dteOf = (iso?: string | null): number | null => {
     if (!iso) return null;
