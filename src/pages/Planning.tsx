@@ -560,6 +560,9 @@ function WebPicksPanel() {
   // MUST be called before any early returns to preserve hook order.
   const sma = useSma200(symbols);
 
+  // NOVA AI filter (must also live above early returns).
+  const [novaSpec] = useNovaFilter();
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-3">
