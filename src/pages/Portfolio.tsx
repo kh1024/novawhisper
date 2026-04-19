@@ -18,6 +18,8 @@ import { feeOneSide, feeRoundTrip } from "@/lib/fees";
 import { buildSamplePaperTrades } from "@/lib/seedPaperTrades";
 import { toast } from "@/hooks/use-toast";
 import { Hint } from "@/components/Hint";
+import { evaluateGuards, CAPITAL_STOP_PCT } from "@/lib/novaGuards";
+import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
