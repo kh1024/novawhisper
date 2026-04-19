@@ -20,6 +20,8 @@ import { NovaStatusStrip } from "@/components/NovaStatusStrip";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
+import { NovaFilterBar } from "@/components/NovaFilterBar";
+import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
