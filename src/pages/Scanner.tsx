@@ -252,24 +252,24 @@ export default function Scanner() {
     <TooltipProvider delayDuration={150}>
       <div className="p-4 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Market Scanner</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Market Scanner</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Disciplined setup scoring across {rows.length} symbols · NO TRADE is a valid outcome.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="pill pill-live"><span className="live-dot" /> Live · {freshness}</span>
             <Tabs value={view} onValueChange={(v) => setView(v as View)}>
               <TabsList className="bg-surface/60 h-9">
-                <TabsTrigger value="table" className="h-7"><Table2 className="h-3.5 w-3.5 mr-1.5" />Table</TabsTrigger>
-                <TabsTrigger value="cards" className="h-7"><LayoutGrid className="h-3.5 w-3.5 mr-1.5" />Cards</TabsTrigger>
+                <TabsTrigger value="table" className="h-7"><Table2 className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Table</span></TabsTrigger>
+                <TabsTrigger value="cards" className="h-7"><LayoutGrid className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Cards</span></TabsTrigger>
               </TabsList>
             </Tabs>
             <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
         </div>
@@ -297,7 +297,7 @@ export default function Scanner() {
         </div>
 
         {/* Filters */}
-        <Card className="glass-card p-5 space-y-5">
+        <Card className="glass-card p-4 sm:p-5 space-y-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
