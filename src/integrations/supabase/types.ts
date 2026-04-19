@@ -14,6 +14,128 @@ export type Database = {
   }
   public: {
     Tables: {
+      learning_weights: {
+        Row: {
+          avg_return: number | null
+          hit_rate: number | null
+          id: string
+          label: string
+          multiplier: number
+          rationale: string | null
+          sample_size: number
+          updated_at: string
+        }
+        Insert: {
+          avg_return?: number | null
+          hit_rate?: number | null
+          id?: string
+          label: string
+          multiplier?: number
+          rationale?: string | null
+          sample_size?: number
+          updated_at?: string
+        }
+        Update: {
+          avg_return?: number | null
+          hit_rate?: number | null
+          id?: string
+          label?: string
+          multiplier?: number
+          rationale?: string | null
+          sample_size?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pick_outcomes: {
+        Row: {
+          evaluated_at: string
+          exit_price: number
+          id: string
+          is_win: boolean
+          return_pct: number
+          snapshot_id: string
+          window_days: number
+        }
+        Insert: {
+          evaluated_at?: string
+          exit_price: number
+          id?: string
+          is_win: boolean
+          return_pct: number
+          snapshot_id: string
+          window_days: number
+        }
+        Update: {
+          evaluated_at?: string
+          exit_price?: number
+          id?: string
+          is_win?: boolean
+          return_pct?: number
+          snapshot_id?: string
+          window_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pick_outcomes_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "pick_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pick_snapshots: {
+        Row: {
+          atr_pct: number | null
+          bias: string
+          created_at: string
+          entry_price: number
+          final_rank: number
+          id: string
+          iv_rank: number | null
+          label: string
+          options_score: number
+          readiness_score: number
+          rel_volume: number | null
+          setup_score: number
+          snapshot_date: string
+          symbol: string
+        }
+        Insert: {
+          atr_pct?: number | null
+          bias: string
+          created_at?: string
+          entry_price: number
+          final_rank: number
+          id?: string
+          iv_rank?: number | null
+          label: string
+          options_score: number
+          readiness_score: number
+          rel_volume?: number | null
+          setup_score: number
+          snapshot_date?: string
+          symbol: string
+        }
+        Update: {
+          atr_pct?: number | null
+          bias?: string
+          created_at?: string
+          entry_price?: number
+          final_rank?: number
+          id?: string
+          iv_rank?: number | null
+          label?: string
+          options_score?: number
+          readiness_score?: number
+          rel_volume?: number | null
+          setup_score?: number
+          snapshot_date?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
       portfolio_positions: {
         Row: {
           close_premium: number | null

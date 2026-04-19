@@ -19,6 +19,7 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
 import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
 import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
+import { useSnapshotUploader } from "@/lib/useSnapshotUploader";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
@@ -35,7 +36,6 @@ import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
-import { VERDICT_HINT, BIAS_HINT } from "@/lib/glossary";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -177,6 +177,18 @@ export default function Scanner() {
     }
     return m;
   }, [rows]);
+
+  // Persist today's snapshot for the Performance dashboard (throttled to 1×/h).
+  const snapshotInputs = useMemo(
+    () => rows
+      .map((r) => {
+        const entry = rankMap.get(r.symbol);
+        return entry ? { setup: r, rank: entry.rank } : null;
+      })
+      .filter((v): v is { setup: SetupRow; rank: RankResult } => v !== null),
+    [rows, rankMap],
+  );
+  useSnapshotUploader(snapshotInputs);
 
   // Re-sort rows by Final Rank desc; ties broken by Setup Score.
   const sortedRows = useMemo(
@@ -503,11 +515,9 @@ export default function Scanner() {
                           </td>
                           <td className="px-3 py-3 mono">{r.relVolume.toFixed(2)}×</td>
                           <td className="px-3 py-3">
-                            <Hint label={BIAS_HINT[r.bias] ?? "Directional read for this ticker."}>
-                              <span className={`pill ${bcls} capitalize gap-1 cursor-help`}>
-                                <BIcon className="h-3 w-3" />{r.bias}
-                              </span>
-                            </Hint>
+                            <span className={`pill ${bcls} capitalize gap-1`}>
+                              <BIcon className="h-3 w-3" />{r.bias}
+                            </span>
                           </td>
                           <td className="px-3 py-3 mono"><EstNum n={r.ivRank} est className={ivrColor(r.ivRank)} /></td>
                           <td className="px-3 py-3 mono"><EstNum n={r.rsi} est className={rsiColor(r.rsi)} /></td>
@@ -524,15 +534,13 @@ export default function Scanner() {
                                     NOVA
                                   </span>
                                 </Hint>
-                                <Hint label={VERDICT_HINT[blocked ? "BLOCKED" : verdict] ?? "NOVA verdict for this setup."}>
-                                  <span className={cn(
-                                    "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit cursor-help",
-                                    verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                    verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                    (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                    verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                                  )}>{blocked ? "BLOCKED" : verdict}</span>
-                                </Hint>
+                                <span className={cn(
+                                  "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
+                                  verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
+                                  verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
+                                  (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
+                                  verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
+                                )}>{blocked ? "BLOCKED" : verdict}</span>
                               </div>
                               {r.crl.riskBadge && (
                                 <span className={cn(
