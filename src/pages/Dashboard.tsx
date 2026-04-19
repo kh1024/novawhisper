@@ -219,9 +219,10 @@ export default function Dashboard() {
             </div>
             <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
               <TabsList className="h-8 bg-surface/60">
-                <TabsTrigger value="safe" className="text-xs h-6">🟢 Safe</TabsTrigger>
-                <TabsTrigger value="mild" className="text-xs h-6">🟡 Mild</TabsTrigger>
+                <TabsTrigger value="safe" className="text-xs h-6">🟢 Conservative</TabsTrigger>
+                <TabsTrigger value="mild" className="text-xs h-6">🟡 Moderate</TabsTrigger>
                 <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
+                <TabsTrigger value="lottery" className="text-xs h-6">🎲 Lottery</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
