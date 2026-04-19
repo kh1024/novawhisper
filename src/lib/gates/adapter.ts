@@ -53,12 +53,25 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
   // Date sync: if the pick's expiry already passed, pivot to nearest monthly.
   const sync = syncExpiry(pick.expiry);
 
-  // Best-effort entry premium: prefer a real saved position, otherwise parse
-  // the Nova `premiumEstimate` string. Falls back to 0 (Gate 8 then no-ops).
+  // Best-effort entry premium with strict source priority:
+  //   1. Live ATM contract ASK from the chain — penny-accurate "what you'd
+  //      actually pay to buy this contract right now". This is the rule:
+  //      buying uses ASK, never mark/last.
+  //   2. Saved position's recorded entry premium.
+  //   3. Parsed Nova string estimate (mid-of-range fallback).
   const parsedPremium = parsePremiumEstimate(pick.premiumEstimate);
-  const entryPremium = position?.entry_premium != null
-    ? Number(position.entry_premium)
-    : (parsedPremium ?? 0);
+  let atmContract: ReturnType<typeof pickAtmContract> | null = null;
+  if (chain && chain.length > 0 && livePrice > 0) {
+    atmContract = pickAtmContract(chain, livePrice, pick.optionType);
+  }
+  const askPremium = atmContract?.ask != null && Number.isFinite(atmContract.ask) && atmContract.ask > 0
+    ? atmContract.ask
+    : null;
+  const entryPremium = askPremium != null
+    ? askPremium
+    : position?.entry_premium != null
+      ? Number(position.entry_premium)
+      : (parsedPremium ?? 0);
 
   // ── Real IVP for Gate 6 ──
   // Priority:
@@ -81,16 +94,12 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
   }
 
   // ── Real Delta for Gate sizing ──
-  // Prefer the ATM contract's delta from the live chain. Fall back to the old
-  // strategy-based heuristic only when no chain data is present.
+  // Prefer the ATM contract's delta (already resolved above) from the live
+  // chain. Fall back to the strategy-based heuristic only when no chain.
   const heuristicDelta = pick.strategy.toLowerCase().includes("leaps") ? 0.85 : 0.55;
-  let resolvedDelta: number = heuristicDelta;
-  if (chain && chain.length > 0 && livePrice > 0) {
-    const atm = pickAtmContract(chain, livePrice, pick.optionType);
-    if (atm?.delta != null && Number.isFinite(atm.delta)) {
-      resolvedDelta = atm.delta as number;
-    }
-  }
+  const resolvedDelta: number = atmContract?.delta != null && Number.isFinite(atmContract.delta)
+    ? (atmContract.delta as number)
+    : heuristicDelta;
 
   const input: SignalInput = {
     ticker: pick.symbol,
@@ -98,7 +107,12 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     strikePrice: Number(pick.strike),
     currentPrice: livePrice,
     entryPremium,
-    currentPremium: currentPremium ?? entryPremium,
+    // Selling uses BID (penny-accurate exit value). Falls back to entry
+    // premium when no chain is present so Gate 7 doesn't false-trigger.
+    currentPremium: currentPremium
+      ?? (atmContract?.bid != null && Number.isFinite(atmContract.bid) && atmContract.bid > 0
+            ? atmContract.bid
+            : entryPremium),
     quoteTimestamp: quote?.updatedAt ? new Date(quote.updatedAt) : new Date(),
     liveFeedPrice: livePrice,
     rsi14: computeRSI14(sma?.closes ?? []),         // real Wilder RSI from daily closes
