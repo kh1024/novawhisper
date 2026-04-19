@@ -23,7 +23,26 @@ import { useSma200 } from "@/lib/sma200";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import { actionFromScore, labelClasses } from "@/lib/finalRank";
 import type { OptionPick } from "@/lib/mockData";
+
+/**
+ * Compute moneyness for a long option vs the live underlying price.
+ * Returns ITM / ATM / OTM with the % distance — used for the inline
+ * moneyness chip on every pick row.
+ */
+function moneynessOf(optionType: "call" | "put", strike: number, spot: number | null) {
+  if (spot == null || !Number.isFinite(spot) || spot <= 0) return null;
+  const diffPct = ((spot - strike) / spot) * 100;          // call: + = ITM
+  const intrinsicPct = optionType === "call" ? diffPct : -diffPct;
+  if (Math.abs(intrinsicPct) < 1) {
+    return { kind: "ATM" as const, pct: intrinsicPct, cls: "border-muted-foreground/40 text-foreground bg-surface/60" };
+  }
+  if (intrinsicPct > 0) {
+    return { kind: "ITM" as const, pct: intrinsicPct, cls: "border-bullish/50 bg-bullish/10 text-bullish" };
+  }
+  return { kind: "OTM" as const, pct: intrinsicPct, cls: "border-warning/50 bg-warning/10 text-warning" };
+}
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
