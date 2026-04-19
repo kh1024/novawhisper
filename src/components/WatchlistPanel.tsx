@@ -8,6 +8,8 @@ import { useWatchlist, useRemoveFromWatchlist, type WatchlistItem } from "@/lib/
 import { useVerdicts } from "@/lib/portfolioVerdict";
 import type { PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
+import { Sparkline } from "@/components/Sparkline";
+import { useSma200 } from "@/lib/sma200";
 
 
 interface Props {
@@ -59,6 +61,9 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
   const remove = useRemoveFromWatchlist();
   const pseudo = useMemo(() => items.map(toPseudoPosition), [items]);
   const verdictQ = useVerdicts(pseudo);
+  // Daily closes for sparklines — same 24h cache as the rest of the app.
+  const symbols = useMemo(() => Array.from(new Set(items.map((w) => w.symbol))), [items]);
+  const { map: smaMap } = useSma200(symbols);
 
   const verdictMap = useMemo(
     () => new Map((verdictQ.data?.verdicts ?? []).map((v) => [v.id, v])),
@@ -144,6 +149,15 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                 </div>
 
                 <div className="text-right shrink-0 hidden sm:block">
+                  {(() => {
+                    const closes = smaMap.get(w.symbol)?.closes;
+                    const tail = closes && closes.length >= 2 ? closes.slice(-20) : null;
+                    return tail ? (
+                      <div className="mb-1 flex justify-end">
+                        <Sparkline values={tail} width={72} height={20} ariaLabel={`${w.symbol} 20-day trend`} />
+                      </div>
+                    ) : null;
+                  })()}
                   {entry != null && (
                     <div className="text-[10px] text-muted-foreground">
                       Entry <span className="mono text-foreground">${entry.toFixed(2)}</span>

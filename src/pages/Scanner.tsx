@@ -40,6 +40,7 @@ import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
 import { ScannerToolbar } from "@/components/ScannerToolbar";
+import { Sparkline } from "@/components/Sparkline";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -658,6 +659,7 @@ export default function Scanner() {
                 key={r.symbol}
                 row={r}
                 rank={rankMap.get(r.symbol)?.rank ?? null}
+                closes={sma.map.get(r.symbol)?.closes ?? null}
                 onOpen={() => setOpenSymbol(r.symbol)}
               />
             ))}
@@ -852,8 +854,9 @@ function DetailPanel({ row, decision, rank, onOpen }: {
   );
 }
 
-function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | null; onOpen: () => void }) {
+function SetupCard({ row, rank, closes, onOpen }: { row: SetupRow; rank: RankResult | null; closes?: number[] | null; onOpen: () => void }) {
   const { cls: bcls, Icon: BIcon } = biasMeta(row.bias);
+  const sparkValues = closes && closes.length >= 2 ? closes.slice(-20) : null;
   return (
     <Card className={cn("glass-card p-4 space-y-3 cursor-pointer hover:border-primary/40 transition-all", row.readiness === "AVOID" && "opacity-75")} onClick={onOpen}>
       <div className="flex items-start justify-between">
@@ -861,17 +864,20 @@ function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | nu
           <div className="font-mono font-semibold text-lg">{row.symbol}</div>
           <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">{row.name}</div>
         </div>
-        <div className="text-right">
-          {rank ? (
-            <>
-              <div className={cn("mono text-2xl font-semibold", scoreColor(rank.finalRank))}>{rank.finalRank}</div>
-              <span className={cn("text-[10px] px-2 py-0.5 rounded border font-semibold tracking-wider", labelClasses(rank.label))}>
-                {rank.label}
-              </span>
-            </>
-          ) : (
-            <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
-          )}
+        <div className="text-right flex items-center gap-2">
+          {sparkValues && <Sparkline values={sparkValues} width={64} height={22} ariaLabel={`${row.symbol} 20-day trend`} />}
+          <div>
+            {rank ? (
+              <>
+                <div className={cn("mono text-2xl font-semibold", scoreColor(rank.finalRank))}>{rank.finalRank}</div>
+                <span className={cn("text-[10px] px-2 py-0.5 rounded border font-semibold tracking-wider", labelClasses(rank.label))}>
+                  {rank.label}
+                </span>
+              </>
+            ) : (
+              <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
+            )}
+          </div>
         </div>
       </div>
 
