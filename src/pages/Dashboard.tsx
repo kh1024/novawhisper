@@ -70,6 +70,9 @@ export default function Dashboard() {
       {/* NOVA status — adaptive regime + time-state read */}
       <NovaStatusStrip />
 
+      {/* NOVA AI filter — natural-language pick filter shared across surfaces */}
+      <NovaFilterBar />
+
       {/* Hero strip — plain-English meters */}
       <MarketHeroCards />
 
