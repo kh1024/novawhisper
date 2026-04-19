@@ -22,10 +22,47 @@ import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
+import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import type { OptionPick } from "@/lib/mockData";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
-type RiskBucket = "safe" | "mild" | "aggressive";
+type RiskBucket = "safe" | "mild" | "aggressive" | "lottery";
+
+// Map a NOVA scout pick (from the options-scout edge fn) into the OptionPick
+// shape the dashboard row renderer expects. This lets us share a single render
+// path between live scout picks and the mock fallback.
+function scoutToOptionPick(s: ScoutPick, bucket: RiskBucket, idx: number): OptionPick {
+  const isPut = s.optionType === "put";
+  const isLeaps = /leaps/i.test(s.strategy);
+  const strategy: OptionPick["strategy"] = isLeaps
+    ? (isPut ? "leaps-put" : "leaps-call")
+    : (isPut ? "long-put" : "long-call");
+  const expDate = new Date(s.expiry);
+  const dte = Math.max(1, Math.round((expDate.getTime() - Date.now()) / 86_400_000));
+  const premiumNum = Number(String(s.premiumEstimate ?? "").match(/[\d.]+/)?.[0] ?? 0);
+  const annualized = Number(String(s.expectedReturn ?? "").match(/[\d.]+/)?.[0] ?? 0);
+  const score = (s.confidenceScore ?? 7) * 10;
+  const grade: "A" | "B" | "C" = (s.grade as "A" | "B" | "C") ?? "B";
+  return {
+    id: `scout-${bucket}-${s.symbol}-${idx}`,
+    symbol: s.symbol,
+    strategy,
+    riskBucket: bucket,
+    expiration: s.expiry,
+    dte,
+    strike: s.strike,
+    premium: premiumNum,
+    premiumPct: 0,
+    annualized,
+    delta: 0, theta: 0, vega: 0, ivRank: 0, oi: 0, volume: 0, spreadPct: 0,
+    score,
+    confidence: grade,
+    bias: s.bias ?? (isPut ? "bearish" : "bullish"),
+    signals: [],
+    reason: s.thesis,
+  };
+}
 
 export default function Dashboard() {
   const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
