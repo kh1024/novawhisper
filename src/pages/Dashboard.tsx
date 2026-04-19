@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
 import { Hint } from "@/components/Hint";
-import { getMockPicks, UPCOMING_EVENTS } from "@/lib/mockData";
+import { getMockPicks, UPCOMING_EVENTS, TICKER_UNIVERSE } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
@@ -148,6 +148,19 @@ export default function Dashboard() {
               const isPut = p.strategy.includes("put");
               const optionType = isPut ? "put" : "call";
               const direction = (p.strategy === "csp" || p.strategy === "covered-call") ? "short" : "long";
+              const live = quoteMap.get(p.symbol);
+              const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
+              const guard = evaluateGuards({
+                symbol: p.symbol,
+                pickPrice,
+                livePrice: live?.price ?? null,
+                riskBucket: p.riskBucket,
+                optionType,
+                direction,
+                strike: p.strike,
+                sma200: sma.map.get(p.symbol)?.sma200 ?? null,
+              });
+              const blocked = guard.shouldBlockSignal;
               return (
               <div
                 key={p.id}
@@ -155,13 +168,17 @@ export default function Dashboard() {
                 tabIndex={0}
                 onClick={() => setOpenSymbol(p.symbol)}
                 onKeyDown={(e) => { if (e.key === "Enter") setOpenSymbol(p.symbol); }}
-                className="w-full flex items-center gap-4 p-3 rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all text-left cursor-pointer"
+                className={`w-full flex items-center gap-4 p-3 rounded-lg border transition-all text-left cursor-pointer ${
+                  blocked
+                    ? "border-bearish/40 bg-bearish/5 hover:border-bearish/60"
+                    : "border-border bg-surface/30 hover:border-primary/40 hover:bg-surface"
+                }`}
               >
                 <div className={`h-10 w-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold ${p.bias === "bullish" ? "bg-bullish/15 text-bullish" : p.bias === "bearish" ? "bg-bearish/15 text-bearish" : "bg-muted text-muted-foreground"}`}>
                   {p.symbol.slice(0, 4)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{p.symbol}</span>
                     <TickerPrice symbol={p.symbol} showChange />
                     <Hint label="NOVA — verdict engine reconciling technicals, Greeks & risk">
@@ -175,6 +192,7 @@ export default function Dashboard() {
                     <span className={`pill ${p.riskBucket === "safe" ? "pill-bullish" : p.riskBucket === "mild" ? "pill-neutral" : "pill-bearish"} capitalize`}>
                       {p.riskBucket}
                     </span>
+                    <NovaGuardBadges guard={guard} />
                   </div>
                   <div className={`mono text-[11px] mt-1 font-semibold ${p.bias === "bullish" ? "text-bullish" : p.bias === "bearish" ? "text-bearish" : "text-foreground"}`}>
                     ${p.strike} {isPut ? "PUT" : "CALL"} · exp {p.expiration}
@@ -182,24 +200,32 @@ export default function Dashboard() {
                   <div className="text-xs text-muted-foreground truncate mt-0.5">{p.reason}</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="mono text-sm font-semibold text-bullish">{p.annualized}% ann.</div>
+                  <div className={`mono text-sm font-semibold ${blocked ? "text-muted-foreground line-through" : "text-bullish"}`}>{p.annualized}% ann.</div>
                   <div className="text-[10px] text-muted-foreground">${p.premium} • {p.dte}d</div>
                 </div>
                 <div className="text-right shrink-0 w-12">
-                  <div className="mono text-lg font-semibold">{p.score}</div>
+                  <div className={`mono text-lg font-semibold ${blocked ? "text-muted-foreground" : ""}`}>{p.score}</div>
                   <div className="text-[10px] text-muted-foreground">Grade {p.confidence}</div>
                 </div>
-                <SaveToPortfolioButton
-                  size="xs"
-                  symbol={p.symbol}
-                  optionType={optionType}
-                  direction={direction}
-                  strike={p.strike}
-                  expiry={p.expiration}
-                  entryPremium={p.premium}
-                  thesis={p.reason}
-                  source="dashboard"
-                />
+                {blocked ? (
+                  <Hint label={guard.worst?.message ?? "NOVA Guard blocked this signal."}>
+                    <span className="text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-bearish/50 bg-bearish/15 text-bearish cursor-help">
+                      BLOCKED
+                    </span>
+                  </Hint>
+                ) : (
+                  <SaveToPortfolioButton
+                    size="xs"
+                    symbol={p.symbol}
+                    optionType={optionType}
+                    direction={direction}
+                    strike={p.strike}
+                    expiry={p.expiration}
+                    entryPremium={p.premium}
+                    thesis={p.reason}
+                    source="dashboard"
+                  />
+                )}
               </div>
             );})}
           </div>
