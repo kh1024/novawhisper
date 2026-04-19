@@ -593,23 +593,15 @@ async function getQuote(
   if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.quote;
   const yahooFromBatch = yahooMap.get(sym) ?? null;
   if (yahooFromBatch) yahooCache.set(sym, { q: yahooFromBatch, at: Date.now() });
-  const [finn, mass, alpha, stooq] = await Promise.all([
+  const [finn, mass, alpha, stooq, cnbc, google] = await Promise.all([
     fetchFinnhub(sym),
     fetchMassive(sym),
     verifyWithAlpha ? fetchAlpha(sym) : Promise.resolve(alphaCache.get(sym)?.q ?? null),
     fetchStooq(sym),
+    fetchCnbc(sym),
+    fetchGoogle(sym),
   ]);
   const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
-
-  // Last-resort fallbacks. Only fire when the 5 primary sources are ALL empty —
-  // keeps happy-path latency unchanged but guarantees ETFs (GLD/TLT/ARKK/SOXL)
-  // never render "$0.00 No data" when Yahoo/Finnhub throttle in bulk.
-  const primaryHasPrice = [finn, mass, alpha, stooq, yahoo].some((q) => q && q.price > 0);
-  let cnbc: SourceQuote | null = cnbcCache.get(sym)?.q ?? null;
-  let google: SourceQuote | null = googleCache.get(sym)?.q ?? null;
-  if (!primaryHasPrice) {
-    [cnbc, google] = await Promise.all([fetchCnbc(sym), fetchGoogle(sym)]);
-  }
 
   const v = verify(sym, finn, alpha, mass, yahoo, stooq, cnbc, google);
   // If every provider failed this round but we have a previous good price, keep

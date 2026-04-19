@@ -14,8 +14,8 @@ export interface VerifiedQuote {
   change: number;
   changePct: number;
   volume: number;
-  sources: { finnhub: number | null; "alpha-vantage": number | null; massive: number | null; yahoo: number | null; stooq: number | null };
-  consensusSource: "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | null;
+  sources: { finnhub: number | null; "alpha-vantage": number | null; massive: number | null; yahoo: number | null; stooq: number | null; cnbc: number | null; google: number | null };
+  consensusSource: "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | "cnbc" | "google" | null;
   status: QuoteStatus;
   diffPct: number | null;
   updatedAt: string;
@@ -107,7 +107,7 @@ function fallbackQuote(symbol: string, base?: Partial<VerifiedQuote>): VerifiedQ
     change: 0,
     changePct: 0,
     volume: 0,
-    sources: base?.sources ?? { finnhub: null, "alpha-vantage": null, massive: null, yahoo: null, stooq: null },
+    sources: base?.sources ?? { finnhub: null, "alpha-vantage": null, massive: null, yahoo: null, stooq: null, cnbc: null, google: null },
     consensusSource: base?.consensusSource ?? null,
     status: "unavailable",
     diffPct: base?.diffPct ?? null,
