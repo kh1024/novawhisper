@@ -283,12 +283,17 @@ export default function Market() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
           </div>
-        ) : hotOptions.length === 0 ? (
+        ) : hotOptionsRanked.length === 0 ? (
           <div className="text-xs text-muted-foreground p-3 text-center">No high-interest options right now.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {hotOptions.map((p, i) => (
-              <OptionPickRow key={`${p.symbol}-${i}`} p={p} onClick={() => setFocused(p.symbol)} />
+            {hotOptionsRanked.map((p, i) => (
+              <OptionPickRow
+                key={`${p.symbol}-${i}`}
+                p={p}
+                oi={interestMap.get(pickInterestKey(p))?.oi}
+                onClick={() => setFocused(p.symbol)}
+              />
             ))}
           </div>
         )}
