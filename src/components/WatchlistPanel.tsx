@@ -57,38 +57,13 @@ function signalChip(action?: string, status?: string) {
   return { label: "WAIT", cls: "border-muted-foreground/40 bg-muted/40 text-foreground" };
 }
 
-/** Map the verdict signal into a plain-English Timing label. */
-function timingLabel(action?: string, status?: string): { label: string; cls: string } {
+/** Map the verdict signal into the shared Timing label vocabulary. */
+function timingFromVerdict(action?: string, status?: string): Timing | undefined {
   const chip = signalChip(action, status);
-  if (chip.label === "BUY NOW") return { label: "Ready", cls: "text-bullish" };
-  if (chip.label === "EXIT") return { label: "Exit Soon", cls: "text-warning" };
-  if (chip.label === "AVOID") return { label: "Avoid", cls: "text-bearish" };
-  // WAIT — distinguish "wait for open" vs "watch closely" by market clock.
-  const est = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const dow = est.getDay();
-  const min = est.getHours() * 60 + est.getMinutes();
-  const isOpen = dow >= 1 && dow <= 5 && min >= 9 * 60 + 30 && min < 16 * 60;
-  return isOpen
-    ? { label: "Watch Closely", cls: "text-warning" }
-    : { label: "Wait for Open", cls: "text-muted-foreground" };
-}
-
-/** Normalize the saved tier into a clean Risk label. */
-function riskLabel(tier?: string | null): string {
-  const t = (tier ?? "").toLowerCase();
-  if (t === "safe" || t.startsWith("conserv")) return "Conservative";
-  if (t === "mild" || t.startsWith("mod") || t === "mid") return "Mid";
-  if (t === "aggressive" || t === "lottery") return "Aggressive";
-  return tier ? tier.charAt(0).toUpperCase() + tier.slice(1) : "—";
-}
-
-/** Build the compact contract label, e.g. "$120C" or "$95P". */
-function contractLabel(strike: number | string | null | undefined, optionType: string): string {
-  if (strike == null || strike === "") return optionType.toUpperCase();
-  const n = Number(strike);
-  const s = Number.isFinite(n) ? (Number.isInteger(n) ? `${n}` : n.toFixed(2)) : `${strike}`;
-  const suffix = optionType === "put" ? "P" : optionType === "call" ? "C" : optionType.charAt(0).toUpperCase();
-  return `$${s}${suffix}`;
+  if (chip.label === "BUY NOW") return "ready";
+  if (chip.label === "EXIT") return "exit";
+  if (chip.label === "AVOID") return "avoid";
+  return undefined; // let PickMetaRow pick "watch"/"wait" from market clock
 }
 
 export function WatchlistPanel({ onOpenSymbol }: Props) {
