@@ -572,18 +572,30 @@ export default function Scanner() {
                               {(() => {
                                 const c = deriveContractFromRow(r);
                                 const isCall = c.optionType === "call";
+                                const expDate = new Date(c.expiry + "T00:00:00");
+                                const expShort = isNaN(expDate.getTime())
+                                  ? c.expiry
+                                  : expDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                                const dte = isNaN(expDate.getTime())
+                                  ? null
+                                  : Math.max(0, Math.round((expDate.getTime() - Date.now()) / 86400000));
                                 return (
-                                  <Hint label={`BUY ${r.symbol} $${c.strike} ${isCall ? "CALL" : "PUT"} · exp ${c.expiry}`}>
-                                    <span
-                                      className={cn(
-                                        "mono text-sm font-bold px-2.5 py-1 rounded-md border-2 whitespace-nowrap cursor-help shadow-sm",
-                                        isCall
-                                          ? "text-bullish border-bullish/60 bg-bullish/10"
-                                          : "text-bearish border-bearish/60 bg-bearish/10",
-                                      )}
-                                    >
-                                      ${c.strike}{isCall ? "C" : "P"}
-                                    </span>
+                                  <Hint label={`BUY ${r.symbol} $${c.strike} ${isCall ? "CALL" : "PUT"} · expires ${c.expiry}${dte != null ? ` (${dte} DTE)` : ""}`}>
+                                    <div className="flex flex-col items-start gap-0.5 cursor-help">
+                                      <span
+                                        className={cn(
+                                          "mono text-sm font-bold px-2.5 py-1 rounded-md border-2 whitespace-nowrap shadow-sm",
+                                          isCall
+                                            ? "text-bullish border-bullish/60 bg-bullish/10"
+                                            : "text-bearish border-bearish/60 bg-bearish/10",
+                                        )}
+                                      >
+                                        ${c.strike}{isCall ? "C" : "P"}
+                                      </span>
+                                      <span className="mono text-[10px] text-muted-foreground whitespace-nowrap">
+                                        exp {expShort}{dte != null && ` · ${dte}d`}
+                                      </span>
+                                    </div>
                                   </Hint>
                                 );
                               })()}
@@ -867,7 +879,26 @@ function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | nu
         </div>
       )}
 
-      <div className="flex justify-end pt-1" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+        {(() => {
+          const c = deriveContractFromRow(row);
+          const isCall = c.optionType === "call";
+          const expDate = new Date(c.expiry + "T00:00:00");
+          const expShort = isNaN(expDate.getTime())
+            ? c.expiry
+            : expDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+          const dte = isNaN(expDate.getTime())
+            ? null
+            : Math.max(0, Math.round((expDate.getTime() - Date.now()) / 86400000));
+          return (
+            <div className="text-[11px]">
+              <span className={cn("mono font-semibold", isCall ? "text-bullish" : "text-bearish")}>
+                ${c.strike}{isCall ? "C" : "P"}
+              </span>
+              <span className="text-muted-foreground"> · exp {expShort}{dte != null && ` (${dte}d)`}</span>
+            </div>
+          );
+        })()}
         <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
       </div>
     </Card>
