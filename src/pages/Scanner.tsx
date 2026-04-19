@@ -372,13 +372,13 @@ export default function Scanner() {
         {/* NOVA AI filter — natural-language pick filter */}
         <NovaFilterBar />
 
-        {/* Action-label summary — institutional ranking buckets. */}
+        {/* Unified action-label summary — same labels appear on every row. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "CRL: GO · take the trade",         cls: "border-bullish/60 text-bullish",     Icon: Zap },
-            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "CRL: WAIT · trigger pending",      cls: "border-primary/40 text-primary",     Icon: Clock },
-            { k: "WAIT",       v: counts.WAIT,            sub: "CRL: NEUTRAL · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
-            { k: "AVOID",      v: counts.AVOID,           sub: "CRL: NO · no edge / IV trap",      cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
+            { k: "BUY NOW",    v: counts["BUY NOW"],  sub: "Take the trade now",                cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "WATCHLIST",  v: counts.WATCHLIST,   sub: "Setup close · wait for trigger",    cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WAIT",       v: counts.WAIT,        sub: "Mixed signals · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "AVOID",      v: counts.AVOID,       sub: "No edge · poor liquidity / IV",     cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">
