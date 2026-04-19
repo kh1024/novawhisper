@@ -356,7 +356,18 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   };
 }
 
-export function computeSetups(quotes: VerifiedQuote[], ctx?: { regime?: MarketRegime }): SetupRow[] {
+export function computeSetups(
+  quotes: VerifiedQuote[],
+  ctx?: {
+    regime?: MarketRegime;
+    /** Per-symbol IVP from a live options chain (0–100). */
+    realIvpBySymbol?: Map<string, number | null> | Record<string, number | null>;
+    /** Per-symbol days-to-next-earnings from a fundamentals feed. */
+    earningsBySymbol?: Map<string, number | null> | Record<string, number | null>;
+    /** Per-symbol daily-close array for real EMA + streak math. */
+    closesBySymbol?: Map<string, number[] | null> | Record<string, number[] | null>;
+  },
+): SetupRow[] {
   // Infer regime once per scan from index quotes if not provided.
   const time = detectTimeState();
   let regime: MarketRegime = ctx?.regime ?? "sideways";
@@ -369,5 +380,22 @@ export function computeSetups(quotes: VerifiedQuote[], ctx?: { regime?: MarketRe
       diaChangePct: find("DIA")?.changePct ?? null,
     }).regime;
   }
-  return quotes.map((q) => computeSetup(q, { regime, timeState: time, timeStateLabel: time.label }));
+  const lookup = <T,>(
+    src: Map<string, T> | Record<string, T> | undefined,
+    sym: string,
+  ): T | null => {
+    if (!src) return null;
+    if (src instanceof Map) return (src.get(sym) ?? null) as T | null;
+    return ((src as Record<string, T>)[sym] ?? null) as T | null;
+  };
+  return quotes.map((q) =>
+    computeSetup(q, {
+      regime,
+      timeState: time,
+      timeStateLabel: time.label,
+      realIvp: lookup<number | null>(ctx?.realIvpBySymbol, q.symbol),
+      earningsInDays: lookup<number | null>(ctx?.earningsBySymbol, q.symbol),
+      closes: lookup<number[] | null>(ctx?.closesBySymbol, q.symbol),
+    }),
+  );
 }
