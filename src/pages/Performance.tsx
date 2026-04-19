@@ -120,7 +120,7 @@ export default function Performance() {
     for (const o of out5) {
       const snap = snapById.get(o.snapshot_id);
       if (!snap) continue;
-      const bucket = byLabel[snap.label];
+      const bucket = byLabel[normalizeLabel(snap.label)];
       if (!bucket) continue;
       bucket.total++;
       if (o.is_win) bucket.wins++;
