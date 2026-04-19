@@ -213,6 +213,17 @@ export function gate8_Affordability(i: SignalInput): GateResult {
   const premium = Number(i.entryPremium);
   const account = Number(i.accountBalance);
 
+  // ── Stale-weekend override ─────────────────────────────────────────────────
+  // If the premium is being read from a frozen weekend chain we refuse to
+  // suggest a trade — the math is unreliable until the open re-prices it.
+  if (isStaleWeekendQuote(i) && Number.isFinite(premium) && premium > 0) {
+    return {
+      gate: "AFFORDABILITY", passed: false, status: "WAIT",
+      label: "🟡 WAITING FOR MONDAY OPEN",
+      reasoning: `Premium $${premium.toFixed(2)} was last quoted before the weekend close — the options chain is frozen and may not reflect Monday's open. Affordability check paused until live quotes resume. Re-validate after the bell.`,
+    };
+  }
+
   // Without a real premium or account we can't enforce the cap — pass quietly.
   if (!Number.isFinite(premium) || premium <= 0 || !Number.isFinite(account) || account <= 0) {
     return {
