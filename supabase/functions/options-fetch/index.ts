@@ -188,6 +188,7 @@ Deno.serve(async (req) => {
     let r: Response | null = null;
     let lastText = "";
     for (let attempt = 0; attempt < 3; attempt++) {
+      await acquireMassiveToken(); // throttle to 75 req/s/instance
       r = await fetch(url, {
         headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
       });
