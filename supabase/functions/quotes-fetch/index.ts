@@ -701,11 +701,14 @@ async function getQuote(
   sym: string,
   verifyWithAlpha: boolean,
   yahooMap: Map<string, SourceQuote>,
+  sdMap: Map<string, SourceQuote>,
 ): Promise<VerifiedQuote> {
   const cached = quoteCache.get(sym);
   if (cached && Date.now() - cached.at < QUOTE_TTL_MS) return cached.quote;
   const yahooFromBatch = yahooMap.get(sym) ?? null;
   if (yahooFromBatch) yahooCache.set(sym, { q: yahooFromBatch, at: Date.now() });
+  const sd = sdMap.get(sym) ?? stockdataCache.get(sym)?.q ?? null;
+  if (sd) stockdataCache.set(sym, { q: sd, at: Date.now() });
   const [finn, mass, alpha, stooq, cnbc, google] = await Promise.all([
     fetchFinnhub(sym),
     fetchMassive(sym),
@@ -716,9 +719,7 @@ async function getQuote(
   ]);
   const yahoo = yahooFromBatch ?? (await fetchYahooSingle(sym));
 
-  const v = verify(sym, finn, alpha, mass, yahoo, stooq, cnbc, google);
-  // If every provider failed this round but we have a previous good price, keep
-  // serving it (marked stale) instead of returning "unavailable" / no data.
+  const v = verify(sym, finn, alpha, mass, yahoo, stooq, cnbc, google, sd);
   if (v.status === "unavailable" && cached?.quote && cached.quote.price > 0) {
     const stale: VerifiedQuote = {
       ...cached.quote,
