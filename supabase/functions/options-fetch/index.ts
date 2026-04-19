@@ -217,22 +217,24 @@ Deno.serve(async (req) => {
     kvSet(cacheKey, payload, CACHE_TTL_MS);
 
     // Record today's ATM IV into iv_history (idempotent per UTC day per symbol).
-    // Only fires when we have a usable underlying price + a finite ATM IV.
+    // ATM is identified by |delta| closest to 0.5 — robust even when the
+    // snapshot omits underlying_asset.price (Polygon does this off-hours).
     try {
-      const spot = contracts.find((c) => Number.isFinite(c.underlyingPrice as number))?.underlyingPrice ?? null;
-      if (spot && spot > 0) {
-        const callsWithIv = contracts.filter((c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv));
-        let best: OptionContract | null = null;
-        let bestDist = Infinity;
-        for (const c of callsWithIv) {
-          const d = Math.abs(c.strike - spot);
-          if (d < bestDist) { best = c; bestDist = d; }
-        }
-        const atmIv = best?.iv ?? null;
-        if (atmIv != null) {
-          // Fire-and-forget; don't await — never block the chain response.
-          recordAtmIv(underlying, atmIv);
-        }
+      const callsWithGreeks = contracts.filter(
+        (c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv) && c.delta != null && Number.isFinite(c.delta),
+      );
+      let best: OptionContract | null = null;
+      let bestDist = Infinity;
+      for (const c of callsWithGreeks) {
+        const d = Math.abs(Math.abs(c.delta as number) - 0.5);
+        if (d < bestDist) { best = c; bestDist = d; }
+      }
+      const atmIv = best?.iv ?? null;
+      if (atmIv != null) {
+        // Fire-and-forget; don't await — never block the chain response.
+        recordAtmIv(underlying, atmIv);
+      } else {
+        console.log(`[iv_history] ${underlying} no ATM contract with delta+iv — skipped`);
       }
     } catch (e) {
       console.warn("[iv_history] record skipped", e);
