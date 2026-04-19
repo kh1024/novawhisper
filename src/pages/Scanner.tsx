@@ -142,6 +142,9 @@ function ScoreBar({ label, value, Icon }: { label: string; value: number; Icon: 
 
 export default function Scanner() {
   const [view, setView] = useState<View>("table");
+  const isMobile = useIsMobile();
+  // On phones the wide table forces horizontal scroll; render stacked cards instead.
+  const effectiveView: View = isMobile ? "cards" : view;
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
