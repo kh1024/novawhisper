@@ -238,8 +238,22 @@ export default function Scanner() {
       if (filters.search && !r.symbol.includes(filters.search.toUpperCase()) && !r.name.toUpperCase().includes(filters.search.toUpperCase())) return false;
       if (filters.sector !== "all" && r.sector !== filters.sector) return false;
       if (filters.bias !== "all" && r.bias !== filters.bias) return false;
-      if (filters.readiness !== "all" && r.readiness !== filters.readiness) return false;
-      if (filters.hideAvoid && r.readiness === "AVOID") return false;
+      // Readiness filter uses the UNIFIED action label (same one shown in the
+      // Action column) so "NOW" only returns rows whose final verdict is BUY NOW.
+      // Previously this checked the raw scout readiness which could disagree
+      // with the final rank — leading to "NOW filter shows WAIT rows".
+      if (filters.readiness !== "all") {
+        const unified = labelFor(r);
+        const matches =
+          (filters.readiness === "NOW"   && unified === "BUY NOW") ||
+          (filters.readiness === "WAIT"  && (unified === "WAIT" || unified === "WAIT PULLBACK" || unified === "WATCHLIST" || unified === "WATCHLIST ONLY" || unified === "EXPENSIVE ENTRY" || unified === "OVEREXTENDED")) ||
+          (filters.readiness === "AVOID" && (unified === "AVOID" || unified === "BLOCKED"));
+        if (!matches) return false;
+      }
+      if (filters.hideAvoid) {
+        const unified = labelFor(r);
+        if (unified === "AVOID" || unified === "BLOCKED") return false;
+      }
       if (r.setupScore < filters.minScore[0]) return false;
       if (r.relVolume < filters.minRelVol[0]) return false;
       if (r.ivRank < filters.ivrRange[0] || r.ivRank > filters.ivrRange[1]) return false;
