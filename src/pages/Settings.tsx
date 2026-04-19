@@ -795,6 +795,9 @@ export default function Settings() {
 
       {/* ───────────── Background cron (server-side, runs even when app closed) ───────────── */}
       <BackgroundCronCard />
+
+      {/* ───────────── Backend cache (kv_cache inspector) ───────────── */}
+      <KvCacheAdminCard />
     </div>
   );
 }
