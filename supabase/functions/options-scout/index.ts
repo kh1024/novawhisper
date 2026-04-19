@@ -342,6 +342,14 @@ INSTRUCTIONS:
           thesis: String(pick.thesis ?? ""),
           risk: String(pick.risk ?? ""),
           source: String(pick.source ?? ""),
+          // New rich-signal columns (added 2026-04). Each is optional — preserves
+          // back-compat if NOVA omits a field for a given pick.
+          bias: pick.bias ? String(pick.bias) : null,
+          expected_return: pick.expectedReturn ? String(pick.expectedReturn) : null,
+          probability: pick.probability ? String(pick.probability) : null,
+          risk_level: pick.riskLevel ? String(pick.riskLevel) : null,
+          grade: pick.grade ? String(pick.grade) : null,
+          grade_rationale: pick.gradeRationale ? String(pick.gradeRationale) : null,
           outcome: "open",
         }));
         const { error: pickErr } = await sb.from("web_picks").insert(rows);
