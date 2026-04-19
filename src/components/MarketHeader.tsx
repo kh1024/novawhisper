@@ -51,10 +51,26 @@ export function MarketHeader() {
   const sourceCls = !isLive ? "pill-neutral" : allGood ? "pill-bullish" : "pill-bearish";
 
   return (
-    <header className="h-14 flex items-center gap-3 px-4 border-b border-border bg-surface/40 backdrop-blur-xl">
+    <header className="h-12 sm:h-14 flex items-center gap-2 sm:gap-3 px-2 sm:px-4 border-b border-border bg-surface/40 backdrop-blur-xl">
       <Hint label="Toggle the side navigation" side="bottom">
         <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
       </Hint>
+
+      {/* Mobile-condensed: session pill + time, hide rest */}
+      <div className="flex md:hidden items-center gap-1.5 min-w-0 overflow-hidden">
+        <span className={`${sessionPill.cls}`}>
+          <span className={sessionPill.live ? "live-dot" : "h-1.5 w-1.5 rounded-full bg-muted-foreground inline-block"} />
+          {session === "regular" ? "Open" : session === "closed" ? "Closed" : session === "pre" ? "Pre" : "After"}
+        </span>
+        <span className="pill pill-neutral mono">{time}</span>
+        {settings.paperMode && (
+          <span className="pill border-warning/50 bg-warning/15 text-warning gap-1">
+            <FlaskConical className="h-2.5 w-2.5" /> SIM
+          </span>
+        )}
+      </div>
+
+      {/* Desktop: full strip */}
       <div className="hidden md:flex items-center gap-2">
         <Hint label={sessionPill.tip} side="bottom">
           <span className={`${sessionPill.cls} cursor-help`}>
@@ -88,7 +104,7 @@ export function MarketHeader() {
           </Hint>
         )}
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-1 sm:gap-2">
         <span className="text-xs text-muted-foreground hidden lg:inline">
           Refresh: <span className="mono">{formatInterval(settings.refreshMs)}</span>
         </span>
@@ -96,12 +112,12 @@ export function MarketHeader() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5"
+            className="h-8 px-2 sm:px-3 gap-1.5"
             onClick={() => qc.invalidateQueries({ queryKey: ["live-quotes"] })}
             disabled={isFetching}
           >
             <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
-            <span className="text-xs">Refresh</span>
+            <span className="text-xs hidden sm:inline">Refresh</span>
           </Button>
         </Hint>
       </div>

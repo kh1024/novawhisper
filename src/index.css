@@ -178,6 +178,20 @@
       linear-gradient(90deg, hsl(var(--border) / 0.4) 1px, transparent 1px);
     background-size: 24px 24px;
   }
+
+  /* Mobile-first niceties: prevent rubber-band horizontal scroll, respect
+     iOS safe-area, and ensure tap targets meet 44px on phones. */
+  html, body { @apply overflow-x-hidden; }
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  @media (max-width: 640px) {
+    button, [role="button"], a.pill, .pill {
+      touch-action: manipulation;
+    }
+    /* Smaller pills on phones so the header strip fits */
+    .pill { @apply px-2 py-0.5 text-[10px]; }
+  }
 }
 
 @keyframes ticker-scroll {
