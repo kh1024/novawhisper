@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      iv_history: {
+        Row: {
+          as_of: string
+          created_at: string
+          id: number
+          iv: number
+          symbol: string
+        }
+        Insert: {
+          as_of: string
+          created_at?: string
+          id?: number
+          iv: number
+          symbol: string
+        }
+        Update: {
+          as_of?: string
+          created_at?: string
+          id?: number
+          iv?: number
+          symbol?: string
+        }
+        Relationships: []
+      }
       kv_cache: {
         Row: {
           created_at: string
