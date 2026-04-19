@@ -658,6 +658,7 @@ export default function Scanner() {
                 key={r.symbol}
                 row={r}
                 rank={rankMap.get(r.symbol)?.rank ?? null}
+                closes={sma.map.get(r.symbol)?.closes ?? null}
                 onOpen={() => setOpenSymbol(r.symbol)}
               />
             ))}
