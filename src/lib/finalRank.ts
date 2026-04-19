@@ -261,10 +261,9 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
 /** Tailwind classes for an Action Label badge. */
 export function labelClasses(label: ActionLabel): string {
   switch (label) {
-    case "ELITE":     return "bg-bullish/20 text-bullish border-bullish/50";
-    case "GO NOW":    return "bg-bullish/10 text-bullish border-bullish/40";
-    case "GOOD":      return "bg-primary/10 text-primary border-primary/40";
-    case "WATCHLIST": return "bg-warning/10 text-warning border-warning/40";
-    case "PASS":      return "bg-muted/40 text-muted-foreground border-border";
+    case "BUY":         return "bg-bullish/20 text-bullish border-bullish/50";
+    case "WATCHLIST":   return "bg-primary/10 text-primary border-primary/40";
+    case "WAIT":        return "bg-warning/10 text-warning border-warning/40";
+    case "DON'T BUY":   return "bg-bearish/15 text-bearish border-bearish/40";
   }
 }
