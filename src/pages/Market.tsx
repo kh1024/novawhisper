@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
 import { useTopCoins } from "@/lib/cryptoData";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
+import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { useQueryClient } from "@tanstack/react-query";
@@ -52,7 +53,7 @@ function MoverRow({ q, onClick }: { q: VerifiedQuote; onClick: () => void }) {
   );
 }
 
-function OptionPickRow({ p, onClick }: { p: ScoutPick; onClick: () => void }) {
+function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; oi?: number }) {
   const isBull = p.bias === "bullish" || p.optionType === "call" || p.optionType === "call_spread";
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
@@ -79,6 +80,14 @@ function OptionPickRow({ p, onClick }: { p: ScoutPick; onClick: () => void }) {
       </div>
       <div className="text-[11px] text-muted-foreground line-clamp-2">{p.thesis}</div>
       <div className="flex items-center gap-2 text-[10px] flex-wrap">
+        {oi != null && oi > 0 && (
+          <span
+            className="font-semibold px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/30 mono"
+            title="Open interest — total outstanding contracts at this strike/expiry"
+          >
+            OI {fmtOI(oi)}
+          </span>
+        )}
         {p.expectedReturn && <span className="text-bullish font-semibold">+{p.expectedReturn}</span>}
         {p.probability && <span className="text-muted-foreground">{p.probability} prob</span>}
         {p.premiumEstimate && <span className="text-muted-foreground mono">{p.premiumEstimate}</span>}
@@ -137,6 +146,17 @@ export default function Market() {
       })
       .slice(0, 8);
   }, [scout]);
+
+  // Live open interest per pick
+  const interestMap = useOptionInterest(hotOptions);
+  // Re-rank by OI when available — falls back to grade order otherwise
+  const hotOptionsRanked = useMemo(() => {
+    return [...hotOptions].sort((a, b) => {
+      const oa = interestMap.get(pickInterestKey(a))?.oi ?? -1;
+      const ob = interestMap.get(pickInterestKey(b))?.oi ?? -1;
+      return ob - oa;
+    });
+  }, [hotOptions, interestMap]);
 
   // Search suggestions
   const searchResults = search.trim().length >= 1
@@ -263,12 +283,17 @@ export default function Market() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {[1,2,3,4].map(i => <Skeleton key={i} className="h-24" />)}
           </div>
-        ) : hotOptions.length === 0 ? (
+        ) : hotOptionsRanked.length === 0 ? (
           <div className="text-xs text-muted-foreground p-3 text-center">No high-interest options right now.</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {hotOptions.map((p, i) => (
-              <OptionPickRow key={`${p.symbol}-${i}`} p={p} onClick={() => setFocused(p.symbol)} />
+            {hotOptionsRanked.map((p, i) => (
+              <OptionPickRow
+                key={`${p.symbol}-${i}`}
+                p={p}
+                oi={interestMap.get(pickInterestKey(p))?.oi}
+                onClick={() => setFocused(p.symbol)}
+              />
             ))}
           </div>
         )}
