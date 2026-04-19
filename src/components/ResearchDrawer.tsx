@@ -73,7 +73,7 @@ function genSeries(symbol: string, base: number, n = 60) {
 }
 
 /** Min/max bookmarks so we can pin them on the chart. */
-function seriesExtents(s: { d: number; v: number }[]) {
+function seriesExtents(s: { d: number; v: number; date: string }[]) {
   if (!s.length) return null;
   let lo = s[0], hi = s[0];
   for (const p of s) {
@@ -374,8 +374,8 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                             />
                             {ext && (
                               <>
-                                <ReferenceDot x={ext.hi.d} y={ext.hi.v} r={3} fill="hsl(var(--bullish))" stroke="hsl(var(--background))" strokeWidth={1.5} />
-                                <ReferenceDot x={ext.lo.d} y={ext.lo.v} r={3} fill="hsl(var(--bearish))" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                                <ReferenceDot x={ext.hi.date} y={ext.hi.v} r={3} fill="hsl(var(--bullish))" stroke="hsl(var(--background))" strokeWidth={1.5} />
+                                <ReferenceDot x={ext.lo.date} y={ext.lo.v} r={3} fill="hsl(var(--bearish))" stroke="hsl(var(--background))" strokeWidth={1.5} />
                               </>
                             )}
                           </ComposedChart>
