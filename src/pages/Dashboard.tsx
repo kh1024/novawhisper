@@ -26,6 +26,8 @@ import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { actionFromScore, labelClasses } from "@/lib/finalRank";
+import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
+import { useBudget } from "@/lib/budget";
 import type { OptionPick } from "@/lib/mockData";
 
 /**
