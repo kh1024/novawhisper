@@ -16,6 +16,10 @@ export interface ScoutPick {
   expiry: string;
   playAt: number;
   premiumEstimate?: string;
+  bias?: "bullish" | "bearish" | "neutral";
+  expectedReturn?: string;
+  probability?: string;
+  riskLevel?: "low" | "medium" | "high";
   thesis: string;
   risk: string;
   bestEntry?: string;
