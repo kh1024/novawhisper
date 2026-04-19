@@ -433,6 +433,8 @@ export default function Scanner() {
           ))}
         </div>
 
+        <WatchlistPanel onOpenSymbol={setOpenSymbol} />
+
         <ScannerToolbar
           filters={filters}
           defaults={DEFAULT_FILTERS}
@@ -666,8 +668,6 @@ export default function Scanner() {
             ))}
           </div>
         )}
-
-        <WatchlistPanel onOpenSymbol={setOpenSymbol} />
 
         <ResearchDrawer symbol={openSymbol} onClose={() => setOpenSymbol(null)} />
       </div>
