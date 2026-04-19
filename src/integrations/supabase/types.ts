@@ -190,19 +190,25 @@ export type Database = {
       }
       web_picks: {
         Row: {
+          bias: string | null
           created_at: string
           current_price: number | null
           direction: string
           entry_price: number | null
           evaluated_at: string | null
+          expected_return: string | null
           expiry: string
+          grade: string | null
+          grade_rationale: string | null
           id: string
           option_type: string
           outcome: string | null
           play_at: number
           pnl_pct: number | null
           premium_estimate: string | null
+          probability: string | null
           risk: string
+          risk_level: string | null
           run_id: string
           source: string
           strategy: string
@@ -213,19 +219,25 @@ export type Database = {
           tier: string
         }
         Insert: {
+          bias?: string | null
           created_at?: string
           current_price?: number | null
           direction: string
           entry_price?: number | null
           evaluated_at?: string | null
+          expected_return?: string | null
           expiry: string
+          grade?: string | null
+          grade_rationale?: string | null
           id?: string
           option_type: string
           outcome?: string | null
           play_at: number
           pnl_pct?: number | null
           premium_estimate?: string | null
+          probability?: string | null
           risk: string
+          risk_level?: string | null
           run_id: string
           source: string
           strategy: string
@@ -236,19 +248,25 @@ export type Database = {
           tier: string
         }
         Update: {
+          bias?: string | null
           created_at?: string
           current_price?: number | null
           direction?: string
           entry_price?: number | null
           evaluated_at?: string | null
+          expected_return?: string | null
           expiry?: string
+          grade?: string | null
+          grade_rationale?: string | null
           id?: string
           option_type?: string
           outcome?: string | null
           play_at?: number
           pnl_pct?: number | null
           premium_estimate?: string | null
+          probability?: string | null
           risk?: string
+          risk_level?: string | null
           run_id?: string
           source?: string
           strategy?: string
