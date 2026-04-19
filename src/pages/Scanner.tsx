@@ -203,6 +203,15 @@ export default function Scanner() {
   // 200-day SMA gate — pulled once per session, cached 24h.
   const sma = useSma200(rows.map((r) => r.symbol));
 
+  // EXIT signals only apply to symbols the user actually holds in their portfolio.
+  // For everything else, an EXIT verdict is meaningless (you can't exit what you don't own),
+  // so we surface it as NO ("don't enter") instead.
+  const portfolioQ = usePortfolio();
+  const ownedSymbols = useMemo(
+    () => new Set((portfolioQ.data ?? []).filter((p) => p.status === "open").map((p) => p.symbol.toUpperCase())),
+    [portfolioQ.data],
+  );
+
   const [novaSpec] = useNovaFilter();
 
   const filtered = useMemo(() => {
