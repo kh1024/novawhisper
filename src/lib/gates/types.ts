@@ -36,6 +36,10 @@ export interface SignalInput {
   grade?: "A" | "B" | "C";
   /** NEW: pick expiry (YYYY-MM-DD) — used by date-sync logic upstream. */
   expiryDate?: string;
+  /** NEW: live ATM contract bid — drives Gate 1 liquidity check. */
+  bid?: number;
+  /** NEW: live ATM contract ask — drives Gate 1 liquidity check. */
+  ask?: number;
 }
 
 export interface GateResult {
@@ -111,3 +115,8 @@ export const AFFORDABILITY_WARN_PCT = 2;
 export const MAX_RISK_PCT = 2;
 /** Sweet-spot dollar range Gate 8 nudges expensive picks toward via spreads. */
 export const SPREAD_SWEET_SPOT = { min: 150, max: 300 } as const;
+/**
+ * Gate 1 liquidity guard. If (ask − bid) / ask exceeds this fraction the
+ * trade is BLOCKED — entering a 10%+ spread means starting underwater.
+ */
+export const MAX_BIDASK_SPREAD_PCT = 0.10;
