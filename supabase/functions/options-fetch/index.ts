@@ -245,8 +245,7 @@ Deno.serve(async (req) => {
     // Record today's ATM IV into iv_history (idempotent per UTC day per symbol).
     // ATM is identified by |delta| closest to 0.5 — robust even when the
     // snapshot omits underlying_asset.price (Polygon does this off-hours).
-    // Uses EdgeRuntime.waitUntil so the write survives after the response
-    // returns (otherwise the isolate shuts down and kills the fetch).
+    // Awaited so the write definitely lands before the response returns.
     try {
       const callsWithGreeks = contracts.filter(
         (c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv) && c.delta != null && Number.isFinite(c.delta),
@@ -258,15 +257,9 @@ Deno.serve(async (req) => {
         if (d < bestDist) { best = c; bestDist = d; }
       }
       const atmIv = best?.iv ?? null;
+      console.log(`[iv_history] ${underlying} chain=${contracts.length} candidates=${callsWithGreeks.length} bestDelta=${best?.delta ?? "none"} atmIv=${atmIv}`);
       if (atmIv != null) {
-        const writePromise = recordAtmIv(underlying, atmIv);
-        // @ts-ignore — EdgeRuntime is available in Supabase Deno isolates.
-        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
-          // @ts-ignore
-          EdgeRuntime.waitUntil(writePromise);
-        }
-      } else {
-        console.log(`[iv_history] ${underlying} no ATM contract with delta+iv — skipped`);
+        await recordAtmIv(underlying, atmIv);
       }
     } catch (e) {
       console.warn("[iv_history] record skipped", e);
