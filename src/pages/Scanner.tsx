@@ -233,8 +233,7 @@ export default function Scanner() {
   })), [rows]);
   const expiryStatus = usePickExpiration(expiryInputs);
 
-  // 200-day SMA gate — pulled once per session, cached 24h.
-  const sma = useSma200(rows.map((r) => r.symbol));
+  // (sma already declared above to feed both gates and computeSetups closes.)
 
   // EXIT signals only apply to symbols the user actually holds in their portfolio.
   // For everything else, an EXIT verdict is meaningless (you can't exit what you don't own),
