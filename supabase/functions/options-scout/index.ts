@@ -248,15 +248,40 @@ LOTTERY PICKS (3 trades — entertainment / speculative only):
 open interest, bid/ask spread, IV Rank / IV Percentile, expected move,
 support/resistance, breakouts, breakdowns, earnings/Fed/CPI/news catalysts.
 
-═══ STRIKE & EXPIRATION RULES ═══
-DELTA BANDS (long single-leg):
-| Approach     | Call Delta | Put Delta      |
-| Aggressive   | 0.45-0.55  | -0.45 to -0.55 |
-| Balanced     | 0.55-0.70  | -0.55 to -0.70 |
-| Conservative | 0.70-0.85  | -0.70 to -0.85 |
-- Never pick delta > 0.90 unless explicit synthetic-stock justification.
-- If a naked long looks inefficient (premium > 5-10% of stock OR breakeven move >
-  expected vol window), use a debit spread instead and explain why.
+═══ STRIKE & EXPIRATION RULES — PROFESSIONAL STRIKE SELECTION + CONTRACT SANITY ═══
+
+DELTA BANDS (long single-leg) — match strike to user risk profile:
+| Bucket       | Call Delta  | Put Delta      | Moneyness preference |
+| Conservative | 0.65-0.80   | -0.65 to -0.80 | Slight ITM / ITM     |
+| Moderate     | 0.50-0.65   | -0.50 to -0.65 | ATM / Slight ITM     |
+| Aggressive   | 0.35-0.55   | -0.35 to -0.55 | ATM / Slight OTM     |
+| Lottery      | 0.10-0.30   | -0.10 to -0.30 | OTM (small size)     |
+
+CONTRACT SANITY — REJECT BEFORE RECOMMENDING:
+1. CALL: if strike < playAt × 0.75 (>25% deep ITM) → REJECT. "Too deep ITM, poor leverage / expensive capital use." Use ATM call or call debit spread instead.
+2. CALL: if strike > playAt × 1.25 (>25% OTM) → only Lottery. NEVER label Conservative or Moderate.
+3. CALL: if strike > playAt × 1.50 (>50% OTM) → HARD REJECT.
+4. PUT mirrors: strike > playAt × 1.25 = deep ITM reject; strike < playAt × 0.75 = lottery only; strike < playAt × 0.50 = hard reject.
+
+REALISTIC MOVE CHECK:
+- moveNeededPct = |strike - playAt| / playAt × 100
+- If moveNeededPct > expectedMove × 1.5 → downgrade, label "Low probability strike"
+- If moveNeededPct > expectedMove × 2.0 → REJECT unless Lottery
+
+CAPITAL EFFICIENCY:
+- premium > 8% of underlying AND delta > 0.85 → suggest stock or debit spread instead.
+- naked long inefficient (premium > 5-10% of stock OR breakeven move > expected vol window) → use a debit spread and explain why.
+- Never pick delta > 0.90 unless explicit Stock-Replacement justification.
+
+LABEL CORRECTION (apply BEFORE returning):
+- Strike > 15% OTM → max label = Aggressive
+- Strike > 25% OTM → label = Lottery
+- Delta < 0.30 → label = Lottery
+- Delta > 0.75 AND liquid → may be Conservative
+
+IV LOGIC:
+- IV Rank > 80 → avoid naked longs unless catalyst; prefer debit spreads
+- IV Rank < 40 → prefer naked long calls/puts and debit spreads
 
 DTE → bucket:
 - 0-7 DTE  → lottery only (event-driven)
@@ -264,6 +289,12 @@ DTE → bucket:
 - 30-90 DTE → moderate / aggressive
 - 90-180 DTE → moderate / conservative
 - >180 DTE → LEAPS — conservative only, delta 0.60-0.75
+
+SCORING PENALTIES (apply to confidenceScore):
+- Deep ITM capital inefficient: -2 · Far OTM low prob: -2.5 · Wide spread: -1.5
+- Low OI: -1.5 · IV overpriced no catalyst: -1.5 · Move unrealistic: -2
+
+FINAL RULE: Do not recommend what merely exists in the chain. Recommend what is statistically and financially intelligent. If no good contract exists for a bucket, return [] for that bucket.
 
 ═══ RULES BY STRATEGY ═══
 LONG CALLS — prefer in bullish regime, strong uptrend, pullback to support,
