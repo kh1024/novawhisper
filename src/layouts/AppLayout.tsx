@@ -5,6 +5,7 @@ import { MarketHeader } from "@/components/MarketHeader";
 import { TickerTape } from "@/components/TickerTape";
 import { NewsTicker } from "@/components/NewsTicker";
 import { NovaChatBubble } from "@/components/NovaChatBubble";
+import { SafetyExitAlert } from "@/components/SafetyExitAlert";
 
 export default function AppLayout() {
   return (
@@ -23,6 +24,7 @@ export default function AppLayout() {
           </main>
         </div>
         <NovaChatBubble />
+        <SafetyExitAlert />
       </div>
     </SidebarProvider>
   );
