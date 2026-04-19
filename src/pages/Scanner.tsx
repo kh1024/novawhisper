@@ -352,10 +352,10 @@ export default function Scanner() {
             <RangeSlider label="Daily % change" value={filters.changeRange} onChange={(v) => setFilters({ ...filters, changeRange: v })} min={-15} max={15} step={0.5} display={`${filters.changeRange[0]}% – ${filters.changeRange[1]}%`} />
           </div>
 
-          <div className="flex items-center gap-5 flex-wrap pt-2 border-t border-border/40">
+          <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pt-2 border-t border-border/40">
             <Toggle label="Exclude earnings ≤ 7d" checked={filters.excludeEarnings} onChange={(v) => setFilters({ ...filters, excludeEarnings: v })} />
             <Toggle label="Hide AVOID" checked={filters.hideAvoid} onChange={(v) => setFilters({ ...filters, hideAvoid: v })} />
-            <span className="text-[10px] text-muted-foreground ml-auto">
+            <span className="text-[10px] text-muted-foreground w-full sm:w-auto sm:ml-auto">
               IVR · RSI · ATR · EMA distance are <span className="text-warning">estimated</span> until live indicators wired in.
             </span>
           </div>
@@ -687,7 +687,7 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
             Open full research →
           </Button>
           <SaveToPortfolioButton {...deriveContractFromRow(row)} size="sm" />
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
+          <Button asChild variant="outline" size="sm" className="gap-1.5 flex-1 sm:flex-none min-w-[120px] sm:min-w-0">
             <a
               href={`https://robinhood.com/options/chains/${encodeURIComponent(row.symbol)}`}
               target="_blank"
