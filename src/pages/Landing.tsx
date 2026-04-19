@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, Minus, Filter, BarChart3, Download, Zap, Shield, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { LiveMiniScanner } from "@/components/LiveMiniScanner";
 
 const FILTER_CHIPS = ["theta", "delta", "IV", "DTE", "volume", "open interest", "pullback %", "ROI"];
 
