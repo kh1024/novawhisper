@@ -455,7 +455,7 @@ export default function Scanner() {
                       { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
                       { k: "Rank", tip: "Final Rank 0–100 = Setup×.40 + Readiness×.30 + Options×.30 − Penalties. ELITE ≥90, GO NOW ≥80, GOOD ≥70, WATCHLIST ≥60." }, { k: "" },
                     ].map((h) => (
-                      <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap">
+                      <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap bg-card">
                         {h.tip ? (
                           <Tooltip><TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">{h.k}</TooltipTrigger><TooltipContent>{h.tip}</TooltipContent></Tooltip>
                         ) : h.k}
