@@ -12,8 +12,12 @@
 // Response is normalized to the same { quotes: [{ symbol, price, ts }] }
 // shape the rest of the app consumes from quotes-fetch, so it can later be
 // folded into the consensus without further changes.
-import { corsHeaders } from "@supabase/supabase-js/cors";
 import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 const BASE = "https://api.public.com";
 const TOKEN_TTL_MIN = 60;
