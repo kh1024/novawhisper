@@ -116,6 +116,7 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
 }
 
 export default function Market() {
+  const { portfolio: accountBalance } = useCapitalSettings();
   const universe = useMemo(() => TICKER_UNIVERSE.map((u) => u.symbol), []);
   const watch = useMemo(() => Array.from(new Set([...INDICES, ...universe])), [universe]);
   const { data: quotes = [], isLoading, isFetching } = useLiveQuotes(watch);
@@ -318,6 +319,7 @@ export default function Market() {
                 oi={interestMap.get(pickInterestKey(p))?.oi}
                 quote={quoteMap.get(p.symbol) ?? null}
                 sma={smaMap.get(p.symbol) ?? null}
+                accountBalance={accountBalance}
                 onClick={() => setFocused(p.symbol)}
               />
             ))}
