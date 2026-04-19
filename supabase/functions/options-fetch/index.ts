@@ -165,14 +165,17 @@ Deno.serve(async (req) => {
       };
     });
 
+    const payload = {
+      underlying,
+      count: contracts.length,
+      contracts,
+      fetchedAt: new Date().toISOString(),
+      source: "massive",
+    };
+    // Best-effort write-through to KV so subsequent loads (within 60s) skip Polygon.
+    kvSet(cacheKey, payload, CACHE_TTL_MS);
     return new Response(
-      JSON.stringify({
-        underlying,
-        count: contracts.length,
-        contracts,
-        fetchedAt: new Date().toISOString(),
-        source: "massive",
-      }),
+      JSON.stringify(payload),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
