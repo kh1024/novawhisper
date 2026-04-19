@@ -816,6 +816,19 @@ function HistoryPanel() {
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">Play at ${Number(p.play_at).toFixed(2)}{p.premium_estimate ? ` · ${p.premium_estimate}` : ""}</div>
                     <p className="mt-1 text-[11px] text-foreground/80 line-clamp-2">{p.thesis}</p>
+                    <div className="mt-1.5">
+                      <PickMetaChips
+                        compact
+                        meta={{
+                          bias: p.bias,
+                          expectedReturn: p.expected_return,
+                          probability: p.probability,
+                          riskLevel: p.risk_level,
+                          grade: p.grade,
+                          gradeRationale: p.grade_rationale,
+                        }}
+                      />
+                    </div>
                     {p.outcome && p.outcome !== "open" && (
                       <Badge variant="secondary" className="mt-1.5 text-[10px] capitalize">{p.outcome}{p.pnl_pct != null ? ` · ${p.pnl_pct >= 0 ? "+" : ""}${Number(p.pnl_pct).toFixed(1)}%` : ""}</Badge>
                     )}
