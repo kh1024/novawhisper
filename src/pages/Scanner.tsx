@@ -294,23 +294,50 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  // Top-card counts now mirror the CRL signal shown in the row badge,
-  // so "BUY NOW" up top always equals the number of BUY rows in the table.
-  // GO → BUY NOW · WAIT → WATCHLIST · NEUTRAL → WAIT · NO/EXIT → AVOID.
+  // ── UNIFIED LABEL SYSTEM ─────────────────────────────────────────────
+  // ONE label per row, used by BOTH the top cards AND the row badge.
+  // Source of truth: Final Rank's ActionLabel (BUY NOW / WATCHLIST / WAIT /
+  // AVOID / EXIT) with three explicit overrides in priority order:
+  //   1. Guard block on a BUY NOW → BLOCKED (counts as AVOID)
+  //   2. CRL says EXIT + owned    → EXIT
+  //   3. Pick expiry STALE        → AVOID
+  // Everything else uses rank.label as-is. No more competing CRL/Setup pills.
+  type RowLabel = ActionLabel | "BLOCKED";
+  const labelFor = (r: SetupRow): RowLabel => {
+    const rk = rankMap.get(r.symbol)?.rank;
+    if (!rk) return "WAIT";
+    const exp = expiryStatus.get(`scanner:${r.symbol}`);
+    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
+    const guard = evaluateGuards({
+      symbol: r.symbol,
+      livePrice: r.price,
+      pickPrice: r.price,
+      optionType: r.bias === "bearish" ? "put" : "call",
+      direction: "long",
+      strike: r.price,
+      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
+    });
+    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
+    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
+    if (exp?.isStale) return "AVOID";
+    return rk.label;
+  };
+
   const counts = useMemo(() => {
     const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
     for (const r of rows) {
-      const exp = expiryStatus.get(`scanner:${r.symbol}`);
-      const v = exp?.effectiveVerdict ?? r.crl?.verdict ?? "NEUTRAL";
-      if (v === "GO") tally["BUY NOW"]++;
-      else if (v === "WAIT") tally.WATCHLIST++;
-      else if (v === "EXIT") tally.EXIT++;
-      else if (v === "NO") tally.AVOID++;
-      else tally.WAIT++; // NEUTRAL
+      const l = labelFor(r);
+      if (l === "BUY NOW") tally["BUY NOW"]++;
+      else if (l === "WATCHLIST") tally.WATCHLIST++;
+      else if (l === "WAIT") tally.WAIT++;
+      else if (l === "EXIT") tally.EXIT++;
+      else tally.AVOID++; // AVOID + BLOCKED
       if (r.warnings.length > 0) tally.warnings++;
     }
     return tally;
-  }, [rows, expiryStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, rankMap, expiryStatus, sma, ownedSymbols]);
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
