@@ -22,8 +22,15 @@ export type Quote = {
 export type OptionPick = {
   id: string;
   symbol: string;
-  strategy: "covered-call" | "csp" | "long-call" | "long-put" | "wheel" | "leaps";
-  riskBucket: "safe" | "mild" | "aggressive";
+  // App is BUY-PREMIUM ONLY. No short premium / income strategies are emitted.
+  // - long-call / long-put: standard directional buys (14-90 DTE)
+  // - leaps-call / leaps-put: long-dated thesis trades (>180 DTE)
+  // Legacy values ("covered-call" | "csp" | "wheel" | "leaps") remain in the
+  // type union for back-compat with persisted rows but are NEVER produced.
+  strategy: "long-call" | "long-put" | "leaps-call" | "leaps-put" | "covered-call" | "csp" | "wheel" | "leaps";
+  // riskBucket buckets the trade. "lottery" = tiny-size, high-IV, ≤30 DTE.
+  // "mild" is the legacy alias for "moderate" — kept for Planning.tsx etc.
+  riskBucket: "safe" | "mild" | "aggressive" | "lottery";
   expiration: string;
   dte: number;
   strike: number;
@@ -153,14 +160,22 @@ export function getMockQuotes(): Quote[] {
   });
 }
 
-const STRATS: OptionPick["strategy"][] = ["covered-call", "csp", "long-call", "long-put", "wheel", "leaps"];
+// Buy-premium-only strategy palette. Long calls + long puts dominate; LEAPS
+// surface as a smaller share for long-thesis trades. Short premium structures
+// (covered call / CSP / wheel) are intentionally OFF.
+const STRATS: OptionPick["strategy"][] = [
+  "long-call", "long-call", "long-call",
+  "long-put", "long-put",
+  "leaps-call",
+  "leaps-put",
+];
 const REASONS = [
-  "Premium-selling candidate: IV elevated vs realized vol.",
-  "Bullish trend: above 20/50 EMA, MACD positive.",
-  "Sympathy setup: sector leader broke out today.",
-  "Caution: earnings within 2 sessions — IV crush risk.",
-  "Wheel-friendly: blue chip, deep liquidity, stable theta.",
-  "LEAPS opportunity: cheap vol, structural uptrend.",
+  "Bullish trend continuation: above 20/50 EMA, MACD positive, rel-vol 1.4×.",
+  "Pullback to support inside an uptrend — defined-risk long call.",
+  "Breakdown setup: failed retest of 20-EMA on rising volume — long put.",
+  "LEAPS opportunity: cheap IV vs HV, structural multi-quarter uptrend.",
+  "Catalyst-driven: earnings 5-10 sessions out, IV still fair for premium buy.",
+  "Momentum breakout from base — aggressive ATM long call into rel-strength.",
 ];
 
 export function getMockPicks(count = 60): OptionPick[] {
@@ -170,17 +185,33 @@ export function getMockPicks(count = 60): OptionPick[] {
     const r = seed(q.symbol + "p");
     const n = 2 + Math.floor(r() * 3);
     for (let i = 0; i < n && picks.length < count; i++) {
-      const dte = [7, 14, 30, 45, 60, 180, 365][Math.floor(r() * 7)];
       const strategy = STRATS[Math.floor(r() * STRATS.length)];
-      const isCall = strategy.includes("call") || strategy === "wheel" || strategy === "leaps";
-      const moneyness = (r() - 0.5) * 0.1;
-      const strike = +(q.price * (1 + moneyness)).toFixed(0);
-      const premium = +(q.price * (0.005 + r() * 0.04)).toFixed(2);
+      const isLeaps = strategy === "leaps-call" || strategy === "leaps-put";
+      const isPut = strategy === "long-put" || strategy === "leaps-put";
+      const isCall = !isPut;
+      // DTE depends on strategy. Lottery picks come out of long-call/put with
+      // the shortest DTE bucket below.
+      const dte = isLeaps
+        ? [365, 540, 730][Math.floor(r() * 3)]
+        : [7, 14, 21, 30, 45, 60, 90][Math.floor(r() * 7)];
+      // Long premium → strike near the money (ITM/ATM/slightly OTM).
+      const moneyness = (r() - 0.5) * 0.08;
+      const strike = +(q.price * (1 + (isCall ? -moneyness : moneyness))).toFixed(0);
+      const premium = +(q.price * (0.01 + r() * 0.05)).toFixed(2);
       const premiumPct = +((premium / strike) * 100).toFixed(2);
-      const annualized = +((premiumPct * 365) / dte).toFixed(1);
+      const annualized = +((premiumPct * 365) / Math.max(1, dte)).toFixed(1);
       const score = Math.floor(45 + r() * 55);
       const confidence: OptionPick["confidence"] = score > 80 ? "A" : score > 65 ? "B" : "C";
-      const riskBucket: OptionPick["riskBucket"] = score > 75 ? "safe" : score > 60 ? "mild" : "aggressive";
+      // Bucket assignment per institutional spec:
+      //  • LEAPS or score ≥ 80 + DTE ≥ 60  → safe (Conservative)
+      //  • Score ≥ 60 + DTE 21-90           → mild (Moderate)
+      //  • DTE ≤ 14 + high IVR              → lottery (tiny size, asymmetric)
+      //  • Else                             → aggressive
+      let riskBucket: OptionPick["riskBucket"];
+      if (isLeaps || (score >= 80 && dte >= 60)) riskBucket = "safe";
+      else if (dte <= 14 && (q.ivRank ?? 50) > 55) riskBucket = "lottery";
+      else if (score >= 60 && dte >= 21) riskBucket = "mild";
+      else riskBucket = "aggressive";
       picks.push({
         id: `${q.symbol}-${i}-${dte}`,
         symbol: q.symbol,
@@ -192,7 +223,7 @@ export function getMockPicks(count = 60): OptionPick[] {
         premium,
         premiumPct,
         annualized,
-        delta: +((isCall ? 0.2 + r() * 0.5 : -(0.2 + r() * 0.5))).toFixed(2),
+        delta: +((isCall ? 0.35 + r() * 0.45 : -(0.35 + r() * 0.45))).toFixed(2),
         theta: +(-0.02 - r() * 0.08).toFixed(3),
         vega: +(0.05 + r() * 0.2).toFixed(3),
         ivRank: q.ivRank ?? 50,
@@ -201,12 +232,12 @@ export function getMockPicks(count = 60): OptionPick[] {
         spreadPct: +(0.5 + r() * 4).toFixed(2),
         score,
         confidence,
-        bias: q.trend ?? "neutral",
+        bias: isPut ? "bearish" : isCall ? "bullish" : "neutral",
         signals: [
-          q.trend === "bullish" ? "EMA20>EMA50" : q.trend === "bearish" ? "EMA20<EMA50" : "EMA flat",
+          isPut ? "EMA20<EMA50" : "EMA20>EMA50",
           (q.ivRank ?? 50) > 50 ? "IVR high" : "IVR low",
           `RSI ${q.rsi}`,
-          `OI ${(500 + r() * 20000).toFixed(0)}`,
+          isLeaps ? "LEAPS thesis" : `${dte}d`,
         ],
         reason: REASONS[Math.floor(r() * REASONS.length)],
         earningsInDays: r() > 0.7 ? Math.floor(r() * 14) : undefined,

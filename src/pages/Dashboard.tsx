@@ -174,7 +174,8 @@ export default function Dashboard() {
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
             {picks.map((p) => {
-              const isPut = p.strategy === "long-put";
+              const isPut = p.strategy === "long-put" || p.strategy === "leaps-put";
+              const isLeaps = p.strategy === "leaps-call" || p.strategy === "leaps-put";
               const optionType = isPut ? "put" : "call";
               const direction = "long" as const;
               const live = quoteMap.get(p.symbol);
@@ -216,10 +217,14 @@ export default function Dashboard() {
                       </span>
                     </Hint>
                     <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
-                      {p.strategy.replace("-", " ")}
+                      {isLeaps ? `LEAPS ${isPut ? "PUT" : "CALL"}` : p.strategy.replace("-", " ")}
                     </Badge>
-                    <span className={`pill ${p.riskBucket === "safe" ? "pill-bullish" : p.riskBucket === "mild" ? "pill-neutral" : "pill-bearish"} capitalize`}>
-                      {p.riskBucket}
+                    <span className={`pill ${
+                      p.riskBucket === "safe" ? "pill-bullish" :
+                      p.riskBucket === "mild" ? "pill-neutral" :
+                      "pill-bearish"
+                    } capitalize`}>
+                      {p.riskBucket === "safe" ? "Conservative" : p.riskBucket === "mild" ? "Moderate" : p.riskBucket === "lottery" ? "🎲 Lottery" : "Aggressive"}
                     </span>
                     <NovaGuardBadges guard={guard} />
                   </div>

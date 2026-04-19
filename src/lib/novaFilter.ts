@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 export type NovaFilterSpec = {
   budget?: number | null;                 // total $ available for one contract
-  riskBuckets?: ("safe" | "mild" | "aggressive")[]; // empty = all
+  riskBuckets?: ("safe" | "mild" | "aggressive" | "lottery")[]; // empty = all
   bias?: ("bullish" | "bearish" | "neutral")[];
   optionTypes?: ("call" | "put")[];
   strategies?: string[];                  // substring match against strategy field
@@ -68,7 +68,7 @@ export function isFilterActive(s: NovaFilterSpec): boolean {
 export interface FilterablePick {
   symbol: string;
   strategy?: string;
-  riskBucket?: "safe" | "mild" | "aggressive";
+  riskBucket?: "safe" | "mild" | "aggressive" | "lottery";
   bias?: "bullish" | "bearish" | "neutral";
   optionType?: "call" | "put";
   expiration?: string;       // ISO date
