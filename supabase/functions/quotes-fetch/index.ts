@@ -409,7 +409,69 @@ async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
   }
 }
 
-// ── Session detection ─────────────────────────────────────────────────
+// ── CNBC quote API (free JSON, no key; great ETF coverage) ──
+async function fetchCnbc(symbol: string): Promise<SourceQuote | null> {
+  const cached = cnbcCache.get(symbol);
+  if (cached && Date.now() - cached.at < CNBC_TTL_MS) return cached.q;
+  try {
+    const url = `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${encodeURIComponent(symbol)}&requestMethod=quick&noform=1&output=json`;
+    const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 NovaTerminal", Accept: "application/json" } });
+    if (!r.ok) {
+      cnbcCache.set(symbol, { q: cached?.q ?? null, at: Date.now() });
+      return cached?.q ?? null;
+    }
+    const d = await r.json();
+    const row = d?.FormattedQuoteResult?.FormattedQuote?.[0];
+    const price = Number(row?.last);
+    if (!isFinite(price) || price <= 0) {
+      cnbcCache.set(symbol, { q: null, at: Date.now() });
+      return null;
+    }
+    const change = Number(String(row?.change ?? "0").replace(/[+,]/g, ""));
+    const changePct = Number(String(row?.change_pct ?? "0").replace(/[+%,]/g, ""));
+    const volume = Number(String(row?.volume ?? "0").replace(/,/g, ""));
+    const q: SourceQuote = { source: "cnbc", price, change: isFinite(change) ? change : 0, changePct: isFinite(changePct) ? changePct : 0, volume: isFinite(volume) ? volume : 0 };
+    cnbcCache.set(symbol, { q, at: Date.now() });
+    return q;
+  } catch (e) {
+    console.error(`[cnbc] ${symbol}`, e);
+    return cached?.q ?? null;
+  }
+}
+
+// ── Google Finance HTML scrape (free, no key; bulletproof for US ETFs) ──
+// Tries NYSEARCA → NASDAQ → NYSE in order. We pull `data-last-price` from the
+// rendered DOM, which Google ships in the initial HTML response.
+async function fetchGoogle(symbol: string): Promise<SourceQuote | null> {
+  const cached = googleCache.get(symbol);
+  if (cached && Date.now() - cached.at < GOOGLE_TTL_MS) return cached.q;
+  const exchanges = ["NYSEARCA", "NASDAQ", "NYSE"];
+  for (const ex of exchanges) {
+    try {
+      const url = `https://www.google.com/finance/quote/${encodeURIComponent(symbol)}:${ex}`;
+      const r = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 NovaTerminal", Accept: "text/html" } });
+      if (!r.ok) continue;
+      const html = await r.text();
+      const m = html.match(/data-last-price="([0-9.]+)"/);
+      const prevMatch = html.match(/data-last-normal-market-timestamp="\d+"\s+data-previous-close-price="([0-9.]+)"/)
+        ?? html.match(/data-previous-close-price="([0-9.]+)"/);
+      const price = m ? Number(m[1]) : NaN;
+      if (!isFinite(price) || price <= 0) continue;
+      const prev = prevMatch ? Number(prevMatch[1]) : NaN;
+      const change = isFinite(prev) ? price - prev : 0;
+      const changePct = isFinite(prev) && prev ? ((price - prev) / prev) * 100 : 0;
+      const q: SourceQuote = { source: "google", price, change, changePct, volume: 0 };
+      googleCache.set(symbol, { q, at: Date.now() });
+      return q;
+    } catch (e) {
+      console.error(`[google] ${symbol}@${ex}`, e);
+    }
+  }
+  googleCache.set(symbol, { q: null, at: Date.now() });
+  return null;
+}
+
+
 // US equities: pre 04:00–09:30 ET, regular 09:30–16:00 ET, post 16:00–20:00 ET.
 // We compute the current minute in America/New_York from the UTC clock.
 function detectSession(yahooState?: string | null): Session {
