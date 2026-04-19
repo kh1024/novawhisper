@@ -149,6 +149,15 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                 </div>
 
                 <div className="text-right shrink-0 hidden sm:block">
+                  {(() => {
+                    const closes = smaMap.get(w.symbol)?.closes;
+                    const tail = closes && closes.length >= 2 ? closes.slice(-20) : null;
+                    return tail ? (
+                      <div className="mb-1 flex justify-end">
+                        <Sparkline values={tail} width={72} height={20} ariaLabel={`${w.symbol} 20-day trend`} />
+                      </div>
+                    ) : null;
+                  })()}
                   {entry != null && (
                     <div className="text-[10px] text-muted-foreground">
                       Entry <span className="mono text-foreground">${entry.toFixed(2)}</span>
