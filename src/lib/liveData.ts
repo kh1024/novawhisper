@@ -1,5 +1,6 @@
 // Live data hooks: typed wrappers around the quotes-fetch + options-fetch edge functions.
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { TICKER_UNIVERSE, getMockQuotes } from "./mockData";
 import { useSettings } from "./settings";
@@ -135,7 +136,11 @@ async function fetchQuotes(symbols: string[]): Promise<VerifiedQuote[]> {
  *  thinner and prices move less — saves API budget without missing real moves. */
 export function useLiveQuotes(symbols?: string[], opts?: { refetchMs?: number }) {
   const [settings] = useSettings();
-  const list = symbols && symbols.length ? symbols : TICKER_UNIVERSE.map((u) => u.symbol);
+  const universe = useMemo(
+    () => Array.from(new Set([...TICKER_UNIVERSE.map((u) => u.symbol), ...(settings.customTickers ?? [])])),
+    [settings.customTickers],
+  );
+  const list = symbols && symbols.length ? symbols : universe;
   const session = currentSessionET();
   const baseInterval = opts?.refetchMs ?? settings.refreshMs;
   const interval = (session === "pre" || session === "post")

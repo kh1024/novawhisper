@@ -30,6 +30,7 @@ export interface TraderProfile {
 export interface AppSettings {
   refreshMs: number;          // quote polling interval
   tickerSymbols: string[];    // symbols shown in the top tape
+  customTickers: string[];    // user-added symbols (merged into the universe everywhere)
   aiModel: AiModel;
   riskProfile: RiskProfile;
   webhookUrl: string;         // Make.com / n8n / Slack incoming webhook
@@ -52,6 +53,7 @@ const KEY = "nova_settings";
 const DEFAULTS: AppSettings = {
   refreshMs: 30_000,           // safe default — Finnhub free = 60 calls/min
   tickerSymbols: [],           // empty = use full universe
+  customTickers: [],           // user-added symbols
   aiModel: "google/gemini-3-flash-preview",
   riskProfile: "mild",
   webhookUrl: "",

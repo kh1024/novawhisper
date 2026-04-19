@@ -19,6 +19,7 @@ import { GateValidationDashboard } from "@/components/GateValidationDashboard";
 import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
 import { useCapitalSettings } from "@/lib/budget";
+import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
@@ -121,7 +122,11 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
 
 export default function Market() {
   const { portfolio: accountBalance } = useCapitalSettings();
-  const universe = useMemo(() => TICKER_UNIVERSE.map((u) => u.symbol), []);
+  const [settings] = useSettings();
+  const universe = useMemo(
+    () => Array.from(new Set([...TICKER_UNIVERSE.map((u) => u.symbol), ...(settings.customTickers ?? [])])),
+    [settings.customTickers],
+  );
   const watch = useMemo(() => Array.from(new Set([...INDICES, ...universe])), [universe]);
   const { data: quotes = [], isLoading, isFetching } = useLiveQuotes(watch);
   const { data: coins = [], isLoading: coinsLoading } = useTopCoins(10);
