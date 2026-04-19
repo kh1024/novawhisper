@@ -26,6 +26,7 @@ import { PickExpiryChips } from "@/components/PickExpiryChips";
 import { evaluateGuards, type GuardEval } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
+import { PickMetaChips } from "@/components/PickMetaChips";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 
