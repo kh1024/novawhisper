@@ -1,12 +1,16 @@
-// Options Scout — institutional-grade NOVA brain.
-// Scrapes finance/news/options sites via Firecrawl, infers market regime &
-// time-state, then asks Nova (Lovable AI) to return 4 buckets of trades:
-// Safe / Moderate / Aggressive / Swing — each pick graded A-D for confidence.
+// Options Scout — institutional-grade NOVA brain (BUY PREMIUM ONLY).
 //
-// Behavior shifts based on session (weekend → Monday watchlist; pre-market →
-// gap continuation; opening hour → ORB; midday → theta; power hour → EOD
-// flow; after-hours → earnings reactions). Nova never analyzes the market the
-// same way twice.
+// Per spec: NEVER recommends covered calls, CSPs, wheels, iron condors,
+// credit spreads, or any short-premium / income strategy. Only:
+//   1) Long Calls   2) Long Puts   3) LEAPS Calls   4) LEAPS Puts
+//   5) Call Debit Spreads (rare — only if superior to long calls)
+//   6) Put Debit Spreads  (rare — only if superior to long puts)
+//
+// Returns 4 buckets — Conservative / Moderate / Aggressive / Lottery —
+// with a market-regime read and a final summary block. Behavior shifts
+// with the US/Eastern session (weekend, premarket, opening hour, midday,
+// power hour, after-hours, closed) so NOVA never analyzes the tape twice
+// the same way.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.95.0";
 
@@ -52,52 +56,48 @@ function detectTimeState(): { state: TimeState; label: string; isFriday: boolean
   return { state, label, isFriday: weekday === 5, isMonday: weekday === 1, isMonthEnd: date >= 28 };
 }
 
-// ─── Search queries: chosen by time-state to match what Nova should focus on ─
+// ─── Search queries — biased toward BUY-side flow (no income / theta queries) ─
 function queriesForTimeState(t: ReturnType<typeof detectTimeState>): { tier: string; q: string }[] {
-  // Every state pulls the same 4 evergreen tracks (sentiment, flow, earnings,
-  // macro) plus 2 state-specific queries. Tier is a HINT — Nova decides final
-  // bucket placement based on the actual content.
   const evergreen = [
     { tier: "moderate", q: "site:seekingalpha.com earnings calendar this week expected move" },
-    { tier: "aggressive", q: "site:benzinga.com unusual options activity today whale trades" },
-    { tier: "moderate", q: "site:barchart.com top gainers today stocks momentum" },
-    { tier: "safe", q: "best dividend stocks options income strategy this week" },
+    { tier: "aggressive", q: "site:benzinga.com unusual options activity calls puts whale today" },
+    { tier: "moderate", q: "site:barchart.com top gainers losers today momentum stocks" },
+    { tier: "conservative", q: "best LEAPS calls 2026 long term thesis quality stocks" },
   ];
-
   let stateSpecific: { tier: string; q: string }[];
   if (t.state === "weekend") {
     stateSpecific = [
-      { tier: "swing", q: "monday stock market watchlist gap up gap down candidates" },
-      { tier: "swing", q: "next week earnings calendar most anticipated stocks options" },
+      { tier: "moderate", q: "monday stock market watchlist gap candidates this week" },
+      { tier: "moderate", q: "next week earnings calendar most anticipated stocks options" },
     ];
   } else if (t.state === "premarket") {
     stateSpecific = [
       { tier: "aggressive", q: "site:cnbc.com pre-market movers today stocks gainers losers" },
-      { tier: "moderate", q: "premarket gap stocks today catalyst earnings reaction" },
+      { tier: "lottery", q: "premarket gap stocks today catalyst earnings reaction explosive" },
     ];
   } else if (t.state === "openingHour") {
     stateSpecific = [
       { tier: "aggressive", q: "opening range breakout stocks today high volume momentum" },
-      { tier: "moderate", q: "stocks gap fill candidates today open" },
+      { tier: "moderate", q: "stocks gap fill candidates today open continuation" },
     ];
   } else if (t.state === "midday") {
     stateSpecific = [
-      { tier: "safe", q: "best theta selling options today high IV rank" },
-      { tier: "moderate", q: "iron condor candidates today range-bound stocks" },
+      { tier: "moderate", q: "stocks pullback to support today buy setup long calls" },
+      { tier: "conservative", q: "quality stocks oversold bounce LEAPS entry today" },
     ];
   } else if (t.state === "powerHour") {
     stateSpecific = [
       { tier: "aggressive", q: "end of day breakout stocks closing strength power hour" },
-      { tier: "swing", q: "stocks closing at highs today swing trade tomorrow" },
+      { tier: "moderate", q: "stocks closing at highs today swing trade tomorrow" },
     ];
   } else if (t.state === "afterHours") {
     stateSpecific = [
-      { tier: "aggressive", q: "after hours earnings movers today stock reaction" },
-      { tier: "swing", q: "tomorrow stock market setups premarket watchlist" },
+      { tier: "lottery", q: "after hours earnings movers today stock reaction explosive" },
+      { tier: "moderate", q: "tomorrow stock market setups premarket watchlist" },
     ];
   } else {
     stateSpecific = [
-      { tier: "swing", q: "next session stock market watchlist setups" },
+      { tier: "moderate", q: "next session stock market watchlist setups long calls" },
       { tier: "moderate", q: "overnight news stocks tomorrow market open" },
     ];
   }
@@ -140,7 +140,6 @@ Deno.serve(async (req) => {
     const time = detectTimeState();
     const QUERIES = queriesForTimeState(time);
 
-    // 1) Run all Firecrawl searches in parallel (last 24h)
     const groups = await Promise.all(
       QUERIES.map(async (q) => ({ tier: q.tier, query: q.q, results: await fcSearch(q.q) })),
     );
@@ -151,7 +150,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 2) Build context for Nova
     const context = groups.map((g) =>
       `### Search bucket: ${g.tier.toUpperCase()} — "${g.query}"\n\n` +
       g.results.map((r) => `- [${r.title || r.url}](${r.url})\n${r.markdown}`).join("\n\n")
@@ -165,99 +163,169 @@ Deno.serve(async (req) => {
     if (time.isMonday) calendarFlags.push("Today is Monday — watch for weekend repositioning and gap continuation.");
     if (time.isMonthEnd) calendarFlags.push("Month-end window — expect fund rebalancing flows.");
 
-    const systemPrompt = `You are NOVA, an institutional-grade Options Trading AI. You think like a hedge-fund desk: weighted evidence across regime, technicals, volatility, flow, fundamentals, news, sentiment, macro and sector. You NEVER analyze markets the same way twice — behavior shifts with session, calendar, and regime.
+    const systemPrompt = `You are NOVA, an elite institutional-level options scanner.
+
+YOUR JOB: identify ONLY the highest-quality BUYING-PREMIUM opportunities.
+
+═══ ALLOWED STRATEGIES ═══
+1) Long Calls
+2) Long Puts
+3) LEAPS Calls
+4) LEAPS Puts (rare — only for strong bearish long-term thesis)
+5) Call Debit Spreads (only if superior to a naked long call)
+6) Put  Debit Spreads (only if superior to a naked long put)
+
+═══ FORBIDDEN — NEVER RECOMMEND ═══
+- Covered calls, cash-secured puts, the wheel, iron condors, credit spreads,
+  naked option selling, any income / short-premium strategy, low-liquidity
+  contracts. If it's not a buy-premium trade, drop it.
+
+═══ PRIMARY OBJECTIVE ═══
+Generate only high-probability, high-quality setups. If no strong setups
+exist, return empty buckets and set staySafe=true with reason
+"NO TRADE TODAY — preserve capital." Cash IS a position. No filler trades.
 
 CURRENT TIME STATE: ${time.label}
 ${calendarFlags.length ? "CALENDAR: " + calendarFlags.join(" ") : ""}
 TODAY: ${today}
 
+═══ MARKET REGIME ANALYSIS (do this first) ═══
+Classify the regime as exactly one of:
+- "bull"     (Bullish Trend)
+- "bear"     (Bearish Trend)
+- "sideways" (Range Bound)
+- "panic"    (High Vol / Event Risk)
+- "meltup"   (Risk-On Growth)
+- "defensive"(Defensive Rotation)
+Use SPY/QQQ trend, VIX behavior, sector leadership, breadth, momentum, macro
+catalysts. Then ADAPT recommendations to that regime:
+- bull / meltup  → favor long calls, LEAPS calls, call debit spreads on dips
+- bear / panic   → favor long puts, hedges, put debit spreads
+- sideways       → mostly NO TRADE; only A-grade catalyst breakouts
+- defensive      → quality LEAPS only; reduce aggressive bucket size
+
 ═══ TIME-STATE LOGIC (apply strictly) ═══
-${time.state === "weekend" ? `- WEEKEND. Cache Friday close. Do NOT treat Friday momentum as live. Build Monday watchlists, gap candidates, weekend news impact, geopolitical/macro, upcoming earnings, sector rotation. Mark intraday-only ideas as "stage for Monday open". Down-weight fresh price signals — thin liquidity & no confirmation.` : ""}
+${time.state === "weekend" ? `- WEEKEND. No live signals. Build Monday watchlists, gap candidates, weekend-news impact, geopolitical/macro, upcoming earnings, sector rotation. Mark intraday-only ideas as "stage for Monday open". Down-weight fresh price signals.` : ""}
 ${time.state === "premarket" ? `- PRE-MARKET. Focus overnight news, earnings reactions, premarket movers, gap continuation, opening-range candidates. Confirm at open before sizing.` : ""}
-${time.state === "openingHour" ? `- OPENING HOUR (9:30-10:30 ET). Demand volume confirmation. Favor opening-range breakouts, gap fills, institutional flow direction. Stale overnight signals often fail.` : ""}
-${time.state === "midday" ? `- MIDDAY CHOP (10:30-2:00 ET). Volume thin. Prefer THETA trades (credit spreads, iron condors, covered calls). Scale entries. Avoid chasing breakouts — midday moves often reverse.` : ""}
+${time.state === "openingHour" ? `- OPENING HOUR (9:30-10:30 ET). Demand volume confirmation. Favor opening-range breakouts, gap fills, institutional flow direction.` : ""}
+${time.state === "midday" ? `- MIDDAY CHOP (10:30-2:00 ET). Volume thin. Be picky — prefer pullbacks to support inside trends. Avoid chasing breakouts.` : ""}
 ${time.state === "powerHour" ? `- POWER HOUR (2:00-4:00 ET). Closing strength, EOD breakouts, institutional positioning, tomorrow continuation candidates.` : ""}
 ${time.state === "afterHours" ? `- AFTER-HOURS. Earnings reactions, news, IV changes, tomorrow setups. Mark intraday-only ideas as "for tomorrow's open".` : ""}
-${time.state === "closed" ? `- CLOSED. Down-weight intraday signals. Stage tomorrow. Use cached close — do not pretend signals are live.` : ""}
+${time.state === "closed" ? `- CLOSED. Down-weight intraday signals. Stage tomorrow.` : ""}
 
-═══ REGIME → STRATEGY MAPPING ═══
-- Sideways/low-vol → SELL premium (iron condors, butterflies, covered calls, CSPs, credit spreads). Options likely expire worthless.
-- Strong bull → long calls, bull call spreads, LEAPS calls, CSPs on dips.
-- Bear / panic → puts, put spreads, inverse ETFs, hedges. Down-grade bullish ideas.
-- Melt-up (broad rally + breadth) → long calls, bull spreads, covered calls on extended names.
-- IV elevated (IVR > 60) → SELL premium (credit spreads, condors, CCs).
-- IV cheap (IVR < 30) + catalyst near → BUY premium (debit spreads, calendars, long single-leg).
-- Earnings within 5 days → flag IV crush risk explicitly. No naked premium buys unless aggressive bucket vol play.
-- Geopolitical risk rising → reduce confidence on bullish trades by one grade.
+═══ FOUR RISK BUCKETS — return MAX 12 trades total ═══
+Return 3 per bucket; fewer if quality is lacking; never filler.
+Maximum 1 trade per ticker in conservative/moderate/aggressive. Lottery may
+repeat a ticker only for an exceptional setup.
 
-═══ STRIKE & EXPIRATION RULES (institutional) ═══
+CONSERVATIVE (3 trades):
+- Large cap or ETF, high liquidity, tight bid/ask, strong structure
+- Lower / fair IV, 60+ DTE or LEAPS
+- Higher probability of profit
+- Strategies: Long ITM Call (delta 0.70-0.85), LEAPS Call/Put
+
+MODERATE (3 trades):
+- Trend continuation, pullback entry, breakout setup
+- 30-90 DTE, balanced reward/risk
+- Strategies: Long Call (delta 0.55-0.70), Long Put, occasional Call Debit Spread
+
+AGGRESSIVE (3 trades):
+- Catalyst play, momentum breakout, reversal setup
+- 14-45 DTE, higher upside, lower probability
+- Strategies: ATM Long Call/Put (delta 0.45-0.55)
+
+LOTTERY PICKS (3 trades — entertainment / speculative only):
+- Tiny size 0.25%-1% of account
+- Real catalyst or technical trigger required (NOT pure hype)
+- Tight enough spreads, accept 100% loss possible
+- ≥3× upside potential
+- 7-30 DTE
+- Strategies: short-dated Long Call or Long Put
+- NEVER rank a lottery pick above a quality conservative/moderate trade
+
+═══ SCREENING FACTORS (use what's in the article context) ═══
+20/50/200 EMA, RSI, MACD, relative strength, relative volume, options volume,
+open interest, bid/ask spread, IV Rank / IV Percentile, expected move,
+support/resistance, breakouts, breakdowns, earnings/Fed/CPI/news catalysts.
+
+═══ STRIKE & EXPIRATION RULES ═══
 DELTA BANDS (long single-leg):
-| Approach     | Call Delta | Put Delta    |
+| Approach     | Call Delta | Put Delta      |
 | Aggressive   | 0.45-0.55  | -0.45 to -0.55 |
 | Balanced     | 0.55-0.70  | -0.55 to -0.70 |
 | Conservative | 0.70-0.85  | -0.70 to -0.85 |
+- Never pick delta > 0.90 unless explicit synthetic-stock justification.
+- If a naked long looks inefficient (premium > 5-10% of stock OR breakeven move >
+  expected vol window), use a debit spread instead and explain why.
 
-- NEVER pick delta > 0.90 (deep ITM) unless user wants synthetic stock. Penalize if intrinsic value > 90% of premium — no leverage edge.
-- If naked single-leg looks inefficient (premium > 5-10% of stock price OR breakeven move > expected vol), prefer a SPREAD instead.
-- Capital-efficiency check: required move-to-breakeven must be < expected volatility window for the chosen DTE.
+DTE → bucket:
+- 0-7 DTE  → lottery only (event-driven)
+- 7-30 DTE → aggressive / lottery
+- 30-90 DTE → moderate / aggressive
+- 90-180 DTE → moderate / conservative
+- >180 DTE → LEAPS — conservative only, delta 0.60-0.75
 
-DTE → STRATEGY MAPPING:
-| 0-7 DTE     | Event-driven / intraday only. Aggressive bucket only. |
-| 7-30 DTE    | Tactical swings, vol plays. Moderate / Aggressive.    |
-| 30-60 DTE   | Trend continuation. Moderate / Swing.                 |
-| 60-180 DTE  | Medium-term swings. Swing bucket.                     |
-| >180 DTE    | LEAPS only on strong long-term conviction (delta 0.60-0.75). |
+═══ RULES BY STRATEGY ═══
+LONG CALLS — prefer in bullish regime, strong uptrend, pullback to support,
+breakout volume, IV cheap/fair. Avoid when IV expensive, directly under
+resistance, or weak market breadth.
 
-STRUCTURE PREFERENCE (CALLS / PUTS ONLY — multi-leg structures are disabled in this app):
-- Bullish → long call. Pick a delta band that matches conviction (Aggressive ATM, Balanced slight ITM, Conservative ITM 0.70-0.85).
-- Bearish → long put. Same delta-band rule.
-- Neutral / no clear edge → return [] for that bucket. DO NOT propose iron condors, calendars, butterflies, straddles, strangles, or vertical spreads — the user wants single-leg calls/puts only.
-- Income / hedging — express it as a single ITM call (synthetic-stock style) or a single put hedge, never as a spread.
+LONG PUTS — prefer in bearish regime, breakdown, weak sector, failed rally.
+Avoid in oversold bounce zones or strong bull tape.
 
-═══ FOUR BUCKETS (single-leg only) ═══
-- SAFE — long ITM call/put with longer DTE (≥45 DTE), conservative delta band 0.70-0.85. Stock-replacement style.
-- MODERATE — 30-60 DTE single-leg on liquid names with a clear catalyst, balanced delta 0.55-0.70.
-- AGGRESSIVE — 0-7 DTE or ATM single-leg on momentum / earnings / unusual flow. Aggressive delta 0.45-0.55.
-- SWING — 30-90 DTE single-leg on technical breakout / sector rotation / post-earnings drift. Balanced-to-conservative delta.
+LEAPS — strong companies / ETFs, multi-month thesis, pullback entries, fair IV.
+
+DEBIT SPREADS — only when IV elevated, moderate expected move, defined risk
+clearly superior, lower cost preferred. Always explain why the spread beats
+the naked long.
 
 ═══ CONFIDENCE GRADING (weighted score 0-100) ═══
-- 20% Technical setup (trend, S/R, pattern, volume)
-- 20% Volatility edge (IV vs HV, IV rank, skew)
-- 15% Fundamentals (growth, balance sheet, analyst)
-- 15% Regime fit (does bias match regime?)
-- 10% News / catalyst quality
-- 10% Sentiment / positioning (flow, put/call, retail crowd as contrarian)
-- 10% Liquidity / execution (OI, spread %)
-
-Letter grade: A = 90+, B = 75-89, C = 60-74, D = <60. ONLY return picks graded A, B, or C. Drop D.
+20% Technical setup · 20% Volatility edge · 15% Fundamentals · 15% Regime fit
+· 10% News/catalyst · 10% Sentiment · 10% Liquidity
+A=90+, B=75-89, C=60-74, D=<60. Return ONLY A/B/C picks. Drop D.
 
 ═══ RISK MANAGEMENT (hard rules) ═══
-- Per-trade risk ≤ 1-2% of account (one-percent rule). Never > 5%.
-- Reject illiquid options (bid-ask > 5% of mid, OI too low).
-- Defined-risk preferred. Always specify entry trigger AND exit (target + stop).
-- For short premium: exit at 50-75% max profit, close ~1 week before expiry to avoid gamma.
-- No volatile buys right before earnings/FOMC unless explicit vol play.
+- Per-trade risk ≤ 1-2% of account. Never > 5%.
+- Reject illiquid options.
+- Always specify entry trigger, profit targets, stop loss, time exit, and
+  invalidation level.
+- Lottery total exposure ≤ 10% of total suggested capital.
+- No naked premium buy right before earnings/FOMC unless explicit vol play.
 
 ═══ FORBIDDEN ═══
-- Illiquid chains.
-- Meme hype without confirmed momentum.
-- Earnings lottos outside aggressive bucket.
-- Weak fundamentals on swing/LEAPS.
-- Deep ITM (delta > 0.90) without synthetic-stock justification.
-- Vague entries (no strike, no expiry → drop).
+- Illiquid chains. Meme hype without confirmed momentum. Earnings lottos
+  outside aggressive/lottery. Weak fundamentals on conservative/LEAPS.
+  Vague entries.
 
 ═══ OUTPUT REQUIREMENTS ═══
-Every pick MUST include: exact strike (USD), real future expiry (YYYY-MM-DD, valid weekly/monthly), option type & direction, "play at" underlying, premium estimate range, bias, expected return %, probability of profit %, risk level, why, what could go wrong, entry, exit, confidence grade A/B/C, grade rationale naming the strongest 2 factors. Pick 2-3 per bucket. Tickers must explicitly appear in article text. If a bucket has no quality setup at this time-state, return [] — that is a valid outcome.`;
+Each pick MUST include: symbol, strategy ("Long Call" / "Long Put" / "LEAPS Call"
+/ "LEAPS Put" / "Call Debit Spread" / "Put Debit Spread"), optionType (call|put),
+direction ("long"), strike (USD), strikeShort (only for debit spreads, else
+omit), expiry YYYY-MM-DD (real future weekly/monthly), playAt (entry underlying
+USD), premiumEstimate (range), bias, expectedReturn %, probability %, riskLevel,
+liquidityRating 1-10, confidenceScore 1-10, riskScore 1-10, thesis (Why This
+Setup), whyStrike, whyExpiration, whyNow, profitTarget1, profitTarget2,
+stopLoss, timeExit, invalidationLevel, betterThanAlternative (long vs spread
+reasoning), avoidIf, grade (A/B/C), gradeRationale.
 
-    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by suggested risk tier — but YOU make the final call on bucket placement based on time-state and regime):
+ALWAYS also return the FINAL SUMMARY block: marketRegime, marketRead,
+bestOverallTrade, safestTrade, highestUpsideTrade, bestLeapsTrade,
+bestLotteryPick, stayInCash (yes/no + reason).
+
+If the market is poor or unclear: return FEWER trades. Quality over quantity.`;
+
+    const userPrompt = `Web search results (Firecrawl, last 24h, grouped by suggested risk tier — but YOU make the final bucket call based on time-state and regime):
 
 ${context}
 
 INSTRUCTIONS:
-1. Open with a one-sentence MARKET READ that names the regime (bull/bear/sideways/panic/meltup) and current time-state.
-2. Return 2-3 picks per bucket (Safe / Moderate / Aggressive / Swing) with concrete strikes, expiries, play-at prices, AND a confidence grade (A/B/C).
-3. For every pick, fill in: thesis, what can go wrong, best entry, best exit, and explicit grade rationale.
-4. If a bucket has no high-quality setup at this time-state, return an empty array for it — that is a valid outcome.`;
+1. First classify the market regime and write a one-sentence MARKET READ.
+2. Return up to 3 picks per bucket: conservative / moderate / aggressive / lottery.
+   BUY-PREMIUM ONLY. NEVER recommend covered calls, CSPs, wheels, condors,
+   credit spreads, or any short-premium strategy.
+3. For every pick, fill in every output field — no vague entries.
+4. If a bucket has no quality A/B/C setup at this time-state, return [] for it.
+5. Return the FINAL SUMMARY block with stayInCash recommendation.`;
 
     const aiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -272,21 +340,34 @@ INSTRUCTIONS:
           type: "function",
           function: {
             name: "options_buckets",
-            description: "Return four buckets of NOVA-graded options ideas plus regime + time-state metadata.",
+            description: "Return four buy-premium-only buckets of NOVA-graded options ideas plus regime + final summary.",
             parameters: {
               type: "object",
               properties: {
-                marketRead: { type: "string", description: "One sentence market read naming regime + time-state." },
-                regime: { type: "string", enum: ["bull", "bear", "sideways", "panic", "meltup"], description: "Inferred market regime." },
-                timeState: { type: "string", description: "Echo back the current time-state label." },
-                bestStrategyNow: { type: "string", description: "One sentence: what to favor right now." },
-                avoidRightNow: { type: "string", description: "One sentence: what to avoid right now." },
-                safe: { type: "array", items: pickSchema() },
+                marketRead: { type: "string", description: "One-sentence regime + time-state read." },
+                regime: { type: "string", enum: ["bull", "bear", "sideways", "panic", "meltup", "defensive"], description: "Inferred market regime." },
+                timeState: { type: "string" },
+                bestStrategyNow: { type: "string" },
+                avoidRightNow: { type: "string" },
+                conservative: { type: "array", items: pickSchema() },
                 moderate: { type: "array", items: pickSchema() },
                 aggressive: { type: "array", items: pickSchema() },
-                swing: { type: "array", items: pickSchema() },
+                lottery: { type: "array", items: pickSchema() },
+                summary: {
+                  type: "object",
+                  properties: {
+                    bestOverallTrade: { type: "string" },
+                    safestTrade: { type: "string" },
+                    highestUpsideTrade: { type: "string" },
+                    bestLeapsTrade: { type: "string" },
+                    bestLotteryPick: { type: "string" },
+                    stayInCash: { type: "string", description: "'yes' or 'no' followed by one-sentence reason." },
+                  },
+                  required: ["bestOverallTrade", "safestTrade", "highestUpsideTrade", "bestLeapsTrade", "bestLotteryPick", "stayInCash"],
+                  additionalProperties: false,
+                },
               },
-              required: ["marketRead", "regime", "timeState", "bestStrategyNow", "avoidRightNow", "safe", "moderate", "aggressive", "swing"],
+              required: ["marketRead", "regime", "timeState", "bestStrategyNow", "avoidRightNow", "conservative", "moderate", "aggressive", "lottery", "summary"],
               additionalProperties: false,
             },
           },
@@ -306,22 +387,33 @@ INSTRUCTIONS:
     const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
     let buckets: Record<string, unknown> = {
       marketRead: "", regime: "sideways", timeState: time.label, bestStrategyNow: "", avoidRightNow: "",
-      safe: [], moderate: [], aggressive: [], swing: [],
+      conservative: [], moderate: [], aggressive: [], lottery: [], summary: {},
     };
     if (toolCall?.function?.arguments) {
       try { buckets = JSON.parse(toolCall.function.arguments); }
       catch (e) { console.error("[options-scout] parse failed", e); }
     }
 
+    // Strict whitelist of allowed strategies (case-insensitive substring).
+    const ALLOWED_STRATS = ["long call", "long put", "leaps call", "leaps put", "call debit spread", "put debit spread"];
+    const isAllowed = (p: Record<string, unknown>) => {
+      const strat = String(p.strategy ?? "").toLowerCase();
+      const ot = String(p.optionType ?? "").toLowerCase();
+      const dir = String(p.direction ?? "").toLowerCase();
+      // Hard reject any short premium / income leaks.
+      if (dir === "short") return false;
+      if (ot !== "call" && ot !== "put") return false;
+      return ALLOWED_STRATS.some((a) => strat.includes(a));
+    };
+
     // 5) Persist this run + picks for history & performance tracking
     let runId: string | null = null;
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      const tiers = ["safe", "moderate", "aggressive", "swing"] as const;
+      const tiers = ["conservative", "moderate", "aggressive", "lottery"] as const;
       const allPicks = tiers.flatMap((t) => ((buckets[t] as unknown[]) ?? [])
         .map((p) => ({ tier: t, pick: p as Record<string, unknown> }))
-        // Single-leg only — drop anything the model still tried to sneak through.
-        .filter(({ pick }) => pick.optionType === "call" || pick.optionType === "put"));
+        .filter(({ pick }) => isAllowed(pick)));
       const { data: runRow, error: runErr } = await sb.from("web_picks_runs").insert({
         market_read: (buckets.marketRead as string) ?? "",
         source_count: allSources.length,
@@ -336,17 +428,15 @@ INSTRUCTIONS:
           symbol: String(pick.symbol ?? "").toUpperCase(),
           strategy: String(pick.strategy ?? ""),
           option_type: String(pick.optionType ?? ""),
-          direction: String(pick.direction ?? ""),
+          direction: String(pick.direction ?? "long"),
           strike: Number(pick.strike ?? 0),
           strike_short: pick.strikeShort != null ? Number(pick.strikeShort) : null,
           expiry: String(pick.expiry ?? new Date().toISOString().slice(0, 10)),
           play_at: Number(pick.playAt ?? 0),
           premium_estimate: pick.premiumEstimate ? String(pick.premiumEstimate) : null,
           thesis: String(pick.thesis ?? ""),
-          risk: String(pick.risk ?? ""),
+          risk: String(pick.risk ?? pick.avoidIf ?? ""),
           source: String(pick.source ?? ""),
-          // New rich-signal columns (added 2026-04). Each is optional — preserves
-          // back-compat if NOVA omits a field for a given pick.
           bias: pick.bias ? String(pick.bias) : null,
           expected_return: pick.expectedReturn ? String(pick.expectedReturn) : null,
           probability: pick.probability ? String(pick.probability) : null,
@@ -362,9 +452,21 @@ INSTRUCTIONS:
       console.error("[options-scout] persistence failed (non-fatal)", e);
     }
 
+    // Filter buckets in the response too — same whitelist guard.
+    const filterBucket = (arr: unknown): unknown[] =>
+      Array.isArray(arr) ? arr.filter((p) => isAllowed(p as Record<string, unknown>)) : [];
+
     return new Response(
       JSON.stringify({
         ...buckets,
+        conservative: filterBucket(buckets.conservative),
+        moderate: filterBucket(buckets.moderate),
+        aggressive: filterBucket(buckets.aggressive),
+        lottery: filterBucket(buckets.lottery),
+        // Back-compat aliases for any UI still reading the old field names.
+        safe: filterBucket(buckets.conservative),
+        mild: filterBucket(buckets.moderate),
+        swing: filterBucket(buckets.lottery),
         runId,
         sources: allSources,
         fetchedAt: new Date().toISOString(),
@@ -385,25 +487,38 @@ function pickSchema() {
     type: "object",
     properties: {
       symbol: { type: "string", description: "Underlying ticker, e.g. AAPL" },
-      strategy: { type: "string", description: "e.g. 'Covered call', 'Bull put spread', '0DTE call', 'Iron condor', 'Swing call'" },
-      optionType: { type: "string", enum: ["call", "put"], description: "Single-leg only. Multi-leg structures are disabled in this app." },
-      direction: { type: "string", enum: ["long", "short"], description: "Buying (long) or selling (short) the primary leg" },
-      strike: { type: "number", description: "Primary strike price in USD." },
-      strikeShort: { type: "number", description: "Optional second strike for spreads/multi-leg." },
-      expiry: { type: "string", description: "Expiration YYYY-MM-DD. Real upcoming weekly/monthly expiry, in the future." },
-      playAt: { type: "number", description: "Underlying price at which to enter (USD)." },
-      premiumEstimate: { type: "string", description: "Rough expected option premium per contract (e.g. '$1.20-1.40')." },
-      bias: { type: "string", enum: ["bullish", "bearish", "neutral"], description: "Directional bias of the trade." },
-      expectedReturn: { type: "string", description: "Expected return on premium / max gain (e.g. '40%')." },
-      probability: { type: "string", description: "Estimated probability of profit (e.g. '70%')." },
-      riskLevel: { type: "string", enum: ["low", "medium", "high"], description: "Overall risk level." },
-      thesis: { type: "string", description: "Why this trade — 1-2 sentences. Reference regime + setup + vol edge." },
-      risk: { type: "string", description: "Main risk + invalidation scenario (what could go wrong)." },
-      bestEntry: { type: "string", description: "Best entry trigger / level." },
-      bestExit: { type: "string", description: "Profit target + stop." },
-      grade: { type: "string", enum: ["A", "B", "C"], description: "NOVA confidence grade (A=90+, B=75-89, C=60-74)." },
-      gradeRationale: { type: "string", description: "Why this grade — name the strongest 2 weighted factors." },
-      source: { type: "string", description: "Which source flagged it (URL or domain)." },
+      strategy: { type: "string", enum: ["Long Call", "Long Put", "LEAPS Call", "LEAPS Put", "Call Debit Spread", "Put Debit Spread"], description: "BUY-PREMIUM ONLY." },
+      optionType: { type: "string", enum: ["call", "put"] },
+      direction: { type: "string", enum: ["long"], description: "Always long. Short premium is forbidden." },
+      strike: { type: "number" },
+      strikeShort: { type: "number", description: "Short leg strike — REQUIRED for debit spreads, omit otherwise." },
+      expiry: { type: "string", description: "YYYY-MM-DD, real future weekly/monthly." },
+      playAt: { type: "number", description: "Entry underlying price (USD)." },
+      premiumEstimate: { type: "string", description: "Per-contract premium range, e.g. '$1.20-1.40'." },
+      bias: { type: "string", enum: ["bullish", "bearish", "neutral"] },
+      expectedReturn: { type: "string", description: "e.g. '40%' or '2x'." },
+      probability: { type: "string", description: "Estimated probability of profit, e.g. '65%'." },
+      riskLevel: { type: "string", enum: ["low", "medium", "high"] },
+      liquidityRating: { type: "number", description: "1-10." },
+      confidenceScore: { type: "number", description: "1-10." },
+      riskScore: { type: "number", description: "1-10." },
+      thesis: { type: "string", description: "Why This Setup — 1-2 sentences." },
+      whyStrike: { type: "string" },
+      whyExpiration: { type: "string" },
+      whyNow: { type: "string" },
+      profitTarget1: { type: "string" },
+      profitTarget2: { type: "string" },
+      stopLoss: { type: "string" },
+      timeExit: { type: "string" },
+      invalidationLevel: { type: "string" },
+      betterThanAlternative: { type: "string", description: "Why this beats the alt structure (long vs spread)." },
+      avoidIf: { type: "string" },
+      bestEntry: { type: "string" },
+      bestExit: { type: "string" },
+      risk: { type: "string", description: "Main risk + invalidation scenario." },
+      grade: { type: "string", enum: ["A", "B", "C"] },
+      gradeRationale: { type: "string" },
+      source: { type: "string" },
     },
     required: ["symbol", "strategy", "optionType", "direction", "strike", "expiry", "playAt", "bias", "expectedReturn", "probability", "riskLevel", "thesis", "risk", "bestEntry", "bestExit", "grade", "gradeRationale", "source"],
     additionalProperties: false,
