@@ -598,7 +598,14 @@ export default function Scanner() {
         {/* Card view */}
         {!isLoading && effectiveView === "cards" && filtered.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => <SetupCard key={r.symbol} row={r} onOpen={() => setOpenSymbol(r.symbol)} />)}
+            {filtered.map((r) => (
+              <SetupCard
+                key={r.symbol}
+                row={r}
+                rank={rankMap.get(r.symbol)?.rank ?? null}
+                onOpen={() => setOpenSymbol(r.symbol)}
+              />
+            ))}
           </div>
         )}
 
@@ -774,8 +781,7 @@ function DetailPanel({ row, decision, rank, onOpen }: {
   );
 }
 
-function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
-  const ready = readinessMeta(row.readiness);
+function SetupCard({ row, rank, onOpen }: { row: SetupRow; rank: RankResult | null; onOpen: () => void }) {
   const { cls: bcls, Icon: BIcon } = biasMeta(row.bias);
   return (
     <Card className={cn("glass-card p-4 space-y-3 cursor-pointer hover:border-primary/40 transition-all", row.readiness === "AVOID" && "opacity-75")} onClick={onOpen}>
@@ -785,8 +791,16 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
           <div className="text-[10px] text-muted-foreground truncate max-w-[180px]">{row.name}</div>
         </div>
         <div className="text-right">
-          <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
-          <span className={cn("text-[10px] px-2 py-0.5 rounded border font-semibold tracking-wider", ready.cls)}>{ready.label}</span>
+          {rank ? (
+            <>
+              <div className={cn("mono text-2xl font-semibold", scoreColor(rank.finalRank))}>{rank.finalRank}</div>
+              <span className={cn("text-[10px] px-2 py-0.5 rounded border font-semibold tracking-wider", labelClasses(rank.label))}>
+                {rank.label}
+              </span>
+            </>
+          ) : (
+            <div className={cn("mono text-2xl font-semibold", scoreColor(row.setupScore))}>{row.setupScore}</div>
+          )}
         </div>
       </div>
 
@@ -799,17 +813,28 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
         )}
       </div>
 
+      {/* Score triplet — Setup / Readiness / Options — institutional view. */}
+      {rank && (
+        <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-border/40">
+          <div><div className="text-muted-foreground">Setup</div><div className={cn("mono font-semibold", scoreColor(rank.setupScore))}>{rank.setupScore}</div></div>
+          <div><div className="text-muted-foreground">Ready</div><div className={cn("mono font-semibold", scoreColor(rank.readinessScore))}>{rank.readinessScore}</div></div>
+          <div><div className="text-muted-foreground">Options</div><div className={cn("mono font-semibold", scoreColor(rank.optionsScore))}>{rank.optionsScore}</div></div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 text-xs">
         <div><div className="text-muted-foreground">Last</div><div className="mono">${row.price.toFixed(2)}</div></div>
         <div><div className="text-muted-foreground">Chg</div><div className={cn("mono", row.changePct >= 0 ? "text-bullish" : "text-bearish")}>{row.changePct >= 0 ? "+" : ""}{row.changePct.toFixed(2)}%</div></div>
         <div><div className="text-muted-foreground">Opt liq</div><div className="mono">{row.optionsLiquidity}</div></div>
       </div>
 
-      <div className="space-y-1.5 pt-1">
-        <ScoreBar label="Liquidity"  value={row.breakdown.liquidity}  Icon={Activity} />
-        <ScoreBar label="Technical"  value={row.breakdown.technical}  Icon={TrendingUp} />
-        <ScoreBar label="Timing"     value={row.breakdown.timing}     Icon={Clock} />
-      </div>
+      {rank && rank.penalties.length > 0 && (
+        <div className="text-[10px] text-bearish/90 pt-1 border-t border-border/40 space-y-0.5">
+          {rank.penalties.slice(0, 2).map((p) => (
+            <div key={p.code} className="flex gap-1.5"><span>−{Math.abs(p.points)}</span><span className="text-foreground/80">{p.reason}</span></div>
+          ))}
+        </div>
+      )}
 
       {row.warnings[0] && (
         <div className="text-[11px] text-bearish/90 flex gap-1.5 pt-1 border-t border-border/40">
@@ -821,5 +846,50 @@ function SetupCard({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
         <SaveToPortfolioButton {...deriveContractFromRow(row)} size="xs" />
       </div>
     </Card>
+  );
+}
+
+// ─────────── Rank Summary Card — shown above the playbook in DetailPanel ───────────
+function RankSummaryCard({ rank }: { rank: RankResult }) {
+  return (
+    <Card className="glass-card p-4 space-y-3 border border-border/60">
+      <div className="flex items-start justify-between flex-wrap gap-2">
+        <div>
+          <div className="text-[10px] font-bold tracking-[0.18em] text-muted-foreground">FINAL RANK</div>
+          <div className="flex items-baseline gap-3 mt-0.5">
+            <span className={cn("mono text-3xl font-semibold", scoreColor(rank.finalRank))}>{rank.finalRank}</span>
+            <span className={cn("text-xs font-bold tracking-wider px-2 py-0.5 rounded border", labelClasses(rank.label))}>
+              {rank.label}
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 text-xs">
+          <ScorePill label="Setup" v={rank.setupScore} />
+          <ScorePill label="Readiness" v={rank.readinessScore} />
+          <ScorePill label="Options" v={rank.optionsScore} />
+        </div>
+      </div>
+
+      {rank.penalties.length > 0 && (
+        <div className="pt-2 border-t border-border/40 space-y-1">
+          <div className="text-[10px] font-bold tracking-wider text-bearish">PENALTIES</div>
+          {rank.penalties.map((p) => (
+            <div key={p.code} className="text-[11px] flex gap-2">
+              <span className="mono text-bearish font-semibold w-8">{p.points}</span>
+              <span className="text-foreground/85">{p.reason}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function ScorePill({ label, v }: { label: string; v: number }) {
+  return (
+    <div className="text-center">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={cn("mono text-lg font-semibold", scoreColor(v))}>{v}</div>
+    </div>
   );
 }
