@@ -101,6 +101,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Cache lookup (60s memoization) ───────────────────────────────────
+    const cacheKey = `options_chain_v1:${underlying}:${limit}:${expirationGte ?? ""}:${expirationLte ?? ""}`;
+    const cached = await kvGet(cacheKey);
+    if (cached?.value) {
+      const exp = cached.expires_at ? Date.parse(cached.expires_at) : 0;
+      if (exp > Date.now()) {
+        return new Response(
+          JSON.stringify({ ...cached.value, cached: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     const params = new URLSearchParams({ limit: String(limit) });
     if (expirationGte) params.set("expiration_date.gte", expirationGte);
     if (expirationLte) params.set("expiration_date.lte", expirationLte);
