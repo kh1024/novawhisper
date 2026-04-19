@@ -250,26 +250,26 @@ export default function Scanner() {
 
   return (
     <TooltipProvider delayDuration={150}>
-      <div className="p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
+      <div className="p-4 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-start justify-between flex-wrap gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Market Scanner</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Market Scanner</h1>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Disciplined setup scoring across {rows.length} symbols · NO TRADE is a valid outcome.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="pill pill-live"><span className="live-dot" /> Live · {freshness}</span>
             <Tabs value={view} onValueChange={(v) => setView(v as View)}>
               <TabsList className="bg-surface/60 h-9">
-                <TabsTrigger value="table" className="h-7"><Table2 className="h-3.5 w-3.5 mr-1.5" />Table</TabsTrigger>
-                <TabsTrigger value="cards" className="h-7"><LayoutGrid className="h-3.5 w-3.5 mr-1.5" />Cards</TabsTrigger>
+                <TabsTrigger value="table" className="h-7"><Table2 className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Table</span></TabsTrigger>
+                <TabsTrigger value="cards" className="h-7"><LayoutGrid className="h-3.5 w-3.5 sm:mr-1.5" /><span className="hidden sm:inline">Cards</span></TabsTrigger>
               </TabsList>
             </Tabs>
             <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
               <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin" : ""}`} />
-              Refresh
+              <span className="hidden sm:inline">Refresh</span>
             </Button>
           </div>
         </div>
@@ -297,7 +297,7 @@ export default function Scanner() {
         </div>
 
         {/* Filters */}
-        <Card className="glass-card p-5 space-y-5">
+        <Card className="glass-card p-4 sm:p-5 space-y-5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <SlidersHorizontal className="h-3.5 w-3.5" /> Filters
@@ -352,10 +352,10 @@ export default function Scanner() {
             <RangeSlider label="Daily % change" value={filters.changeRange} onChange={(v) => setFilters({ ...filters, changeRange: v })} min={-15} max={15} step={0.5} display={`${filters.changeRange[0]}% – ${filters.changeRange[1]}%`} />
           </div>
 
-          <div className="flex items-center gap-5 flex-wrap pt-2 border-t border-border/40">
+          <div className="flex items-center gap-x-5 gap-y-2 flex-wrap pt-2 border-t border-border/40">
             <Toggle label="Exclude earnings ≤ 7d" checked={filters.excludeEarnings} onChange={(v) => setFilters({ ...filters, excludeEarnings: v })} />
             <Toggle label="Hide AVOID" checked={filters.hideAvoid} onChange={(v) => setFilters({ ...filters, hideAvoid: v })} />
-            <span className="text-[10px] text-muted-foreground ml-auto">
+            <span className="text-[10px] text-muted-foreground w-full sm:w-auto sm:ml-auto">
               IVR · RSI · ATR · EMA distance are <span className="text-warning">estimated</span> until live indicators wired in.
             </span>
           </div>
@@ -687,7 +687,7 @@ function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
             Open full research →
           </Button>
           <SaveToPortfolioButton {...deriveContractFromRow(row)} size="sm" />
-          <Button asChild variant="outline" size="sm" className="gap-1.5">
+          <Button asChild variant="outline" size="sm" className="gap-1.5 flex-1 sm:flex-none min-w-[120px] sm:min-w-0">
             <a
               href={`https://robinhood.com/options/chains/${encodeURIComponent(row.symbol)}`}
               target="_blank"
