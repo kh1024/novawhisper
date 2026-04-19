@@ -1,13 +1,14 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight, Bell, Copy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
 import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
+import { getOwnerKey, usePortfolio } from "@/lib/portfolio";
 import { toast } from "sonner";
 
 import { useCapitalSettings } from "@/lib/budget";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   useSettings,
   REFRESH_OPTIONS,
@@ -694,9 +695,234 @@ export default function Settings() {
         </details>
       </Card>
 
+      {/* ───────────── Position Alerts (per-account verdict-cron) ───────────── */}
+      <PositionAlertsCard />
+
       {/* ───────────── Background cron (server-side, runs even when app closed) ───────────── */}
       <BackgroundCronCard />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Position Alerts — owner key + webhook + status pill + test button
+// ─────────────────────────────────────────────────────────────────────────────
+function PositionAlertsCard() {
+  const ownerKey = getOwnerKey();
+  const { data: cfg, isLoading } = useVerdictCronConfig();
+  const { data: positions = [] } = usePortfolio();
+  const save = useSaveVerdictCronConfig();
+
+  const enabled = cfg?.enabled ?? false;
+  const savedUrl = cfg?.webhookUrl ?? "";
+  const [urlDraft, setUrlDraft] = useState<string>("");
+  const [testing, setTesting] = useState(false);
+
+  // Hydrate the draft from the loaded config exactly once.
+  useEffect(() => {
+    if (savedUrl && !urlDraft) setUrlDraft(savedUrl);
+  }, [savedUrl, urlDraft]);
+
+  const openCount = useMemo(
+    () => positions.filter((p) => p.status === "open").length,
+    [positions],
+  );
+
+  const isHttps = (u: string) => /^https:\/\//i.test(u.trim());
+  const urlValid = urlDraft.length === 0 || isHttps(urlDraft);
+
+  const persistEnabled = (next: boolean) => {
+    if (next && !isHttps(urlDraft)) {
+      toast.error("Add a valid https:// webhook URL before enabling alerts.");
+      return;
+    }
+    save.mutate(
+      { enabled: next, webhookUrl: urlDraft, alertOnWait: cfg?.alertOnWait ?? false },
+      {
+        onSuccess: () => toast.success(next ? "Position alerts enabled" : "Position alerts disabled"),
+        onError: (e) => toast.error(`Save failed: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  const persistUrl = () => {
+    if (urlDraft && !isHttps(urlDraft)) {
+      toast.error("Webhook URL must start with https://");
+      return;
+    }
+    if (urlDraft === savedUrl) return;
+    save.mutate(
+      { enabled, webhookUrl: urlDraft, alertOnWait: cfg?.alertOnWait ?? false },
+      {
+        onSuccess: () => toast.success("Webhook URL saved"),
+        onError: (e) => toast.error(`Save failed: ${(e as Error).message}`),
+      },
+    );
+  };
+
+  const sendTest = async () => {
+    if (!isHttps(urlDraft)) {
+      toast.error("Webhook URL must start with https://");
+      return;
+    }
+    setTesting(true);
+    try {
+      const sample = {
+        event: "nova_position_alert.test",
+        source: "novawhisper.settings.test",
+        ownerKey,
+        symbol: "AAPL",
+        positionId: "test-position-id",
+        from: "WAIT",
+        to: "GO",
+        status: "winning",
+        action: "hold",
+        verdict: "Test alert from NovaWhisper Settings — delivery confirmed.",
+        text: "🧪 TEST — NovaWhisper webhook is reachable.",
+        at: new Date().toISOString(),
+      };
+      const res = await fetch(urlDraft, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sample),
+        // CORS-friendly fallback so opaque success doesn't read as failure.
+        mode: "cors",
+      }).catch((e) => ({ ok: false, status: 0, statusText: String(e) } as Response));
+      if ((res as Response).ok) {
+        toast.success("Test sent — check your endpoint.");
+      } else {
+        toast.error(`Webhook responded ${(res as Response).status} ${(res as Response).statusText}`);
+      }
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // Status pill
+  let statusDot = "⚫";
+  let statusLabel = "Inactive";
+  let statusCls = "border-border bg-surface/40 text-muted-foreground";
+  if (enabled && openCount > 0) {
+    statusDot = "🟢";
+    statusLabel = `Active — monitoring ${openCount} open position${openCount === 1 ? "" : "s"}`;
+    statusCls = "border-bullish/40 bg-bullish/10 text-bullish";
+  } else if (enabled) {
+    statusDot = "🟡";
+    statusLabel = "Active — no open positions to monitor";
+    statusCls = "border-warning/40 bg-warning/10 text-warning";
+  }
+
+  return (
+    <Card className="glass-card p-6 space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Bell className="h-4 w-4 text-primary" /> Position Alerts
+        </h2>
+        <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+          Activate live monitoring of your open positions. When a gate threshold flips
+          (WAIT → GO, or EXIT triggered), NovaWhisper POSTs a JSON alert to your webhook.
+        </p>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" /> Loading alert config…
+        </div>
+      ) : (
+        <>
+          {/* Status pill */}
+          <div className={`text-xs font-medium px-3 py-2 rounded-md border inline-flex items-center gap-2 ${statusCls}`}>
+            <span aria-hidden>{statusDot}</span> {statusLabel}
+          </div>
+
+          {/* Owner key */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Your account key (auto-assigned)
+            </label>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={ownerKey}
+                className="flex-1 min-w-0 h-9 px-3 text-[11px] font-mono bg-background/60 border border-border rounded-md text-muted-foreground"
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(ownerKey);
+                  toast.success("Account key copied");
+                }}
+                className="h-9 px-3 rounded-md text-xs border border-border hover:bg-surface inline-flex items-center gap-1.5"
+              >
+                <Copy className="h-3 w-3" /> Copy
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Identifies your account for alert routing. Stored locally on this device.
+            </p>
+          </div>
+
+          {/* Webhook URL */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Alert Destination
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="url"
+                placeholder="https://hooks.slack.com/... or Discord webhook URL"
+                value={urlDraft}
+                onChange={(e) => setUrlDraft(e.target.value)}
+                onBlur={persistUrl}
+                className={`flex-1 min-w-[280px] h-10 px-3 text-sm font-mono bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${
+                  urlValid ? "border-border" : "border-bearish"
+                }`}
+              />
+              <button
+                disabled={!urlDraft || !urlValid || testing}
+                onClick={sendTest}
+                className="h-10 px-4 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+              >
+                {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                Test Webhook
+              </button>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Paste a Slack, Discord, or Zapier webhook. NovaWhisper will POST a JSON alert here when a position crosses a gate threshold.
+            </p>
+            {!urlValid && (
+              <p className="text-[10px] text-bearish">URL must start with https://</p>
+            )}
+          </div>
+
+          {/* Enable toggle */}
+          <button
+            onClick={() => persistEnabled(!enabled)}
+            disabled={save.isPending}
+            className={`w-full flex items-center justify-between gap-4 rounded-lg border p-4 text-left transition-colors ${
+              enabled
+                ? "border-primary/60 bg-primary/10"
+                : "border-border bg-surface/40 hover:bg-surface/60"
+            }`}
+          >
+            <div>
+              <div className="text-sm font-semibold">
+                {enabled ? "Monitoring is ON" : "Enable Monitoring"}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                Server checks your open positions every 5 minutes during market hours and POSTs alerts to your webhook.
+              </div>
+            </div>
+            <div className={`h-6 w-11 rounded-full relative transition-colors flex-shrink-0 ${
+              enabled ? "bg-primary" : "bg-muted"
+            }`}>
+              <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-background transition-transform ${
+                enabled ? "translate-x-[22px]" : "translate-x-0.5"
+              }`} />
+            </div>
+          </button>
+        </>
+      )}
+    </Card>
   );
 }
 
