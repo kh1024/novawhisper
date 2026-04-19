@@ -1,19 +1,23 @@
-import { Bookmark, Check, FlaskConical } from "lucide-react";
+import { Bookmark, Check, FlaskConical, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAddPosition, type NewPosition } from "@/lib/portfolio";
 import { useSettings } from "@/lib/settings";
+import { Hint } from "@/components/Hint";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import type { ValidationResult } from "@/lib/gates";
 
 interface Props extends NewPosition {
   size?: "sm" | "xs";
   className?: string;
+  /** When the validator returns BLOCKED, the Save/Buy CTA is disabled (kill switch). */
+  validation?: ValidationResult | null;
 }
 
-export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props) {
+export function SaveToPortfolioButton({ size = "sm", className, validation, ...pick }: Props) {
   const add = useAddPosition();
   const [settings] = useSettings();
   const [saved, setSaved] = useState(false);
