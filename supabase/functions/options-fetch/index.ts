@@ -2,6 +2,7 @@
 // Returns normalized option contracts with Greeks, IV, OI, volume, bid/ask.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
+import { isMassiveDown, markMassiveDown, isOutageStatus } from "../_shared/massiveOutage.ts";
 
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -208,17 +209,25 @@ Deno.serve(async (req) => {
     const TRANSIENT = new Set([502, 503, 504]);
     let r: Response | null = null;
     let lastText = "";
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await acquireMassiveToken(); // throttle to 75 req/s/instance
-      r = await fetch(url, {
-        headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
-      });
-      if (r.ok || !TRANSIENT.has(r.status)) break;
-      lastText = await r.text().catch(() => "");
-      console.warn(`[massive options] ${underlying} HTTP ${r.status} (attempt ${attempt + 1}/4) — backing off`);
-      // 500ms, 1.5s, 3.5s (+ up to 250ms jitter) — total <5.5s in worst case
-      const backoff = 500 * Math.pow(2.5, attempt) + Math.random() * 250;
-      await new Promise((res) => setTimeout(res, backoff));
+    // Kill-switch — if Massive is flagged offline, skip the upstream call
+    // entirely and fall through to the stale-cache path below.
+    const massiveDown = await isMassiveDown();
+    if (!massiveDown) {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        await acquireMassiveToken();
+        r = await fetch(url, {
+          headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
+        });
+        if (r.ok || !TRANSIENT.has(r.status)) break;
+        lastText = await r.text().catch(() => "");
+        console.warn(`[massive options] ${underlying} HTTP ${r.status} (attempt ${attempt + 1}/4) — backing off`);
+        const backoff = 500 * Math.pow(2.5, attempt) + Math.random() * 250;
+        await new Promise((res) => setTimeout(res, backoff));
+      }
+      // After all retries, if still 5xx, flag the outage so other callers skip.
+      if (r && !r.ok && isOutageStatus(r.status)) {
+        await markMassiveDown(`options HTTP ${r.status}`);
+      }
     }
     if (!r || !r.ok) {
       const text = lastText || (r ? await r.text().catch(() => "") : "");
