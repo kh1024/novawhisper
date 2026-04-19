@@ -110,23 +110,33 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   const marketCap = q.marketCap ?? (meta as any)?.marketCap;
   const r = rng(q.symbol);
 
+  // ── Extended-hours awareness ───────────────────────────────────────────
+  // During pre/post sessions, fold the extended-hours move into the working
+  // changePct so RSI, EMA distance, timing, IVR, and the NOVA verdict all
+  // reflect the gap that's actually forming. The displayed price stays the
+  // last regular-session close (q.price) — the badge in TickerPrice surfaces
+  // the extended price separately.
+  const extPct = (q.session === "pre" || q.session === "post") ? (q.extendedChangePct ?? 0) : 0;
+  const effectiveChangePct = q.changePct + extPct;
+
   // Real
   const avgVolume = estimateAvgVolume(q.symbol, marketCap);
   const relVolume = q.volume > 0 ? +(q.volume / avgVolume).toFixed(2) : 0;
 
-  // Estimated technicals (deterministic per symbol; nudged by today's %chg)
+  // Estimated technicals (deterministic per symbol; nudged by today's %chg
+  // *including* any pre/post move so the verdict updates after-hours)
   const baseRsi = 45 + r() * 25; // 45-70
-  const rsi = clamp(Math.round(baseRsi + q.changePct * 1.4), 5, 95);
+  const rsi = clamp(Math.round(baseRsi + effectiveChangePct * 1.4), 5, 95);
 
   const baseEma20 = (r() - 0.5) * 4; // -2 to +2
   const baseEma50 = (r() - 0.5) * 8; // -4 to +4
-  const emaDist20 = +(baseEma20 + q.changePct * 0.4).toFixed(2);
-  const emaDist50 = +(baseEma50 + q.changePct * 0.25).toFixed(2);
+  const emaDist20 = +(baseEma20 + effectiveChangePct * 0.4).toFixed(2);
+  const emaDist50 = +(baseEma50 + effectiveChangePct * 0.25).toFixed(2);
 
   const atrBase = SECTOR_ATR[sector] ?? 2.2;
   const atrPct = +(atrBase * (0.85 + r() * 0.4)).toFixed(2);
 
-  const ivRank = Math.round(clamp(40 + r() * 50 + Math.abs(q.changePct) * 2, 5, 98));
+  const ivRank = Math.round(clamp(40 + r() * 50 + Math.abs(effectiveChangePct) * 2, 5, 98));
 
   const earningsInDays = r() > 0.78 ? Math.floor(r() * 21) : null;
 
@@ -164,9 +174,9 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
 
   // 4) Timing: relative volume + intraday move
   const rvScore = relVolume >= 2 ? 50 : relVolume >= 1.3 ? 35 : relVolume >= 0.8 ? 20 : 5;
-  const moveScore = Math.abs(q.changePct) > 0.5 && Math.abs(q.changePct) < 5
+  const moveScore = Math.abs(effectiveChangePct) > 0.5 && Math.abs(effectiveChangePct) < 5
     ? 35
-    : Math.abs(q.changePct) >= 5
+    : Math.abs(effectiveChangePct) >= 5
       ? 15  // gap risk
       : 10;
   const timing = clamp(rvScore + moveScore);
@@ -176,7 +186,7 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   if (earningsInDays != null && earningsInDays <= 2) catalyst = 85;
   else if (earningsInDays != null && earningsInDays <= 7) catalyst = 65;
   else if (relVolume > 2.2) catalyst = 70;
-  else if (Math.abs(q.changePct) > 3) catalyst = 55;
+  else if (Math.abs(effectiveChangePct) > 3) catalyst = 55;
 
   // 6) Risk-adjusted: penalize wide-ATR + close-to-earnings combos
   let riskAdjusted = 70;
@@ -216,6 +226,11 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   if (atrPct > 4.5) warnings.push(`High volatility — ATR ${atrPct}% of price.`);
   if (rsi > 78) warnings.push(`Overbought — RSI ${rsi}.`);
   if (rsi < 22) warnings.push(`Oversold — RSI ${rsi}.`);
+  // Surface meaningful pre/post moves so traders see why the verdict shifted.
+  if ((q.session === "pre" || q.session === "post") && Math.abs(extPct) >= 1) {
+    const where = q.session === "pre" ? "Pre-market" : "After-hours";
+    warnings.push(`${where} ${extPct >= 0 ? "+" : ""}${extPct.toFixed(2)}% — verdict reflects gap.`);
+  }
 
   const whyValid: string[] = [];
   if (breakdown.liquidity > 70) whyValid.push("Deep liquidity in underlying and options.");
@@ -250,7 +265,8 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   dataQuality = clamp(dataQuality);
 
   // ── Conflict Resolution Layer (estimated for scanner) ──
-  const fakeStreak = q.changePct > 1.5 && emaDist20 > 0 ? 3 : q.changePct > 0.5 && emaDist20 > 0 ? 2 : 0;
+  // Use effectiveChangePct so pre/post gaps influence streak detection.
+  const fakeStreak = effectiveChangePct > 1.5 && emaDist20 > 0 ? 3 : effectiveChangePct > 0.5 && emaDist20 > 0 ? 2 : 0;
   const synEma8 = q.price > 0 && emaDist20 !== 0 ? q.price / (1 + emaDist20 / 100) : null;
   const crlOut = runConflictResolution({
     rsi, ema8: synEma8, spot: q.price, winningStreakDays: fakeStreak,
@@ -259,7 +275,7 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   });
 
   return {
-    symbol: q.symbol, name, sector, price: q.price, changePct: q.changePct,
+    symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
     ivRank, ivRankEst: true, atrPct, atrPctEst: true, rsi, rsiEst: true,
     emaDist20, emaDist50, emaEst: true,

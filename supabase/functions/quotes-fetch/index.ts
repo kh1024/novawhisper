@@ -18,7 +18,15 @@ interface SourceQuote {
   change: number;
   changePct: number;
   volume: number;
+  // Extended hours (only Yahoo populates these today)
+  preMarketPrice?: number | null;
+  preMarketChangePct?: number | null;
+  postMarketPrice?: number | null;
+  postMarketChangePct?: number | null;
+  marketState?: string | null;     // "PRE" | "REGULAR" | "POST" | "CLOSED" | "PREPRE" | "POSTPOST"
 }
+
+export type Session = "pre" | "regular" | "post" | "closed";
 
 interface VerifiedQuote {
   symbol: string;
@@ -31,6 +39,15 @@ interface VerifiedQuote {
   status: "verified" | "close" | "mismatch" | "stale" | "unavailable";
   diffPct: number | null;
   updatedAt: string;
+  // Extended hours
+  session: Session;
+  preMarketPrice: number | null;
+  preMarketChangePct: number | null;
+  postMarketPrice: number | null;
+  postMarketChangePct: number | null;
+  /** Most-relevant extended price for the current session (null in regular/closed). */
+  extendedPrice: number | null;
+  extendedChangePct: number | null;
   error?: string;
 }
 
@@ -219,6 +236,11 @@ async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuo
       regularMarketChange?: number;
       regularMarketChangePercent?: number;
       regularMarketVolume?: number;
+      preMarketPrice?: number;
+      preMarketChangePercent?: number;
+      postMarketPrice?: number;
+      postMarketChangePercent?: number;
+      marketState?: string;
     }> = d?.quoteResponse?.result ?? [];
     for (const row of rows) {
       const price = Number(row.regularMarketPrice);
@@ -229,6 +251,11 @@ async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuo
         change: Number(row.regularMarketChange ?? 0),
         changePct: Number(row.regularMarketChangePercent ?? 0),
         volume: Number(row.regularMarketVolume ?? 0),
+        preMarketPrice: isFinite(Number(row.preMarketPrice)) ? Number(row.preMarketPrice) : null,
+        preMarketChangePct: isFinite(Number(row.preMarketChangePercent)) ? Number(row.preMarketChangePercent) : null,
+        postMarketPrice: isFinite(Number(row.postMarketPrice)) ? Number(row.postMarketPrice) : null,
+        postMarketChangePct: isFinite(Number(row.postMarketChangePercent)) ? Number(row.postMarketChangePercent) : null,
+        marketState: row.marketState ?? null,
       });
     }
   } catch (e) {
@@ -278,6 +305,47 @@ async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
   }
 }
 
+// ── Session detection ─────────────────────────────────────────────────
+// US equities: pre 04:00–09:30 ET, regular 09:30–16:00 ET, post 16:00–20:00 ET.
+// We compute the current minute in America/New_York from the UTC clock.
+function detectSession(yahooState?: string | null): Session {
+  // Yahoo's marketState is the source of truth when present.
+  if (yahooState) {
+    const s = yahooState.toUpperCase();
+    if (s.startsWith("PRE")) return "pre";
+    if (s === "REGULAR") return "regular";
+    if (s.startsWith("POST")) return "post";
+    if (s === "CLOSED") return "closed";
+  }
+  // Fallback: derive from wall clock. Roughly handle DST by using the
+  // Intl API to get the ET hour:minute.
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour12: false,
+    weekday: "short", hour: "2-digit", minute: "2-digit",
+  });
+  const parts = fmt.formatToParts(new Date());
+  const wd = parts.find((p) => p.type === "weekday")?.value ?? "";
+  const hh = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const mm = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  if (wd === "Sat" || wd === "Sun") return "closed";
+  const minutes = hh * 60 + mm;
+  if (minutes >= 4 * 60 && minutes < 9 * 60 + 30) return "pre";
+  if (minutes >= 9 * 60 + 30 && minutes < 16 * 60) return "regular";
+  if (minutes >= 16 * 60 && minutes < 20 * 60) return "post";
+  return "closed";
+}
+
+function pickExtended(session: Session, yahoo: SourceQuote | null): { price: number | null; pct: number | null } {
+  if (!yahoo) return { price: null, pct: null };
+  if (session === "pre" && yahoo.preMarketPrice != null) {
+    return { price: yahoo.preMarketPrice, pct: yahoo.preMarketChangePct ?? null };
+  }
+  if (session === "post" && yahoo.postMarketPrice != null) {
+    return { price: yahoo.postMarketPrice, pct: yahoo.postMarketChangePct ?? null };
+  }
+  return { price: null, pct: null };
+}
+
 // Pick consensus from up to 5 sources.
 function verify(
   symbol: string,
@@ -288,6 +356,17 @@ function verify(
   stooq: SourceQuote | null,
 ): VerifiedQuote {
   const now = new Date().toISOString();
+  const session = detectSession(yahoo?.marketState);
+  const ext = pickExtended(session, yahoo);
+  const extendedFields = {
+    session,
+    preMarketPrice: yahoo?.preMarketPrice ?? null,
+    preMarketChangePct: yahoo?.preMarketChangePct ?? null,
+    postMarketPrice: yahoo?.postMarketPrice ?? null,
+    postMarketChangePct: yahoo?.postMarketChangePct ?? null,
+    extendedPrice: ext.price,
+    extendedChangePct: ext.pct,
+  };
   const sources: Record<SourceName, number | null> = {
     finnhub: finn?.price ?? null,
     "alpha-vantage": alpha?.price ?? null,
@@ -300,7 +379,7 @@ function verify(
     return {
       symbol, price: 0, change: 0, changePct: 0, volume: 0,
       sources, consensusSource: null, status: "unavailable",
-      diffPct: null, updatedAt: now, error: "All providers failed",
+      diffPct: null, updatedAt: now, ...extendedFields, error: "All providers failed",
     };
   }
   if (live.length === 1) {
@@ -309,7 +388,7 @@ function verify(
     return {
       symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
       sources, consensusSource: src.source, status: "verified",
-      diffPct: null, updatedAt: now,
+      diffPct: null, updatedAt: now, ...extendedFields,
     };
   }
   const prices = live.map((s) => s.price);
@@ -331,6 +410,7 @@ function verify(
     status,
     diffPct: +diff.toFixed(4),
     updatedAt: now,
+    ...extendedFields,
   };
 }
 

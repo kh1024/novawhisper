@@ -2,16 +2,16 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Clock, FlaskConical } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { useLiveQuotes } from "@/lib/liveData";
+import { useLiveQuotes, currentSessionET, type Session } from "@/lib/liveData";
 import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
 
-function isMarketOpen(nyDate: Date) {
-  const day = nyDate.getDay();
-  if (day === 0 || day === 6) return false;
-  const mins = nyDate.getHours() * 60 + nyDate.getMinutes();
-  return mins >= 9 * 60 + 30 && mins < 16 * 60;
-}
+const SESSION_PILL: Record<Session, { label: string; cls: string; live: boolean; tip: string }> = {
+  pre:     { label: "Pre-Market",  cls: "pill border-primary/40 bg-primary/10 text-primary", live: true,  tip: "US pre-market session (04:00–09:30 ET). Lower liquidity; refresh throttled to 2 min." },
+  regular: { label: "Market Open", cls: "pill-live",   live: true,  tip: "Regular US session (09:30–16:00 ET)." },
+  post:    { label: "After-Hours", cls: "pill border-warning/40 bg-warning/10 text-warning",  live: true,  tip: "US after-hours session (16:00–20:00 ET). Lower liquidity; refresh throttled to 2 min." },
+  closed:  { label: "Market Closed", cls: "pill-neutral", live: false, tip: "US equity market is closed. Showing the last regular-session prices." },
+};
 
 function formatInterval(ms: number) {
   if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
@@ -30,7 +30,8 @@ export function MarketHeader() {
   }, []);
 
   const ny = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const open = isMarketOpen(ny);
+  const session = currentSessionET();
+  const sessionPill = SESSION_PILL[session];
   const time = ny.toLocaleTimeString("en-US", {
     hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
   });
@@ -52,9 +53,9 @@ export function MarketHeader() {
     <header className="h-14 flex items-center gap-3 px-4 border-b border-border bg-surface/40 backdrop-blur-xl">
       <SidebarTrigger className="text-muted-foreground hover:text-foreground" />
       <div className="hidden md:flex items-center gap-2">
-        <span className={`pill ${open ? "pill-live" : "pill-neutral"}`}>
-          <span className={open ? "live-dot" : "h-1.5 w-1.5 rounded-full bg-muted-foreground inline-block"} />
-          {open ? "Market Open" : "Market Closed"}
+        <span className={sessionPill.cls} title={sessionPill.tip}>
+          <span className={sessionPill.live ? "live-dot" : "h-1.5 w-1.5 rounded-full bg-muted-foreground inline-block"} />
+          {sessionPill.label}
         </span>
         <span className="pill pill-neutral">
           <Clock className="h-3 w-3" />
