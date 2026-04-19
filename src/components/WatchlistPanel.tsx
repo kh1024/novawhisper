@@ -10,6 +10,7 @@ import type { PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
 import { Sparkline } from "@/components/Sparkline";
 import { useSma200 } from "@/lib/sma200";
+import { PickMetaRow, type Timing } from "@/components/PickMetaRow";
 
 
 interface Props {
