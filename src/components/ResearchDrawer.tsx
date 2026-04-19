@@ -17,6 +17,7 @@ import { useBudget } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
 import { NovaVerdictCard, type NovaCard } from "@/components/NovaVerdictCard";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { useEventRiskSignals } from "@/lib/sentimentSignals";
 import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
@@ -523,19 +524,34 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         <div className="text-muted-foreground">spread {c.spreadPct.toFixed(1)}%</div>
                       </div>
                       <div className="mono text-lg font-semibold w-10 text-right">{score}</div>
-                      <SaveToPortfolioButton
-                        size="xs"
-                        symbol={symbol}
-                        optionType={c.type}
-                        direction="long"
-                        strike={c.strike}
-                        expiry={c.expiration}
-                        contracts={1}
-                        entryPremium={mid > 0 ? mid : null}
-                        entryUnderlying={q?.price ?? null}
-                        thesis={`Drawer pick · score ${score} · ${annualized.toFixed(0)}% ann.`}
-                        source="research-drawer"
-                      />
+                      <div className="flex flex-col gap-1">
+                        <SaveToWatchlistButton
+                          size="xs"
+                          symbol={symbol}
+                          direction="long"
+                          optionType={c.type}
+                          strike={c.strike}
+                          expiry={c.expiration}
+                          entryPrice={q?.price ?? null}
+                          premiumEstimate={mid > 0 ? `$${mid.toFixed(2)}` : null}
+                          thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`}
+                          source="research-drawer"
+                          meta={{ score, annualized, dte: c.dte }}
+                        />
+                        <SaveToPortfolioButton
+                          size="xs"
+                          symbol={symbol}
+                          optionType={c.type}
+                          direction="long"
+                          strike={c.strike}
+                          expiry={c.expiration}
+                          contracts={1}
+                          entryPremium={mid > 0 ? mid : null}
+                          entryUnderlying={q?.price ?? null}
+                          thesis={`Drawer pick · score ${score} · ${annualized.toFixed(0)}% ann.`}
+                          source="research-drawer"
+                        />
+                      </div>
                     </Card>
                     );
                   })}

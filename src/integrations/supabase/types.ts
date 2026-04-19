@@ -300,7 +300,9 @@ export type Database = {
       }
       verdict_cron_config: {
         Row: {
+          alert_on_buy: boolean
           alert_on_wait: boolean
+          alert_watchlist: boolean
           created_at: string
           enabled: boolean
           id: string
@@ -311,7 +313,9 @@ export type Database = {
           webhook_url: string | null
         }
         Insert: {
+          alert_on_buy?: boolean
           alert_on_wait?: boolean
+          alert_watchlist?: boolean
           created_at?: string
           enabled?: boolean
           id?: string
@@ -322,7 +326,9 @@ export type Database = {
           webhook_url?: string | null
         }
         Update: {
+          alert_on_buy?: boolean
           alert_on_wait?: boolean
+          alert_watchlist?: boolean
           created_at?: string
           enabled?: boolean
           id?: string
@@ -331,6 +337,81 @@ export type Database = {
           owner_key?: string
           updated_at?: string
           webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      watchlist_items: {
+        Row: {
+          bias: string | null
+          created_at: string
+          direction: string
+          entry_price: number | null
+          expiry: string | null
+          id: string
+          last_signal: string | null
+          last_signal_at: string | null
+          meta: Json
+          option_type: string
+          owner_key: string
+          premium_estimate: string | null
+          probability: string | null
+          risk: string | null
+          source: string | null
+          strategy: string | null
+          strike: number | null
+          strike_short: number | null
+          symbol: string
+          thesis: string | null
+          tier: string | null
+          updated_at: string
+        }
+        Insert: {
+          bias?: string | null
+          created_at?: string
+          direction: string
+          entry_price?: number | null
+          expiry?: string | null
+          id?: string
+          last_signal?: string | null
+          last_signal_at?: string | null
+          meta?: Json
+          option_type: string
+          owner_key: string
+          premium_estimate?: string | null
+          probability?: string | null
+          risk?: string | null
+          source?: string | null
+          strategy?: string | null
+          strike?: number | null
+          strike_short?: number | null
+          symbol: string
+          thesis?: string | null
+          tier?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bias?: string | null
+          created_at?: string
+          direction?: string
+          entry_price?: number | null
+          expiry?: string | null
+          id?: string
+          last_signal?: string | null
+          last_signal_at?: string | null
+          meta?: Json
+          option_type?: string
+          owner_key?: string
+          premium_estimate?: string | null
+          probability?: string | null
+          risk?: string | null
+          source?: string | null
+          strategy?: string | null
+          strike?: number | null
+          strike_short?: number | null
+          symbol?: string
+          thesis?: string | null
+          tier?: string | null
+          updated_at?: string
         }
         Relationships: []
       }
