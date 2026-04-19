@@ -6,9 +6,16 @@
 import { TICKER_UNIVERSE } from "./mockData";
 import type { VerifiedQuote } from "./liveData";
 import { runConflictResolution, type CrlVerdict, type RiskBadge } from "./conflictResolution";
+import {
+  detectTimeState, inferRegime, adjustForRegime, scoreToGrade,
+  type ConfidenceGrade, type MarketRegime,
+} from "./novaBrain";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
+
+// Re-export so callers can import grade types from one place.
+export type { ConfidenceGrade, MarketRegime };
 
 export interface ScoreBreakdown {
   liquidity: number;     // 0-100
@@ -41,7 +48,12 @@ export interface SetupRow {
   earningsInDays: number | null;
   bias: Bias;
   trendLabel: string;
-  setupScore: number;         // 0-100
+  setupScore: number;         // 0-100 (regime + time-state adjusted)
+  rawSetupScore: number;      // 0-100 (pre-adjustment, for transparency)
+  grade: ConfidenceGrade;     // A / B / C / D from NOVA brain
+  regime: MarketRegime;       // current inferred regime
+  timeStateLabel: string;     // e.g. "Power Hour"
+  novaNotes: string[];        // why the regime/time-state nudged the score
   breakdown: ScoreBreakdown;
   readiness: Readiness;
   warnings: string[];
@@ -103,12 +115,14 @@ function estimateOptionsLiquidity(symbol: string, marketCap?: number) {
   return 48;
 }
 
-export function computeSetup(q: VerifiedQuote): SetupRow {
+export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; timeStateLabel?: string; timeState?: ReturnType<typeof detectTimeState> }): SetupRow {
   const meta = TICKER_UNIVERSE.find((t) => t.symbol === q.symbol);
   const sector = q.sector ?? meta?.sector ?? "—";
   const name = q.name ?? meta?.name ?? q.symbol;
   const marketCap = q.marketCap ?? (meta as any)?.marketCap;
   const r = rng(q.symbol);
+  const time = ctx?.timeState ?? detectTimeState();
+  const regime: MarketRegime = ctx?.regime ?? "sideways";
 
   // ── Extended-hours awareness ───────────────────────────────────────────
   // During pre/post sessions, fold the extended-hours move into the working
@@ -205,8 +219,8 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
     riskAdjusted: Math.round(riskAdjusted),
   };
 
-  // Weighted final
-  const setupScore = Math.round(
+  // Weighted final (raw, before regime/time-state adjustment)
+  const rawSetupScore = Math.round(
     breakdown.liquidity   * 0.22 +
     breakdown.technical   * 0.22 +
     breakdown.volatility  * 0.14 +
@@ -214,6 +228,15 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
     breakdown.catalyst    * 0.10 +
     breakdown.riskAdjusted * 0.14
   );
+
+  // NOVA brain — adjust for current regime + time-state
+  const adj = adjustForRegime({
+    rawScore: rawSetupScore, bias, ivRank, timeState: time.state, regime,
+  });
+  const setupScore = adj.score;
+  const novaNotes = adj.notes;
+  const grade = scoreToGrade(setupScore);
+  const timeStateLabel = ctx?.timeStateLabel ?? time.label;
 
   // Warnings
   const warnings: string[] = [];
@@ -280,7 +303,8 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
     ivRank, ivRankEst: true, atrPct, atrPctEst: true, rsi, rsiEst: true,
     emaDist20, emaDist50, emaEst: true,
     optionsLiquidity, earningsInDays, bias, trendLabel,
-    setupScore, breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
+    setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
+    breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
     status: q.status,
     crl: {
       verdict: crlOut.verdict,
@@ -291,6 +315,18 @@ export function computeSetup(q: VerifiedQuote): SetupRow {
   };
 }
 
-export function computeSetups(quotes: VerifiedQuote[]): SetupRow[] {
-  return quotes.map(computeSetup);
+export function computeSetups(quotes: VerifiedQuote[], ctx?: { regime?: MarketRegime }): SetupRow[] {
+  // Infer regime once per scan from index quotes if not provided.
+  const time = detectTimeState();
+  let regime: MarketRegime = ctx?.regime ?? "sideways";
+  if (!ctx?.regime) {
+    const find = (s: string) => quotes.find((q) => q.symbol === s);
+    regime = inferRegime({
+      spyChangePct: find("SPY")?.changePct ?? null,
+      qqqChangePct: find("QQQ")?.changePct ?? null,
+      iwmChangePct: find("IWM")?.changePct ?? null,
+      diaChangePct: find("DIA")?.changePct ?? null,
+    }).regime;
+  }
+  return quotes.map((q) => computeSetup(q, { regime, timeState: time, timeStateLabel: time.label }));
 }
