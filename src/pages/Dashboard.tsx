@@ -439,9 +439,15 @@ export default function Dashboard() {
                     )}
                     <NovaGuardBadges guard={guard} />
                   </div>
-                  <div className={`mono text-[11px] mt-1 font-semibold ${p.bias === "bullish" ? "text-bullish" : p.bias === "bearish" ? "text-bearish" : "text-foreground"}`}>
-                    ${p.strike} {isPut ? "PUT" : "CALL"} · exp {p.expiration}
-                  </div>
+                  <PickMetaRow
+                    className="mt-1.5"
+                    bias={p.bias}
+                    optionType={isPut ? "put" : "call"}
+                    strike={p.strike}
+                    expiry={p.expiration}
+                    tier={p.riskBucket}
+                    timing={blocked ? "avoid" : action === "BUY NOW" ? "ready" : action === "AVOID" ? "avoid" : undefined}
+                  />
                   <div className="text-xs text-muted-foreground truncate mt-0.5">{p.reason}</div>
                 </div>
                 <div className="text-right shrink-0">
