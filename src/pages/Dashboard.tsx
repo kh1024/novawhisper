@@ -32,11 +32,29 @@ export default function Dashboard() {
   const allPicks = useMemo(() => getMockPicks(60), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
+  const [novaSpec] = useNovaFilter();
+  const novaActive = isFilterActive(novaSpec);
 
-  const picks = useMemo(
-    () => allPicks.filter((p) => p.riskBucket === riskTab).slice(0, 6),
-    [allPicks, riskTab]
-  );
+  const picks = useMemo(() => {
+    // When NOVA filter is active, ignore the risk tab so the user's natural-
+    // language ask drives the result set across all buckets.
+    const base = novaActive ? allPicks : allPicks.filter((p) => p.riskBucket === riskTab);
+    return base
+      .filter((p) => pickMatchesFilter({
+        symbol: p.symbol,
+        strategy: p.strategy,
+        riskBucket: p.riskBucket,
+        bias: p.bias,
+        optionType: p.strategy.includes("put") ? "put" : "call",
+        expiration: p.expiration,
+        dte: p.dte,
+        premium: p.premium,
+        score: p.score,
+        annualized: p.annualized,
+        earningsInDays: p.earningsInDays ?? null,
+      }, novaSpec))
+      .slice(0, novaActive ? 12 : 6);
+  }, [allPicks, riskTab, novaSpec, novaActive]);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
