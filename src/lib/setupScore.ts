@@ -303,7 +303,8 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
     ivRank, ivRankEst: true, atrPct, atrPctEst: true, rsi, rsiEst: true,
     emaDist20, emaDist50, emaEst: true,
     optionsLiquidity, earningsInDays, bias, trendLabel,
-    setupScore, breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
+    setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
+    breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
     status: q.status,
     crl: {
       verdict: crlOut.verdict,
@@ -314,6 +315,18 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   };
 }
 
-export function computeSetups(quotes: VerifiedQuote[]): SetupRow[] {
-  return quotes.map(computeSetup);
+export function computeSetups(quotes: VerifiedQuote[], ctx?: { regime?: MarketRegime }): SetupRow[] {
+  // Infer regime once per scan from index quotes if not provided.
+  const time = detectTimeState();
+  let regime: MarketRegime = ctx?.regime ?? "sideways";
+  if (!ctx?.regime) {
+    const find = (s: string) => quotes.find((q) => q.symbol === s);
+    regime = inferRegime({
+      spyChangePct: find("SPY")?.changePct ?? null,
+      qqqChangePct: find("QQQ")?.changePct ?? null,
+      iwmChangePct: find("IWM")?.changePct ?? null,
+      diaChangePct: find("DIA")?.changePct ?? null,
+    }).regime;
+  }
+  return quotes.map((q) => computeSetup(q, { regime, timeState: time, timeStateLabel: time.label }));
 }
