@@ -110,7 +110,19 @@ const readinessMeta = (r: Readiness) => {
 };
 
 const scoreColor = (n: number) =>
-  n >= 75 ? "text-bullish" : n >= 55 ? "text-foreground" : n >= 40 ? "text-warning" : "text-bearish";
+  n >= 70 ? "text-bullish" : n >= 45 ? "text-foreground" : "text-bearish";
+
+// ── Metric color rules (red = bad, green = good, white = neutral) ─────────────
+// Uniform 3-tier coloring for the scanner table so the user can scan a row and
+// instantly read "good/neutral/bad" per metric without parsing numbers.
+const ivrColor = (n: number) =>
+  n < 30 ? "text-bullish" : n > 60 ? "text-bearish" : "text-foreground";
+const rsiColor = (n: number) =>
+  n < 30 || n > 70 ? "text-bearish" : n >= 45 && n <= 60 ? "text-bullish" : "text-foreground";
+const atrColor = (n: number) =>
+  n < 2 ? "text-bullish" : n > 4 ? "text-bearish" : "text-foreground";
+const liqColor = (n: number) =>
+  n >= 60 ? "text-bullish" : n < 30 ? "text-bearish" : "text-foreground";
 
 function ScoreBar({ label, value, Icon }: { label: string; value: number; Icon: any }) {
   return (
@@ -373,10 +385,12 @@ export default function Scanner() {
                     {[
                       { k: "Ticker" }, { k: "Last" }, { k: "% Chg" },
                       { k: "Rel Vol", tip: "Volume vs estimated avg" },
-                      { k: "Trend" }, { k: "IVR", tip: "Estimated until live IV wired" },
-                      { k: "RSI", tip: "Estimated" }, { k: "ATR%", tip: "Estimated" },
-                      { k: "Opt Liq", tip: "Options liquidity proxy" },
-                      { k: "Setup", tip: "Weighted final score 0–100" },
+                      { k: "Trend" },
+                      { k: "IVR", tip: "IV Rank — green <30 (cheap premium), red >60 (rich premium)" },
+                      { k: "RSI", tip: "Estimated — green 45–60 (healthy), red <30 or >70 (over-extended)" },
+                      { k: "ATR%", tip: "Estimated — green <2% (calm), red >4% (volatile)" },
+                      { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
+                      { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
                       { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
                       { k: "Readiness" }, { k: "" },
                     ].map((h) => (
@@ -438,10 +452,10 @@ export default function Scanner() {
                               <BIcon className="h-3 w-3" />{r.bias}
                             </span>
                           </td>
-                          <td className="px-3 py-3 mono"><EstNum n={r.ivRank} est /></td>
-                          <td className="px-3 py-3 mono"><EstNum n={r.rsi} est /></td>
-                          <td className="px-3 py-3 mono"><EstNum n={r.atrPct} est suffix="%" /></td>
-                          <td className="px-3 py-3 mono">{r.optionsLiquidity}</td>
+                          <td className="px-3 py-3 mono"><EstNum n={r.ivRank} est className={ivrColor(r.ivRank)} /></td>
+                          <td className="px-3 py-3 mono"><EstNum n={r.rsi} est className={rsiColor(r.rsi)} /></td>
+                          <td className="px-3 py-3 mono"><EstNum n={r.atrPct} est suffix="%" className={atrColor(r.atrPct)} /></td>
+                          <td className={cn("px-3 py-3 mono font-semibold", liqColor(r.optionsLiquidity))}>{r.optionsLiquidity}</td>
                           <td className="px-3 py-3">
                             <div className={cn("mono font-semibold text-base", scoreColor(r.setupScore))}>{r.setupScore}</div>
                           </td>
@@ -568,11 +582,11 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   );
 }
 
-function EstNum({ n, est, suffix = "" }: { n: number; est?: boolean; suffix?: string }) {
+function EstNum({ n, est, suffix = "", className }: { n: number; est?: boolean; suffix?: string; className?: string }) {
   return (
-    <span className="inline-flex items-baseline gap-1">
+    <span className={cn("inline-flex items-baseline gap-1 font-semibold", className)}>
       {n}{suffix}
-      {est && <span className="text-[8px] text-warning/80">·est</span>}
+      {est && <span className="text-[8px] text-warning/80 font-normal">·est</span>}
     </span>
   );
 }
