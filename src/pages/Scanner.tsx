@@ -259,32 +259,65 @@ export default function Scanner() {
 
   const [novaSpec] = useNovaFilter();
 
-  // ── UNIFIED LABEL SYSTEM (declared early so the filter below can use it) ──
-  // ONE label per row, used by the filter, top cards, AND the row badge.
-  // Source of truth: Final Rank's ActionLabel with explicit overrides:
-  //   1. Guard block on a BUY NOW → BLOCKED
-  //   2. CRL says EXIT + owned    → EXIT
-  //   3. Pick expiry STALE        → AVOID
+  // ── UNIFIED VERDICT MODEL (declared early so the filter below can use it) ──
+  // Every row is funneled through computeVerdict() so the summary cards, the
+  // Action column, and any other consumer all read from the same map. This
+  // makes summary-vs-row mismatches impossible by construction.
+  const verdictByRow = useMemo<Map<string, VerdictResult>>(() => {
+    const m = new Map<string, VerdictResult>();
+    for (const r of rows) {
+      const rk = rankMap.get(r.symbol)?.rank;
+      const exp = expiryStatus.get(`scanner:${r.symbol}`);
+      const guard = evaluateGuards({
+        symbol: r.symbol,
+        livePrice: r.price,
+        pickPrice: r.price,
+        optionType: r.bias === "bearish" ? "put" : "call",
+        direction: "long",
+        strike: r.price,
+        sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+        riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
+      });
+      const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
+      const upstream =
+        guard.shouldBlockSignal && rk?.label === "BUY NOW" ? "BLOCKED"
+        : (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) ? "EXIT"
+        : rk?.label ?? "WAIT";
+      const v = computeVerdict({
+        symbol: r.symbol,
+        price: r.price,
+        changePct: r.changePct,
+        setupScore: r.setupScore,
+        finalRank: rk?.finalRank ?? null,
+        rsi: r.rsi,
+        optionsLiquidity: r.optionsLiquidity,
+        earningsInDays: r.earningsInDays,
+        rawBias: r.bias,
+        optionType: r.bias === "bearish" ? "put" : "call",
+        strike: Math.max(1, Math.round(r.price / (r.price >= 100 ? 5 : 1)) * (r.price >= 100 ? 5 : 1)),
+        budget: maxLossBudget,
+        riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
+        isHardBlocked: guard.shouldBlockSignal,
+        isStale: exp?.isStale ?? false,
+        isTimedOut: exp?.isTimedOut ?? false,
+        upstreamLabel: upstream,
+        isReady: rk?.label === "BUY NOW" && !guard.shouldBlockSignal,
+      });
+      m.set(r.symbol, v);
+    }
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, rankMap, expiryStatus, sma, ownedSymbols, maxLossBudget]);
+
+  /** Legacy unified label — kept for the existing filter shape; derives from
+   *  the new verdict model so the Scanner can never disagree with itself. */
   type RowLabel = ActionLabel | "BLOCKED";
   const labelFor = (r: SetupRow): RowLabel => {
-    const rk = rankMap.get(r.symbol)?.rank;
-    if (!rk) return "WAIT";
-    const exp = expiryStatus.get(`scanner:${r.symbol}`);
-    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
-    const guard = evaluateGuards({
-      symbol: r.symbol,
-      livePrice: r.price,
-      pickPrice: r.price,
-      optionType: r.bias === "bearish" ? "put" : "call",
-      direction: "long",
-      strike: r.price,
-      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
-      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
-    });
-    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
-    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
-    if (exp?.isStale) return "AVOID";
-    return rk.label;
+    const v = verdictByRow.get(r.symbol)?.verdict;
+    if (v === "Buy Now") return "BUY NOW";
+    if (v === "Watchlist") return "WATCHLIST";
+    if (v === "Wait") return "WAIT";
+    return "AVOID";
   };
 
 
