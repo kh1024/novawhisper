@@ -215,6 +215,29 @@ Deno.serve(async (req) => {
     };
     // Best-effort write-through to KV so subsequent loads (within 60s) skip Polygon.
     kvSet(cacheKey, payload, CACHE_TTL_MS);
+
+    // Record today's ATM IV into iv_history (idempotent per UTC day per symbol).
+    // Only fires when we have a usable underlying price + a finite ATM IV.
+    try {
+      const spot = contracts.find((c) => Number.isFinite(c.underlyingPrice as number))?.underlyingPrice ?? null;
+      if (spot && spot > 0) {
+        const callsWithIv = contracts.filter((c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv));
+        let best: OptionContract | null = null;
+        let bestDist = Infinity;
+        for (const c of callsWithIv) {
+          const d = Math.abs(c.strike - spot);
+          if (d < bestDist) { best = c; bestDist = d; }
+        }
+        const atmIv = best?.iv ?? null;
+        if (atmIv != null) {
+          // Fire-and-forget; don't await — never block the chain response.
+          recordAtmIv(underlying, atmIv);
+        }
+      }
+    } catch (e) {
+      console.warn("[iv_history] record skipped", e);
+    }
+
     return new Response(
       JSON.stringify(payload),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
