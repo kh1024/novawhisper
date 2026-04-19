@@ -236,7 +236,10 @@ export default function Dashboard() {
                                 </span>
                               </div>
                               <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
-                              <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
+                              <div className="flex items-center gap-1 mt-1.5">
+                                <div className={`pill ${meta.cls} text-[9px]`}>{meta.label}</div>
+                                <QuoteSourceChip quote={e} />
+                              </div>
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" className="text-xs max-w-[220px]">
