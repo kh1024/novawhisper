@@ -181,22 +181,23 @@ Deno.serve(async (req) => {
     if (expirationLte) params.set("expiration_date.lte", expirationLte);
     const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}?${params}`;
 
-    // Retry transient upstream errors (502/503/504) with short exponential
-    // backoff — Massive occasionally hiccups for ~1s and surfacing those to
-    // the UI as red errors is misleading.
+    // Retry transient upstream errors (502/503/504) with exponential backoff
+    // + jitter. Massive 502s typically clear within 2-5s, so we wait longer
+    // than the original 250/750ms which often retried before recovery.
     const TRANSIENT = new Set([502, 503, 504]);
     let r: Response | null = null;
     let lastText = "";
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       await acquireMassiveToken(); // throttle to 75 req/s/instance
       r = await fetch(url, {
         headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
       });
       if (r.ok || !TRANSIENT.has(r.status)) break;
       lastText = await r.text().catch(() => "");
-      console.warn(`[massive options] ${underlying} HTTP ${r.status} (attempt ${attempt + 1}/3) — backing off`);
-      // 250ms, 750ms — total <1.1s extra latency in the worst case
-      await new Promise((res) => setTimeout(res, 250 * (attempt === 0 ? 1 : 3)));
+      console.warn(`[massive options] ${underlying} HTTP ${r.status} (attempt ${attempt + 1}/4) — backing off`);
+      // 500ms, 1.5s, 3.5s (+ up to 250ms jitter) — total <5.5s in worst case
+      const backoff = 500 * Math.pow(2.5, attempt) + Math.random() * 250;
+      await new Promise((res) => setTimeout(res, backoff));
     }
     if (!r || !r.ok) {
       const text = lastText || (r ? await r.text().catch(() => "") : "");
