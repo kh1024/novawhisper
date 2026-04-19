@@ -29,6 +29,7 @@ import { useSettings } from "@/lib/settings";
 import { useBudget } from "@/lib/budget";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
+import { WatchlistPanel } from "@/components/WatchlistPanel";
 import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
