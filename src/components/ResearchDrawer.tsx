@@ -552,6 +552,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                           source="research-drawer"
                         />
                       </div>
+                    </Card>
                     );
                   })}
                 </TabsContent>
