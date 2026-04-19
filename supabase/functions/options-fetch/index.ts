@@ -41,6 +41,47 @@ async function kvSet(key: string, value: unknown, ttlMs: number): Promise<void> 
   } catch { /* best effort */ }
 }
 
+// ── ATM IV history recording ──────────────────────────────────────────
+// One snapshot per (symbol, UTC date). Skipped (no-op) if iv_history table
+// hasn't been created yet — this keeps the function safe to deploy ahead of
+// the migration. Uses the kv_cache as a same-day dedupe to avoid redundant
+// PostgREST round-trips for repeated chain fetches on the same symbol.
+async function recordAtmIv(symbol: string, atmIv: number | null): Promise<void> {
+  if (!SUPABASE_URL || !SERVICE_ROLE) return;
+  if (atmIv == null || !Number.isFinite(atmIv) || atmIv <= 0) return;
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
+  const dedupeKey = `iv_history_written:${symbol}:${today}`;
+  const seen = await kvGet(dedupeKey);
+  if (seen?.value) {
+    const exp = seen.expires_at ? Date.parse(seen.expires_at) : 0;
+    if (exp > Date.now()) return;
+  }
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/iv_history?on_conflict=symbol,as_of`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE,
+        Authorization: `Bearer ${SERVICE_ROLE}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=ignore-duplicates,return=minimal",
+      },
+      body: JSON.stringify({ symbol, as_of: today, iv: atmIv }),
+    });
+    if (r.ok || r.status === 409) {
+      // Mark as recorded for ~26h so we only attempt once per UTC day per symbol.
+      kvSet(dedupeKey, { ok: true }, 26 * 60 * 60_000);
+    } else {
+      // 404 = table not created yet (pre-migration). Don't spam logs.
+      if (r.status !== 404) {
+        const t = await r.text().catch(() => "");
+        console.warn(`[iv_history] ${symbol} write HTTP ${r.status}: ${t.slice(0, 200)}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`[iv_history] ${symbol} write error`, e);
+  }
+}
+
 interface OptionContract {
   ticker: string;             // e.g. "O:AAPL250117C00200000"
   underlying: string;
@@ -174,6 +215,29 @@ Deno.serve(async (req) => {
     };
     // Best-effort write-through to KV so subsequent loads (within 60s) skip Polygon.
     kvSet(cacheKey, payload, CACHE_TTL_MS);
+
+    // Record today's ATM IV into iv_history (idempotent per UTC day per symbol).
+    // Only fires when we have a usable underlying price + a finite ATM IV.
+    try {
+      const spot = contracts.find((c) => Number.isFinite(c.underlyingPrice as number))?.underlyingPrice ?? null;
+      if (spot && spot > 0) {
+        const callsWithIv = contracts.filter((c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv));
+        let best: OptionContract | null = null;
+        let bestDist = Infinity;
+        for (const c of callsWithIv) {
+          const d = Math.abs(c.strike - spot);
+          if (d < bestDist) { best = c; bestDist = d; }
+        }
+        const atmIv = best?.iv ?? null;
+        if (atmIv != null) {
+          // Fire-and-forget; don't await — never block the chain response.
+          recordAtmIv(underlying, atmIv);
+        }
+      }
+    } catch (e) {
+      console.warn("[iv_history] record skipped", e);
+    }
+
     return new Response(
       JSON.stringify(payload),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },

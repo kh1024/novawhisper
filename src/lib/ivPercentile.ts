@@ -89,3 +89,82 @@ export function ivpFromChain(
     ivHigh: range.high,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// True 52-week IVP path — reads accumulated daily ATM-IV from `iv_history`.
+// Activates automatically once enough samples (≥60 days) have accumulated.
+// Until then callers should fall back to `ivpFromChain`.
+// ─────────────────────────────────────────────────────────────────────────
+
+const HISTORY_MIN_SAMPLES = 60;
+const HISTORY_LOOKBACK_DAYS = 252; // ~52 trading weeks
+// In-memory memo so we don't refetch the same series repeatedly within a session.
+const _historyCache = new Map<string, { at: number; values: number[] }>();
+const HISTORY_TTL_MS = 15 * 60_000;
+
+/**
+ * Fetch up to 252 most recent ATM-IV samples for `symbol` from iv_history.
+ * Returns `null` when the table is unavailable, or the symbol has no rows.
+ * Memoized for 15 minutes per symbol.
+ */
+export async function fetchIvHistory(symbol: string): Promise<number[] | null> {
+  const key = symbol.toUpperCase();
+  const cached = _historyCache.get(key);
+  if (cached && Date.now() - cached.at < HISTORY_TTL_MS) return cached.values;
+  try {
+    // Lazy import to keep this module tree-shakeable for tests that don't touch Supabase.
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data, error } = await (supabase.from as any)("iv_history")
+      .select("iv,as_of")
+      .eq("symbol", key)
+      .order("as_of", { ascending: false })
+      .limit(HISTORY_LOOKBACK_DAYS);
+    if (error || !data || data.length === 0) return null;
+    const values = (data as { iv: number }[])
+      .map((r) => Number(r.iv))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    _historyCache.set(key, { at: Date.now(), values });
+    return values;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compute IVP from a 252-day history series: % of historical samples that are
+ * strictly below `currentIV`. Returns null when not enough samples exist.
+ */
+export function ivpFromHistory(currentIV: number, history: number[] | null | undefined): number | null {
+  if (!history || history.length < HISTORY_MIN_SAMPLES) return null;
+  if (!Number.isFinite(currentIV)) return null;
+  const below = history.reduce((n, v) => (v < currentIV ? n + 1 : n), 0);
+  return Math.round((below / history.length) * 100);
+}
+
+/**
+ * Preferred end-to-end IVP: try true 52-week history first, fall back to the
+ * chain-envelope proxy. Async because history requires a Supabase round-trip.
+ */
+export async function ivpPreferred(
+  symbol: string,
+  contracts: OptionContract[] | null | undefined,
+  spot: number | null | undefined,
+  type: "call" | "put",
+): Promise<{ ivp: number; currentIV: number; ivLow: number; ivHigh: number; source: "history" | "chain" } | null> {
+  const chainResult = ivpFromChain(contracts, spot, type);
+  if (!chainResult) return null;
+  const history = await fetchIvHistory(symbol);
+  const histIvp = ivpFromHistory(chainResult.currentIV, history);
+  if (histIvp != null && history) {
+    const lo = Math.min(...history);
+    const hi = Math.max(...history);
+    return {
+      ivp: histIvp,
+      currentIV: chainResult.currentIV,
+      ivLow: lo,
+      ivHigh: hi,
+      source: "history",
+    };
+  }
+  return { ...chainResult, source: "chain" };
+}
