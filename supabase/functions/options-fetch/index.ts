@@ -47,7 +47,8 @@ async function kvSet(key: string, value: unknown, ttlMs: number): Promise<void> 
 // the migration. Uses the kv_cache as a same-day dedupe to avoid redundant
 // PostgREST round-trips for repeated chain fetches on the same symbol.
 async function recordAtmIv(symbol: string, atmIv: number | null): Promise<void> {
-  if (!SUPABASE_URL || !SERVICE_ROLE) return;
+  console.log(`[iv_history] recordAtmIv invoked symbol=${symbol} atmIv=${atmIv}`);
+  if (!SUPABASE_URL || !SERVICE_ROLE) { console.warn("[iv_history] missing SUPABASE_URL/SERVICE_ROLE"); return; }
   if (atmIv == null || !Number.isFinite(atmIv) || atmIv <= 0) return;
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
   const dedupeKey = `iv_history_written:${symbol}:${today}`;
