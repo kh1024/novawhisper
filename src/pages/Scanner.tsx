@@ -28,6 +28,8 @@ import { PickExpiryChips } from "@/components/PickExpiryChips";
 import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
+import { NovaFilterBar } from "@/components/NovaFilterBar";
+import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
