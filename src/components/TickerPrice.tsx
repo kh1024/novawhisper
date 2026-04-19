@@ -6,6 +6,7 @@
 //   • <FreshnessBadge>      — "12s ago · realtime/delayed/stale" trust pill
 //   • Pre/After-hours pill  — automatic during PRE/AH sessions
 import { useLiveQuotes, sessionLabel, type VerifiedQuote } from "@/lib/liveData";
+import { useLiveTick } from "@/lib/liveTicks";
 import { cn } from "@/lib/utils";
 import { QuoteSourceChip } from "@/components/QuoteSourceChip";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
@@ -36,12 +37,15 @@ interface PillProps {
 
 function FetchedTickerPrice({ symbol, className, showChange, hideSource, showFreshness }: { symbol: string; className?: string; showChange?: boolean; hideSource?: boolean; showFreshness?: boolean }) {
   const { data } = useLiveQuotes([symbol], { refetchMs: 60_000 });
+  const live = useLiveTick(symbol);
   const q = data?.find((x) => x.symbol === symbol);
   if (!q || q.price == null) return null;
+  const cachedTs = q.updatedAt ? new Date(q.updatedAt).getTime() : 0;
+  const px = live && live.ts > cachedTs ? live.price : q.price;
   const ext = (q.session === "pre" || q.session === "post") && q.extendedPrice != null
     ? { session: q.session, price: q.extendedPrice, pct: q.extendedChangePct ?? null }
     : null;
-  return <Pill px={q.price} pct={q.changePct} className={className} showChange={showChange} ext={ext} quote={q} hideSource={hideSource} showFreshness={showFreshness} />;
+  return <Pill px={px} pct={q.changePct} className={className} showChange={showChange} ext={ext} quote={q} hideSource={hideSource} showFreshness={showFreshness} />;
 }
 
 function Pill({ px, pct, className, showChange, ext, quote, hideSource, showFreshness }: PillProps) {

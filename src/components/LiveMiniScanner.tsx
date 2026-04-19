@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
+import { useLiveTicks } from "@/lib/liveTicks";
 import { computeSetups } from "@/lib/setupScore";
 import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
@@ -23,6 +24,7 @@ export function LiveMiniScanner() {
   // (N round-trips, expensive); the per-symbol chain on /scanner already drives
   // the gate-level IVP, so we leave realIvpBySymbol off here on purpose.
   const symbols = useMemo(() => (quotes ?? []).map((q) => q.symbol), [quotes]);
+  const liveTicks = useLiveTicks(symbols);
   const sma = useSma200(symbols);
   const earnings = useEarnings(symbols);
   const closesBySymbol = useMemo(() => {
@@ -105,7 +107,7 @@ export function LiveMiniScanner() {
                 <tr key={s.symbol} className="border-b border-border/40 last:border-0 hover:bg-surface/40 transition-colors">
                   <td className="p-3 font-semibold mono">{s.symbol}</td>
                   <td className="p-3"><span className={`pill ${tone}`}>{s.bias}</span></td>
-                  <td className="p-3 text-right mono">${s.price.toFixed(2)}</td>
+                  <td className="p-3 text-right mono">${(liveTicks.get(s.symbol)?.price ?? s.price).toFixed(2)}</td>
                   <td className="p-3 text-right mono">{s.setupScore}</td>
                   <td className="p-3 text-right mono">{rank.readinessScore}</td>
                   <td className="p-3 pr-4 text-right">
