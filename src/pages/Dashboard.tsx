@@ -169,7 +169,8 @@ export default function Dashboard() {
           {picks.length === 0 && (
             <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
           )}
-          <div className="space-y-2">
+          {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
+          <div className="space-y-2 min-h-[480px]">
             {picks.map((p) => {
               const isPut = p.strategy.includes("put");
               const optionType = isPut ? "put" : "call";
