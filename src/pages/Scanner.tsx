@@ -34,6 +34,7 @@ import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
 import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
+import { useEarnings } from "@/lib/earnings";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
@@ -174,11 +175,16 @@ export default function Scanner() {
     return m;
   }, [sma.map]);
 
+  // Real next-earnings-in-days from fundamentals-fetch (Finnhub calendar).
+  // Drives the catalyst score, risk-adjusted penalty, and earnings warnings.
+  const earnings = useEarnings(universe);
+  const earningsBySymbol = earnings.map;
+
   // Compute setups, then attach the institutional rank (Setup × .40 +
   // Readiness × .30 + Options × .30 − Penalties). Default sort: Final Rank desc.
   const rows: SetupRow[] = useMemo(
-    () => computeSetups(quotes, { closesBySymbol }),
-    [quotes, closesBySymbol],
+    () => computeSetups(quotes, { closesBySymbol, earningsBySymbol }),
+    [quotes, closesBySymbol, earningsBySymbol],
   );
 
   // Per-symbol Strategy + Rank. Stable map keyed by symbol so DetailPanel /

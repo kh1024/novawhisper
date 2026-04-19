@@ -10,6 +10,7 @@ import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
 import { useBudget } from "@/lib/budget";
 import { useSma200 } from "@/lib/sma200";
+import { useEarnings } from "@/lib/earnings";
 
 export function LiveMiniScanner() {
   const query = useLiveQuotes(undefined, { refetchMs: 60_000 });
@@ -23,6 +24,7 @@ export function LiveMiniScanner() {
   // the gate-level IVP, so we leave realIvpBySymbol off here on purpose.
   const symbols = useMemo(() => (quotes ?? []).map((q) => q.symbol), [quotes]);
   const sma = useSma200(symbols);
+  const earnings = useEarnings(symbols);
   const closesBySymbol = useMemo(() => {
     const m = new Map<string, number[]>();
     sma.map.forEach((v, k) => {
@@ -30,15 +32,16 @@ export function LiveMiniScanner() {
     });
     return m;
   }, [sma.map]);
+  const earningsBySymbol = earnings.map;
 
   const rows = useMemo(() => {
     if (!quotes?.length) return [];
-    const setups = computeSetups(quotes, { closesBySymbol });
+    const setups = computeSetups(quotes, { closesBySymbol, earningsBySymbol });
     return setups
       .map((s) => ({ s, rank: rankSetup(s, selectStrategy({ ...s, maxLossBudget: budget })) }))
       .sort((a, b) => b.rank.finalRank - a.rank.finalRank)
       .slice(0, 5);
-  }, [quotes, budget, closesBySymbol]);
+  }, [quotes, budget, closesBySymbol, earningsBySymbol]);
 
   const today = new Date().toISOString().slice(0, 10);
 
