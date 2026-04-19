@@ -1,6 +1,7 @@
 // Live options chain from Massive: GET /v3/snapshot/options/{underlyingAsset}
 // Returns normalized option contracts with Greeks, IV, OI, volume, bid/ask.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
+import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
 
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -187,6 +188,7 @@ Deno.serve(async (req) => {
     let r: Response | null = null;
     let lastText = "";
     for (let attempt = 0; attempt < 3; attempt++) {
+      await acquireMassiveToken(); // throttle to 75 req/s/instance
       r = await fetch(url, {
         headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
       });
