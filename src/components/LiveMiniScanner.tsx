@@ -80,7 +80,9 @@ export function LiveMiniScanner() {
                 s.bias === "bearish" ? "pill-bearish" : "pill-neutral";
               const rankTone =
                 rank.label === "BUY NOW" ? "pill-bullish" :
-                (rank.label === "AVOID" || rank.label === "EXIT") ? "pill-bearish" : "pill-neutral";
+                (rank.label === "AVOID" || rank.label === "EXIT") ? "pill-bearish" :
+                (rank.label === "WAIT PULLBACK" || rank.label === "EXPENSIVE ENTRY" || rank.label === "OVEREXTENDED") ? "pill-neutral" :
+                "pill-neutral";
               return (
                 <tr key={s.symbol} className="border-b border-border/40 last:border-0 hover:bg-surface/40 transition-colors">
                   <td className="p-3 font-semibold mono">{s.symbol}</td>

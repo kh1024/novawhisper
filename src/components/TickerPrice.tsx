@@ -1,16 +1,14 @@
 // Inline live price next to a ticker symbol. Shares the live-quotes cache
 // per-symbol so multiple instances of the same ticker only fetch once.
 //
-// During pre-market / after-hours sessions we surface a small badge ("PRE" or
-// "AH") plus the extended-hours price next to the regular price so traders see
-// the gap forming before the open / after the close.
-//
-// A small "src" chip (yhoo / fnhb / cnbc / ggl / …) is appended so users can
-// see which provider's price they're looking at, with a tooltip listing every
-// source and a ⚠ flag if they disagree by more than 0.5%.
+// Optional badges, all opt-in via props:
+//   • <QuoteSourceChip>     — provider attribution (yhoo / cnbc / ggl / …)
+//   • <FreshnessBadge>      — "12s ago · realtime/delayed/stale" trust pill
+//   • Pre/After-hours pill  — automatic during PRE/AH sessions
 import { useLiveQuotes, sessionLabel, type VerifiedQuote } from "@/lib/liveData";
 import { cn } from "@/lib/utils";
 import { QuoteSourceChip } from "@/components/QuoteSourceChip";
+import { FreshnessBadge } from "@/components/FreshnessBadge";
 
 interface Props {
   symbol: string;
@@ -21,6 +19,8 @@ interface Props {
   changePct?: number | null;
   /** When true, suppresses the provider-attribution chip. */
   hideSource?: boolean;
+  /** When true, shows the "12s ago" trust badge. Default off to keep dense rows clean. */
+  showFreshness?: boolean;
 }
 
 interface PillProps {
@@ -31,19 +31,20 @@ interface PillProps {
   ext?: { session: "pre" | "post"; price: number; pct: number | null } | null;
   quote?: VerifiedQuote | null;
   hideSource?: boolean;
+  showFreshness?: boolean;
 }
 
-function FetchedTickerPrice({ symbol, className, showChange, hideSource }: { symbol: string; className?: string; showChange?: boolean; hideSource?: boolean }) {
+function FetchedTickerPrice({ symbol, className, showChange, hideSource, showFreshness }: { symbol: string; className?: string; showChange?: boolean; hideSource?: boolean; showFreshness?: boolean }) {
   const { data } = useLiveQuotes([symbol], { refetchMs: 60_000 });
   const q = data?.find((x) => x.symbol === symbol);
   if (!q || q.price == null) return null;
   const ext = (q.session === "pre" || q.session === "post") && q.extendedPrice != null
     ? { session: q.session, price: q.extendedPrice, pct: q.extendedChangePct ?? null }
     : null;
-  return <Pill px={q.price} pct={q.changePct} className={className} showChange={showChange} ext={ext} quote={q} hideSource={hideSource} />;
+  return <Pill px={q.price} pct={q.changePct} className={className} showChange={showChange} ext={ext} quote={q} hideSource={hideSource} showFreshness={showFreshness} />;
 }
 
-function Pill({ px, pct, className, showChange, ext, quote, hideSource }: PillProps) {
+function Pill({ px, pct, className, showChange, ext, quote, hideSource, showFreshness }: PillProps) {
   return (
     <span className={cn("inline-flex items-baseline gap-1 font-mono text-xs text-muted-foreground", className)}>
       <span className="text-foreground/80">${px.toFixed(2)}</span>
@@ -57,6 +58,7 @@ function Pill({ px, pct, className, showChange, ext, quote, hideSource }: PillPr
         <ExtendedBadge session={ext.session} price={ext.price} pct={ext.pct} />
       )}
       {!hideSource && quote && <QuoteSourceChip quote={quote} />}
+      {showFreshness && quote && <FreshnessBadge quote={quote} compact />}
     </span>
   );
 }
@@ -85,7 +87,7 @@ function ExtendedBadge({ session, price, pct }: { session: "pre" | "post"; price
   );
 }
 
-export function TickerPrice({ symbol, className, showChange = false, price, changePct, hideSource }: Props) {
-  if (price != null) return <Pill px={price} pct={changePct ?? null} className={className} showChange={showChange} ext={null} hideSource={hideSource} />;
-  return <FetchedTickerPrice symbol={symbol} className={className} showChange={showChange} hideSource={hideSource} />;
+export function TickerPrice({ symbol, className, showChange = false, price, changePct, hideSource, showFreshness }: Props) {
+  if (price != null) return <Pill px={price} pct={changePct ?? null} className={className} showChange={showChange} ext={null} hideSource={hideSource} showFreshness={showFreshness} />;
+  return <FetchedTickerPrice symbol={symbol} className={className} showChange={showChange} hideSource={hideSource} showFreshness={showFreshness} />;
 }

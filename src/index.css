@@ -43,6 +43,8 @@
     --bearish-foreground: 0 80% 97%;
     --bearish-glow: 0 85% 65%;
     --neutral: 45 90% 58%;
+    --warning: 38 95% 56%;
+    --warning-foreground: 38 100% 10%;
 
     --destructive: 0 75% 55%;
     --destructive-foreground: 0 80% 97%;

@@ -46,6 +46,10 @@ export default {
           glow: "hsl(var(--bearish-glow))",
         },
         neutral: { DEFAULT: "hsl(var(--neutral))" },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",

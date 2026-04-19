@@ -26,6 +26,8 @@ import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { actionFromScore, labelClasses } from "@/lib/finalRank";
+import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
+import { useBudget } from "@/lib/budget";
 import type { OptionPick } from "@/lib/mockData";
 
 /**
@@ -94,6 +96,7 @@ export default function Dashboard() {
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
+  const [budget] = useBudget();
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   const picks = useMemo(() => {
@@ -319,7 +322,12 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{p.symbol}</span>
-                    <TickerPrice symbol={p.symbol} showChange />
+                    <TickerPrice symbol={p.symbol} showChange showFreshness />
+                    <BudgetAltSuggestion
+                      symbol={p.symbol}
+                      contractCost={(p.premium ?? 0) * 100}
+                      budget={budget}
+                    />
                     <Hint label="NOVA — verdict engine reconciling technicals, Greeks & risk">
                       <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/40 cursor-help">
                         NOVA
@@ -366,9 +374,17 @@ export default function Dashboard() {
                       ? "High conviction — score ≥ 80. Take the trade now."
                       : action === "WATCHLIST"
                       ? "Solid setup — score 70–79. Wait for a confirmed entry."
+                      : action === "WATCHLIST ONLY"
+                      ? "Decent setup but one concern (liquidity / IV / no edge). Track, don't trade."
+                      : action === "WAIT PULLBACK"
+                      ? "Strong thesis but price is extended. Wait for a pullback to support."
+                      : action === "EXPENSIVE ENTRY"
+                      ? "Thesis is good but the strike is deep ITM — capital-inefficient."
+                      : action === "OVEREXTENDED"
+                      ? "Already up big today — chase risk. Let it cool before entering."
                       : action === "WAIT"
                       ? "Mixed signals — score 50–69. Monitor, no action yet."
-                      : "Avoid — no edge or hard-blocked (liquidity / IV trap / earnings)."
+                      : "Avoid — bearish setup or hard-blocked (liquidity / IV trap / earnings)."
                   }>
                     <span className={`mt-0.5 inline-block text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${labelClasses(action)}`}>
                       {action}
