@@ -295,10 +295,10 @@ export default function Scanner() {
 
   // Action-label counts derived from the institutional rank.
   const counts = useMemo(() => {
-    const tally: Record<ActionLabel, number> = { BUY: 0, WATCHLIST: 0, WAIT: 0, "DON'T BUY": 0 };
+    const tally: Record<ActionLabel, number> = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0 };
     let warnings = 0;
     for (const r of rows) {
-      const lbl = rankMap.get(r.symbol)?.rank.label ?? "PASS";
+      const lbl = rankMap.get(r.symbol)?.rank.label ?? "AVOID";
       tally[lbl]++;
       if (r.warnings.length > 0) warnings++;
     }
@@ -341,10 +341,10 @@ export default function Scanner() {
         {/* Action-label summary — institutional ranking buckets. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
-            { k: "BUY",        v: counts.BUY,             sub: "rank ≥ 80 · take the trade",  cls: "border-bullish/60 text-bullish",     Icon: Zap },
-            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "rank 65–79 · wait for entry", cls: "border-primary/40 text-primary",     Icon: Clock },
-            { k: "WAIT",       v: counts.WAIT,            sub: "rank 50–64 · monitor",        cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
-            { k: "DON'T BUY",  v: counts["DON'T BUY"],    sub: "no edge",                     cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
+            { k: "BUY NOW",    v: counts["BUY NOW"],      sub: "score ≥ 80 · take the trade",     cls: "border-bullish/60 text-bullish",     Icon: Zap },
+            { k: "WATCHLIST",  v: counts.WATCHLIST,       sub: "score 70–79 · wait for trigger",  cls: "border-primary/40 text-primary",     Icon: Clock },
+            { k: "WAIT",       v: counts.WAIT,            sub: "score 50–69 · monitor",           cls: "border-warning/40 text-warning",     Icon: ShieldAlert },
+            { k: "AVOID",      v: counts.AVOID,           sub: "no edge · liquidity / IV trap",   cls: "border-bearish/40 text-bearish",     Icon: AlertTriangle },
           ].map((c) => (
             <Card key={c.k} className={cn("glass-card p-2.5 sm:p-4 border", c.cls)}>
               <div className="flex items-center justify-between">

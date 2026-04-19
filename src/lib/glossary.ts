@@ -19,10 +19,14 @@ export const BIAS_HINT: Record<string, string> = {
 };
 
 export const ACTION_HINT: Record<string, string> = {
-  BUY: "BUY — High conviction (score ≥ 80). Take the trade now per the playbook.",
-  WATCHLIST: "WATCHLIST — Solid setup (score 65–79). Wait for a clean trigger (break of level, volume confirm) before entering.",
-  WAIT: "WAIT — Mixed signals (score 50–64). Monitor and revisit; do not enter yet.",
-  "DON'T BUY": "DON'T BUY — No edge (score < 50). Skip this one entirely.",
+  "BUY NOW": "BUY NOW — High conviction (score ≥ 80). Setup triggered, liquidity good, regime aligned. Take the trade now per the playbook.",
+  WATCHLIST: "WATCHLIST — Solid setup (score 70–79). Near breakout / pullback level. Wait for a clean trigger (break of level, volume confirm) before entering.",
+  WAIT: "WAIT — Mixed signals (score 50–69). Monitor and revisit; no edge yet, needs confirmation.",
+  AVOID: "AVOID — No edge (score < 50) or hard-blocker present: poor liquidity, expensive IV, earnings risk, unrealistic strike, or broken chart.",
+  EXIT: "EXIT — You hold this position and the thesis is broken (stop hit, trend flipped, or theta is bleeding faster than the move can recover). Close it.",
+  // Legacy aliases for any older snapshots still in the database.
+  BUY: "BUY NOW — High conviction (score ≥ 80). Setup triggered, take the trade now.",
+  "DON'T BUY": "AVOID — No edge or hard-blocker present. Skip this one entirely.",
 };
 
 export const RISK_HINT: Record<string, string> = {
