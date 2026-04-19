@@ -99,6 +99,9 @@ export default function Dashboard() {
   const [budget] = useBudget();
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
+  // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
+  // the user's max-per-trade budget. If we can't verify the premium, we do not
+  // show the pick in Top Opportunities.
   const picks = useMemo(() => {
     const bucketMap: Record<RiskBucket, ScoutPick[]> = {
       safe: scout?.conservative ?? [],
@@ -137,8 +140,9 @@ export default function Dashboard() {
         annualized: p.annualized,
         earningsInDays: p.earningsInDays ?? null,
       }, novaSpec))
+      .filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget)
       .slice(0, novaActive ? 12 : 6);
-  }, [allPicks, riskTab, novaSpec, novaActive, scout]);
+  }, [allPicks, riskTab, novaSpec, novaActive, scout, budget]);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
