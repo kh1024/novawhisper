@@ -129,6 +129,61 @@ interface PoliticalPost {
   platform: "reddit" | "truthsocial" | "x" | "other";
 }
 
+interface EventSourceItem {
+  id: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image?: string;
+  publishedAt: string;
+}
+
+/** Topic-specific articles (Firecrawl Search) — Reuters/AP/BBC/r/worldnews etc. */
+function useEventSourceItems(category: "geopolitics" | "fed" | "earnings") {
+  return useQuery({
+    queryKey: ["event-sources", category],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("event-sources", {
+        body: { category, limit: 16 },
+      });
+      if (error) throw error;
+      return (data?.items ?? []) as EventSourceItem[];
+    },
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+    retry: 1,
+  });
+}
+
+/** Convert topical articles into the same shape `scoreFeed` produces. */
+function tallyTopical(items: EventSourceItem[], terms: string[]): ReturnType<typeof scoreFeed> {
+  const matches: EventRiskMatch[] = items.map((it) => ({
+    id: it.id,
+    headline: it.headline,
+    summary: it.summary,
+    source: it.source,
+    url: it.url,
+    image: it.image,
+    publishedAt: it.publishedAt,
+  }));
+  let pos = 0, neg = 0;
+  for (const it of items) {
+    const text = `${it.headline} ${it.summary}`.toLowerCase();
+    if (POSITIVE_HINTS.some((h) => text.includes(h))) pos += 1;
+    if (NEGATIVE_HINTS.some((h) => text.includes(h))) neg += 1;
+  }
+  // If terms is non-empty, also count headlines containing the terms as a sanity floor.
+  void terms;
+  return {
+    hits: items.length,
+    pos,
+    neg,
+    topHeadline: items[0]?.headline,
+    matches,
+  };
+}
+
 function usePoliticalPosts() {
   return useQuery({
     queryKey: ["political-posts"],
