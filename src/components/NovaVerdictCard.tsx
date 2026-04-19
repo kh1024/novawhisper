@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Sparkline } from "@/components/Sparkline";
+import { computeRSI14 } from "@/lib/streak";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
