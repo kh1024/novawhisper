@@ -328,10 +328,9 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   dataQuality = clamp(dataQuality);
 
   // ── Conflict Resolution Layer ──
-  // Streak now comes from the shared helper (real closes when available; the
-  // scanner pipeline doesn't have the daily-close array on hand, so this stays
-  // 0 here and the adapter feeds the real value into Gate 4).
-  const realStreak = computeStreakDays([]);
+  // Streak from real closes when the caller passed them; otherwise 0 (the
+  // gate adapter computes the real streak from sma.closes downstream).
+  const realStreak = computeStreakDays(ctx?.closes ?? []);
   const synEma8 = q.price > 0 && emaDist20 !== 0 ? q.price / (1 + emaDist20 / 100) : null;
   const crlOut = runConflictResolution({
     rsi, ema8: synEma8, spot: q.price, winningStreakDays: realStreak,
@@ -343,7 +342,7 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
     symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
     ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst: true,
-    emaDist20, emaDist50, emaEst: true,
+    emaDist20, emaDist50, emaEst,
     optionsLiquidity, earningsInDays, bias, trendLabel,
     setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
     breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
