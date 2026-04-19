@@ -270,12 +270,17 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  const counts = useMemo(() => ({
-    now: rows.filter((r) => r.readiness === "NOW").length,
-    wait: rows.filter((r) => r.readiness === "WAIT").length,
-    avoid: rows.filter((r) => r.readiness === "AVOID").length,
-    warnings: rows.filter((r) => r.warnings.length > 0).length,
-  }), [rows]);
+  // Action-label counts derived from the institutional rank.
+  const counts = useMemo(() => {
+    const tally: Record<ActionLabel, number> = { ELITE: 0, "GO NOW": 0, GOOD: 0, WATCHLIST: 0, PASS: 0 };
+    let warnings = 0;
+    for (const r of rows) {
+      const lbl = rankMap.get(r.symbol)?.rank.label ?? "PASS";
+      tally[lbl]++;
+      if (r.warnings.length > 0) warnings++;
+    }
+    return { ...tally, warnings };
+  }, [rows, rankMap]);
 
   const freshness = dataUpdatedAt
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
