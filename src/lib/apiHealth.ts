@@ -30,6 +30,9 @@ export function useApiHealth() {
   return useQuery({
     queryKey: ["api-health"],
     queryFn: async (): Promise<SourceHealth[]> => {
+      // Massive powers both quotes-fetch and options-fetch under the hood.
+      // We ping options-fetch as the Massive health proxy (it's the heaviest
+      // Massive call) and reuse the quotes-fetch ping for the consensus row.
       const [quotes, options, news] = await Promise.all([
         ping("quotes-fetch", { symbols: ["SPY"] }),
         ping("options-fetch", { underlying: "SPY", limit: 5 }),
@@ -38,10 +41,11 @@ export function useApiHealth() {
       const toStatus = (r: { ok: boolean; ms: number }) =>
         !r.ok ? "down" : r.ms > 4000 ? "degraded" : "ok";
       return [
-        { name: "Quotes (Finnhub + Alpha Vantage)", description: "Live verified prices",       status: toStatus(quotes),  latencyMs: quotes.ms,  detail: quotes.detail },
-        { name: "Options Chain (Polygon)",          description: "Real options + Greeks",      status: toStatus(options), latencyMs: options.ms, detail: options.detail },
-        { name: "Market News (Finnhub)",            description: "Sentiment + headlines feed", status: toStatus(news),    latencyMs: news.ms,    detail: news.detail },
-        { name: "Lovable AI Gateway",               description: "Nova explanations",          status: "ok",              latencyMs: null,       detail: "Routed via gateway — no key needed" },
+        { name: "Quotes (Finnhub + Alpha Vantage + Massive)", description: "Live verified prices — freshest-timestamp wins", status: toStatus(quotes),  latencyMs: quotes.ms,  detail: quotes.detail },
+        { name: "Massive (Options + Quotes backbone)",        description: "Throttled <100 req/s to stay under plan limits", status: toStatus(options), latencyMs: options.ms, detail: options.detail },
+        { name: "Options Chain (Polygon + Massive)",          description: "Real options + Greeks",                          status: toStatus(options), latencyMs: options.ms, detail: options.detail },
+        { name: "Market News (Finnhub)",                      description: "Sentiment + headlines feed",                     status: toStatus(news),    latencyMs: news.ms,    detail: news.detail },
+        { name: "Lovable AI Gateway",                         description: "Nova explanations",                              status: "ok",              latencyMs: null,       detail: "Routed via gateway — no key needed" },
       ];
     },
     refetchInterval: 60_000,
