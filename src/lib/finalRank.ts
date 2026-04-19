@@ -123,18 +123,14 @@ function computeOptionsScore(row: SetupRow, decision: StrategyDecision): RankRes
     else strikeEfficiency = 16; // Conservative — fine but expensive
   }
 
-  // IV edge (0–20) — reward correct strategy choice for the IVR band.
+  // IV edge (0–20) — single-leg only, so we just reward Long Premium taken in
+  // a friendly IVR band and penalize buying calls/puts when IV is rich.
   const ivr = row.ivRank;
-  const isCredit = decision.action.includes("Credit") || decision.action === "Iron Condor";
-  const isDebit = decision.action.includes("Spread") && !isCredit;
   const isLongPremium = decision.action === "Long Call" || decision.action === "Long Put";
   let ivEdge = 8;
   if (isWait) ivEdge = 0;
-  else if (ivr > 80 && isCredit) ivEdge = 20;
-  else if (ivr >= 40 && ivr <= 80 && isDebit) ivEdge = 18;
   else if (ivr < 40 && isLongPremium) ivEdge = 18;
   else if (ivr > 80 && isLongPremium) ivEdge = 4;  // wrong tool, IV will crush
-  else if (ivr < 30 && isCredit) ivEdge = 6;       // not enough premium to sell
 
   // Liquidity (0–15) — straight from the proxy.
   const liquidity = Math.round((row.optionsLiquidity / 100) * 15);
