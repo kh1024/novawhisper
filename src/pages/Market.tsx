@@ -102,12 +102,16 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
         )}
       </div>
       <PickMetaRow
-        bias={p.bias ?? (isBull ? "bullish" : "bearish")}
-        optionType={p.optionType}
-        strike={p.strikeShort ? `${p.strike}/${p.strikeShort}` : p.strike}
+        inputs={{
+          symbol: p.symbol,
+          rawBias: p.bias ?? (isBull ? "bullish" : "bearish"),
+          optionType: p.optionType,
+          strike: p.strikeShort ? `${p.strike}/${p.strikeShort}` : p.strike,
+          riskBucket: p.risk,
+          budget: accountBalance,
+          isHardBlocked: blocked,
+        }}
         expiry={p.expiry}
-        tier={p.risk}
-        timing={blocked ? "avoid" : undefined}
       />
       <div className="text-[11px] text-muted-foreground line-clamp-2">{p.thesis}</div>
       <div className="flex items-center gap-2 text-[10px] flex-wrap">
