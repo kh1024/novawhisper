@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import type { SetupRow } from "./setupScore";
 import type { StrategyDecision } from "./strategySelector";
+import { getLabelMultiplier } from "./learningWeights";
 
 // Plain-English action language used across the whole app:
 //   BUY        — high conviction, take the trade now
@@ -227,9 +228,15 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
   const penaltyTotal = penalties.reduce((s, p) => s + p.points, 0);
 
   // Part 6 — final rank formula.
-  const rank = clamp(
+  const baseRank = clamp(
     Math.round(row.setupScore * 0.4 + readiness.total * 0.3 + options.total * 0.3 + penaltyTotal),
   );
+  // Self-learning bias: gently nudge the score per label using historical
+  // hit-rate multipliers (clamped to 0.85–1.15 in the DB), so the AI improves
+  // itself based on real-world outcomes. Provisional label uses base score.
+  const provisionalLabel = labelFor(baseRank, decision);
+  const mult = getLabelMultiplier(provisionalLabel);
+  const rank = clamp(Math.round(baseRank * mult));
 
   return {
     setupScore: row.setupScore,
