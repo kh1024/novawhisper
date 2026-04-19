@@ -617,7 +617,7 @@ function pickExtended(session: Session, yahoo: SourceQuote | null): { price: num
   return { price: null, pct: null };
 }
 
-// Pick consensus from up to 7 sources.
+// Pick consensus from up to 8 sources.
 function verify(
   symbol: string,
   finn: SourceQuote | null,
@@ -627,6 +627,7 @@ function verify(
   stooq: SourceQuote | null,
   cnbc: SourceQuote | null,
   google: SourceQuote | null,
+  sd: SourceQuote | null,
 ): VerifiedQuote {
   const now = new Date().toISOString();
   const session = detectSession(yahoo?.marketState);
@@ -648,8 +649,9 @@ function verify(
     stooq: stooq?.price ?? null,
     cnbc: cnbc?.price ?? null,
     google: google?.price ?? null,
+    stockdata: sd?.price ?? null,
   };
-  const live = [finn, alpha, mass, yahoo, stooq, cnbc, google].filter((x): x is SourceQuote => !!x && x.price > 0);
+  const live = [finn, alpha, mass, yahoo, stooq, cnbc, google, sd].filter((x): x is SourceQuote => !!x && x.price > 0);
   if (live.length === 0) {
     return {
       symbol, price: 0, change: 0, changePct: 0, volume: 0,
@@ -659,7 +661,6 @@ function verify(
   }
   if (live.length === 1) {
     const src = live[0];
-    // ONE good source is still good data — don't punish ETFs / off-hours quotes.
     return {
       symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
       sources, consensusSource: src.source, status: "verified",
@@ -667,12 +668,6 @@ function verify(
     };
   }
   // ── FRESHEST-WINS RULE ────────────────────────────────────────────────
-  // The user-facing price MUST come from the source whose quote timestamp
-  // is the most recent. Older-timestamped sources (e.g. EOD providers like
-  // Alpha Vantage / Stooq, or Massive's `/prev` bar) are kept ONLY for
-  // cross-reference — never to override a fresher intraday tick.
-  // Window: drop any source >5 min behind the freshest during regular hours,
-  // 30 min off-hours (pre/post/closed have thinner liquidity & jitter).
   const freshestTs = Math.max(...live.map((s) => s.ts || 0));
   const windowMs = session === "regular" ? 5 * 60_000 : 30 * 60_000;
   const fresh = live.filter((s) => freshestTs - (s.ts || 0) <= windowMs);
@@ -682,9 +677,9 @@ function verify(
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const diff = ((maxP - minP) / minP) * 100;
-  // Prefer real-time intraday: Yahoo > Finnhub > Massive > CNBC > Google > Stooq > Alpha.
-  // BUT only among the freshest-window sources.
-  const order: SourceName[] = ["yahoo", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
+  // Prefer real-time intraday: Yahoo > StockData > Finnhub > Massive > CNBC > Google > Stooq > Alpha.
+  // StockData is paid + reliable → trusted slot just below Yahoo, above Finnhub.
+  const order: SourceName[] = ["yahoo", "stockdata", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
   const chosen = order.map((n) => eligible.find((s) => s.source === n)).find(Boolean) ?? eligible[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
@@ -697,7 +692,6 @@ function verify(
     consensusSource: chosen.source,
     status,
     diffPct: +diff.toFixed(4),
-    // Surface the *quote* time of the chosen source, not server-receive time.
     updatedAt: new Date(chosen.ts || Date.now()).toISOString(),
     ...extendedFields,
   };
