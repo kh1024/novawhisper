@@ -92,10 +92,13 @@ export function NovaVerdictCard({
             <button
               type="button"
               onClick={() => setSparkMode((m) => (m === "price" ? "rsi" : "price"))}
-              className="text-[9px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-              title="Toggle sparkline mode"
+              aria-label={`Switch sparkline to ${sparkMode === "price" ? "RSI" : "Price"}`}
+              title={`Switch to ${sparkMode === "price" ? "RSI" : "Price"}`}
+              className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground hover:bg-muted hover:text-foreground hover:border-border transition-colors min-h-[24px]"
             >
-              {sparkMode === "price" ? "Price" : "RSI"}
+              <span className={sparkMode === "price" ? "text-foreground" : ""}>Price</span>
+              <span className="text-muted-foreground/50">/</span>
+              <span className={sparkMode === "rsi" ? "text-foreground" : ""}>RSI</span>
             </button>
           </div>
         )}
