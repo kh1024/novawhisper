@@ -307,6 +307,19 @@ export default function Dashboard() {
                     } capitalize`}>
                       {p.riskBucket === "safe" ? "Conservative" : p.riskBucket === "mild" ? "Moderate" : p.riskBucket === "lottery" ? "🎲 Lottery" : "Aggressive"}
                     </span>
+                    {money && (
+                      <Hint label={
+                        money.kind === "ITM"
+                          ? `In-the-money by ${Math.abs(money.pct).toFixed(1)}% — strike already has intrinsic value.`
+                          : money.kind === "OTM"
+                          ? `Out-of-the-money by ${Math.abs(money.pct).toFixed(1)}% — needs to move to gain intrinsic value.`
+                          : `At-the-money — strike sits within 1% of spot.`
+                      }>
+                        <span className={`text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${money.cls}`}>
+                          {money.kind} {money.kind !== "ATM" ? `${Math.abs(money.pct).toFixed(1)}%` : ""}
+                        </span>
+                      </Hint>
+                    )}
                     <NovaGuardBadges guard={guard} />
                   </div>
                   <div className={`mono text-[11px] mt-1 font-semibold ${p.bias === "bullish" ? "text-bullish" : p.bias === "bearish" ? "text-bearish" : "text-foreground"}`}>
