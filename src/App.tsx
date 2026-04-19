@@ -10,10 +10,8 @@ import AppLayout from "./layouts/AppLayout";
 // front. Cuts the longest main-thread task during initial load (lower FID).
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Scanner = lazy(() => import("./pages/Scanner"));
-const Research = lazy(() => import("./pages/Research"));
 const Chains = lazy(() => import("./pages/Chains"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
-const Journal = lazy(() => import("./pages/Journal"));
 const Alerts = lazy(() => import("./pages/Alerts"));
 const Planning = lazy(() => import("./pages/Planning"));
 const Patterns = lazy(() => import("./pages/Patterns"));
@@ -45,10 +43,8 @@ const App = () => (
               <Route path="/market" element={<Market />} />
               <Route path="/scanner" element={<Scanner />} />
               <Route path="/patterns" element={<Patterns />} />
-              <Route path="/research" element={<Research />} />
               <Route path="/chains" element={<Chains />} />
               <Route path="/portfolio" element={<Portfolio />} />
-              <Route path="/journal" element={<Journal />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/planning" element={<Planning />} />
               <Route path="/strategy" element={<Strategy />} />
