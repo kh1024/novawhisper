@@ -9,6 +9,7 @@ import { computeSetups } from "@/lib/setupScore";
 import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
 import { useBudget } from "@/lib/budget";
+import { useSma200 } from "@/lib/sma200";
 
 export function LiveMiniScanner() {
   const query = useLiveQuotes(undefined, { refetchMs: 60_000 });
@@ -16,14 +17,28 @@ export function LiveMiniScanner() {
   const loading = query.isLoading;
   const [budget] = useBudget();
 
+  // Daily closes (24h cache) → real EMA20/EMA50 + RSI streak in computeSetups.
+  // Real IVP would require an options-fetch per symbol on every landing render
+  // (N round-trips, expensive); the per-symbol chain on /scanner already drives
+  // the gate-level IVP, so we leave realIvpBySymbol off here on purpose.
+  const symbols = useMemo(() => (quotes ?? []).map((q) => q.symbol), [quotes]);
+  const sma = useSma200(symbols);
+  const closesBySymbol = useMemo(() => {
+    const m = new Map<string, number[]>();
+    sma.map.forEach((v, k) => {
+      if (Array.isArray(v.closes) && v.closes.length > 0) m.set(k, v.closes);
+    });
+    return m;
+  }, [sma.map]);
+
   const rows = useMemo(() => {
     if (!quotes?.length) return [];
-    const setups = computeSetups(quotes);
+    const setups = computeSetups(quotes, { closesBySymbol });
     return setups
       .map((s) => ({ s, rank: rankSetup(s, selectStrategy({ ...s, maxLossBudget: budget })) }))
       .sort((a, b) => b.rank.finalRank - a.rank.finalRank)
       .slice(0, 5);
-  }, [quotes, budget]);
+  }, [quotes, budget, closesBySymbol]);
 
   const today = new Date().toISOString().slice(0, 10);
 
