@@ -28,6 +28,8 @@ import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { actionFromScore, labelClasses } from "@/lib/finalRank";
+import { smartActionLabel, smartActionTooltip, emptyStateCopy } from "@/lib/actionCopy";
+import { detectTimeState } from "@/lib/novaBrain";
 import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
 import { useBudget } from "@/lib/budget";
 import type { OptionPick } from "@/lib/mockData";
