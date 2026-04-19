@@ -16,6 +16,7 @@ import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { TickerPrice } from "@/components/TickerPrice";
 import { TipsRotator } from "@/components/TipsRotator";
 import { SortableList } from "@/components/SortableList";
+import { NovaStatusStrip } from "@/components/NovaStatusStrip";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 
@@ -37,6 +38,9 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
+      {/* NOVA status — adaptive regime + time-state read */}
+      <NovaStatusStrip />
+
       {/* Hero strip — plain-English meters */}
       <MarketHeroCards />
 
