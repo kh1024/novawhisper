@@ -1,8 +1,10 @@
-// Derives EVENT RISK signals from the live news feed.
-// Replaces the old Memory/Energy thesis signals — focuses on real, immediate
-// market-moving events: geopolitics/war, political posts (Trump/Xi/etc.),
-// Fed/rates, and earnings/macro prints.
+// Derives EVENT RISK signals.
+// Geopolitics / Fed / Earnings come from the news feed.
+// Political Posts comes from REAL social media (Reddit political subs +
+// Truth Social / X via the political-posts edge function).
 import { useNews } from "./liveData";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 
 const GEOPOLITICS_TERMS = [
@@ -114,9 +116,68 @@ function buildSignal(
   return { key, label, tone, status, meter, detail, hits: raw.hits, topHeadline: raw.topHeadline, matches: raw.matches };
 }
 
-/** Pull the general news feed and derive Event-Risk signals. */
+interface PoliticalPost {
+  id: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  author?: string;
+  publishedAt: string;
+  score?: number;
+  comments?: number;
+  platform: "reddit" | "truthsocial" | "x" | "other";
+}
+
+function usePoliticalPosts() {
+  return useQuery({
+    queryKey: ["political-posts"],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("political-posts", {
+        body: { limit: 24, includeSocial: true },
+      });
+      if (error) throw error;
+      return (data?.posts ?? []) as PoliticalPost[];
+    },
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+    retry: 1,
+  });
+}
+
+function buildPoliticalSignal(posts: PoliticalPost[]): EventRiskSignal {
+  const hits = posts.length;
+  const top = posts[0];
+  const platformPosts = posts.filter((p) => p.platform === "truthsocial" || p.platform === "x").length;
+  const isHot = hits >= 8 || platformPosts >= 3;
+  const isWarm = hits >= 3;
+  const tone: SentimentTone = isHot ? "bad" : isWarm ? "ok" : "good";
+  const status = isHot ? "Hot" : isWarm ? "Watch" : "Quiet";
+  const meter = isHot ? 85 : isWarm ? 50 : 18;
+  const detail = top
+    ? `${hits} social posts · "${top.headline.slice(0, 60)}${top.headline.length > 60 ? "…" : ""}"`
+    : "No major political social posts right now";
+  const matches: EventRiskMatch[] = posts.slice(0, 12).map((p) => ({
+    id: p.id,
+    headline: p.headline,
+    summary: p.summary,
+    source: p.source,
+    url: p.url,
+    publishedAt: p.publishedAt,
+  }));
+  return {
+    key: "political",
+    label: "Political Posts",
+    tone, status, meter, detail, hits,
+    topHeadline: top?.headline,
+    matches,
+  };
+}
+
+/** Pull the general news feed + political social posts and derive Event-Risk signals. */
 export function useEventRiskSignals() {
   const { data: items = [], isLoading } = useNews({ category: "general", limit: 50 });
+  const { data: politicalPosts = [], isLoading: politicalLoading } = usePoliticalPosts();
 
   return useMemo(() => {
     const geopolitics = buildSignal(
@@ -127,14 +188,7 @@ export function useEventRiskSignals() {
       "No war/sanctions/tariff headlines",
       "geo headlines",
     );
-    const political = buildSignal(
-      "political",
-      "Political Posts",
-      scoreFeed(items, POLITICAL_TERMS),
-      { hot: 4, warm: 2 },
-      "No major political/Trump posts in feed",
-      "political headlines",
-    );
+    const political = buildPoliticalSignal(politicalPosts);
     const fed = buildSignal(
       "fed",
       "Fed / Rates",
@@ -152,8 +206,8 @@ export function useEventRiskSignals() {
       "earnings headlines",
     );
 
-    return { geopolitics, political, fed, earnings, all: [geopolitics, political, fed, earnings], isLoading };
-  }, [items, isLoading]);
+    return { geopolitics, political, fed, earnings, all: [geopolitics, political, fed, earnings], isLoading: isLoading || politicalLoading };
+  }, [items, politicalPosts, isLoading, politicalLoading]);
 }
 
 // Backwards-compat: keep the old hook name as a deprecated alias so any
