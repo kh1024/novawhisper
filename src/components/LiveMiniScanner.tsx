@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
+import { useLiveTicks } from "@/lib/liveTicks";
 import { computeSetups } from "@/lib/setupScore";
 import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
