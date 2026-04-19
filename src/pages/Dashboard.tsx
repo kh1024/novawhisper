@@ -334,13 +334,13 @@ export default function Dashboard() {
                 <div className="text-right shrink-0 w-20">
                   <div className={`mono text-lg font-semibold ${blocked ? "text-muted-foreground" : ""}`}>{p.score}</div>
                   <Hint label={
-                    action === "BUY"
+                    action === "BUY NOW"
                       ? "High conviction — score ≥ 80. Take the trade now."
                       : action === "WATCHLIST"
-                      ? "Solid setup — score 65–79. Wait for a confirmed entry."
+                      ? "Solid setup — score 70–79. Wait for a confirmed entry."
                       : action === "WAIT"
-                      ? "Mixed signals — score 50–64. Monitor, no action yet."
-                      : "No edge — skip."
+                      ? "Mixed signals — score 50–69. Monitor, no action yet."
+                      : "Avoid — no edge or hard-blocked (liquidity / IV trap / earnings)."
                   }>
                     <span className={`mt-0.5 inline-block text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${labelClasses(action)}`}>
                       {action}
