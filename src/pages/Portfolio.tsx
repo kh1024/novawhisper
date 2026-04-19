@@ -17,6 +17,7 @@ import { dispatchVerdictTransitions } from "@/lib/webhook";
 import { feeOneSide, feeRoundTrip } from "@/lib/fees";
 import { buildSamplePaperTrades } from "@/lib/seedPaperTrades";
 import { toast } from "@/hooks/use-toast";
+import { Hint } from "@/components/Hint";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -177,17 +178,19 @@ export default function Portfolio() {
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Open</div>
             <div className="font-mono text-lg font-semibold">{totals.openCount}</div>
           </div>
-          <div className="rounded-md border border-border bg-surface/40 px-3 py-2" title="Estimated using intrinsic value (spot − strike). Real value usually higher because of time value.">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Unrealized (est.)</div>
-            <div className={cn("font-mono text-lg font-semibold", totals.unrealized >= 0 ? "text-bullish" : "text-bearish")}>
-              {totals.unrealizedKnown ? fmtUsd(totals.unrealized) : "—"}
-            </div>
-            {totals.anySim && (
-              <div className={cn("text-[10px] font-mono mt-0.5", totals.unrealizedSim >= 0 ? "text-bullish" : "text-bearish")}>
-                sim: {fmtUsd(totals.unrealizedSim)}
+          <Hint label="Estimated using intrinsic value (spot − strike). Real value usually higher because of time value.">
+            <div className="rounded-md border border-border bg-surface/40 px-3 py-2 cursor-help">
+              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Unrealized (est.)</div>
+              <div className={cn("font-mono text-lg font-semibold", totals.unrealized >= 0 ? "text-bullish" : "text-bearish")}>
+                {totals.unrealizedKnown ? fmtUsd(totals.unrealized) : "—"}
               </div>
-            )}
-          </div>
+              {totals.anySim && (
+                <div className={cn("text-[10px] font-mono mt-0.5", totals.unrealizedSim >= 0 ? "text-bullish" : "text-bearish")}>
+                  sim: {fmtUsd(totals.unrealizedSim)}
+                </div>
+              )}
+            </div>
+          </Hint>
           <div className="rounded-md border border-border bg-surface/40 px-3 py-2">
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Realized</div>
             <div className={cn("font-mono text-lg font-semibold", totals.realized >= 0 ? "text-bullish" : "text-bearish")}>
@@ -453,11 +456,12 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
             {unrealizedPct != null && <span className="opacity-80">({unrealizedPct >= 0 ? "+" : ""}{unrealizedPct.toFixed(0)}%)</span>}
           </div>
           {isSimulating && simDelta != null && (
-            <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border",
-              simDelta >= 0 ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5")}
-              title="Change vs. real-spot P&L">
-              Δ {fmtUsd(simDelta)}
-            </span>
+            <Hint label="Change vs. real-spot P&L">
+              <span className={cn("text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-help",
+                simDelta >= 0 ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5")}>
+                Δ {fmtUsd(simDelta)}
+              </span>
+            </Hint>
           )}
         </div>
       )}
@@ -660,12 +664,11 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
   return (
     <div className="mt-3 rounded-md border border-border/60 bg-surface/30 p-2.5 space-y-1.5">
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span
-          className="text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border bg-primary/15 text-primary border-primary/40"
-          title="NOVA — the rules engine that reconciles technicals, Greeks and risk into a single verdict"
-        >
-          NOVA
-        </span>
+        <Hint label="NOVA — the rules engine that reconciles technicals, Greeks and risk into a single verdict">
+          <span className="text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border bg-primary/15 text-primary border-primary/40 cursor-help">
+            NOVA
+          </span>
+        </Hint>
         <span className={cn("text-[10px] font-bold tracking-widest px-2 py-0.5 rounded border", verdictStyle[crl.verdict])}>
           {crl.verdict}
         </span>
@@ -675,30 +678,32 @@ function CrlPanel({ crl, metrics }: { crl: NonNullable<Verdict["crl"]>; metrics?
           </span>
         )}
         {crl.valuationAlert?.triggered && (
-          <span
-            className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-warning/15 text-warning border-warning/40"
-            title={crl.valuationAlert.message ?? ""}
-          >
-            ⚠ Risk Alert: +{crl.valuationAlert.premiumPct?.toFixed(1)}% vs intrinsic
-          </span>
+          <Hint label={crl.valuationAlert.message ?? ""}>
+            <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-warning/15 text-warning border-warning/40 cursor-help">
+              ⚠ Risk Alert: +{crl.valuationAlert.premiumPct?.toFixed(1)}% vs intrinsic
+            </span>
+          </Hint>
         )}
         {crl.trendGateBroken && (
-          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/15 text-bearish border-bearish/40"
-            title="Price is below 200-day SMA — long-term trend broken, no calls.">
-            ⛔ Trend Gate
-          </span>
+          <Hint label="Price is below 200-day SMA — long-term trend broken, no calls.">
+            <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/15 text-bearish border-bearish/40 cursor-help">
+              ⛔ Trend Gate
+            </span>
+          </Hint>
         )}
         {crl.highPremium && (
-          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-warning/15 text-warning border-warning/40"
-            title={`IV Percentile ${metrics?.ivPercentile ?? "?"}% — you may be overpaying for premium.`}>
-            💰 High Premium{metrics?.ivPercentile != null ? ` · IVP ${metrics.ivPercentile}%` : ""}
-          </span>
+          <Hint label={`IV Percentile ${metrics?.ivPercentile ?? "?"}% — you may be overpaying for premium.`}>
+            <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-warning/15 text-warning border-warning/40 cursor-help">
+              💰 High Premium{metrics?.ivPercentile != null ? ` · IVP ${metrics.ivPercentile}%` : ""}
+            </span>
+          </Hint>
         )}
         {crl.openingRange && (
-          <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-muted/40 text-muted-foreground border-border"
-            title="Before 10:30 AM ET — opening range is noisy. GO signals downgraded to WAIT.">
-            🕘 Opening Range Testing
-          </span>
+          <Hint label="Before 10:30 AM ET — opening range is noisy. GO signals downgraded to WAIT.">
+            <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-muted/40 text-muted-foreground border-border cursor-help">
+              🕘 Opening Range Testing
+            </span>
+          </Hint>
         )}
         {crl.premiumStopTriggered && (
           <span className="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border bg-bearish/25 text-bearish border-bearish/50 animate-pulse">

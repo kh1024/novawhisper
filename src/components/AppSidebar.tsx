@@ -30,6 +30,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { reconcileOrder } from "@/components/SortableList";
+import { Hint } from "@/components/Hint";
 
 const items = [
   { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -156,13 +157,15 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-[10px] tracking-[0.18em] text-muted-foreground/70 flex items-center justify-between pr-2">
             <span>WORKSPACES</span>
             {!collapsed && (
-              <button
-                onClick={reset}
-                title="Reset to default order"
-                className="opacity-0 group-hover/sidebar:opacity-100 hover:opacity-100 hover:text-foreground transition-opacity"
-              >
-                <RotateCcw className="h-3 w-3" />
-              </button>
+              <Hint label="Reset workspaces to default order" side="right">
+                <button
+                  onClick={reset}
+                  aria-label="Reset to default order"
+                  className="opacity-0 group-hover/sidebar:opacity-100 hover:opacity-100 hover:text-foreground transition-opacity"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </Hint>
             )}
           </SidebarGroupLabel>
           <SidebarGroupContent className="group/sidebar">

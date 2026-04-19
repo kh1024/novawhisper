@@ -3,6 +3,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
+import { Hint } from "@/components/Hint";
 import { getMockPicks, UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta } from "@/lib/liveData";
 import { useMemo, useState } from "react";
@@ -150,12 +151,11 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-sm">{p.symbol}</span>
                     <TickerPrice symbol={p.symbol} showChange />
-                    <span
-                      title="NOVA — Nova's verdict engine reconciling technicals, Greeks & risk"
-                      className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/40"
-                    >
-                      NOVA
-                    </span>
+                    <Hint label="NOVA — verdict engine reconciling technicals, Greeks & risk">
+                      <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border bg-primary/10 text-primary border-primary/40 cursor-help">
+                        NOVA
+                      </span>
+                    </Hint>
                     <Badge variant="outline" className="h-5 text-[10px] capitalize border-border/60">
                       {p.strategy.replace("-", " ")}
                     </Badge>
@@ -198,13 +198,15 @@ export default function Dashboard() {
             <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
               Drag the grip to reorder widgets
             </span>
-            <button
-              onClick={() => { window.localStorage.removeItem(RIGHT_COL_STORAGE_KEY); window.location.reload(); }}
-              title="Reset widget order"
-              className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
-            >
-              <RotateCcw className="h-3 w-3" />
-            </button>
+            <Hint label="Reset widget order to default">
+              <button
+                onClick={() => { window.localStorage.removeItem(RIGHT_COL_STORAGE_KEY); window.location.reload(); }}
+                aria-label="Reset widget order"
+                className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+              >
+                <RotateCcw className="h-3 w-3" />
+              </button>
+            </Hint>
           </div>
           <SortableList
             storageKey={RIGHT_COL_STORAGE_KEY}

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
+import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
 import { PickExpiryChips } from "@/components/PickExpiryChips";
 
@@ -395,12 +396,11 @@ export default function Scanner() {
                           <td className="px-3 py-3">
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-1">
-                                <span
-                                  title="NOVA — Nova's verdict engine reconciling technicals, Greeks & risk"
-                                  className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border w-fit bg-primary/10 text-primary border-primary/40"
-                                >
-                                  NOVA
-                                </span>
+                                <Hint label="NOVA — verdict engine reconciling technicals, Greeks & risk">
+                                  <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border w-fit bg-primary/10 text-primary border-primary/40 cursor-help">
+                                    NOVA
+                                  </span>
+                                </Hint>
                                 <span className={cn(
                                   "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
                                   verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
