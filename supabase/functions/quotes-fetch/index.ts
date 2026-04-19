@@ -220,10 +220,56 @@ const YAHOO_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 let yahooSession: { cookie: string; crumb: string; at: number } | null = null;
 const YAHOO_SESSION_TTL_MS = 60 * 60_000; // 1h
+const YAHOO_KV_KEY = "yahoo_session_v1";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+async function kvGet(key: string): Promise<{ value: any; expires_at: string | null } | null> {
+  if (!SUPABASE_URL || !SERVICE_ROLE) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/kv_cache?key=eq.${encodeURIComponent(key)}&select=value,expires_at`,
+      { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
+    );
+    if (!r.ok) return null;
+    const rows = await r.json();
+    return rows?.[0] ?? null;
+  } catch { return null; }
+}
+
+async function kvSet(key: string, value: unknown, ttlMs: number): Promise<void> {
+  if (!SUPABASE_URL || !SERVICE_ROLE) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/kv_cache?on_conflict=key`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE,
+        Authorization: `Bearer ${SERVICE_ROLE}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        key,
+        value,
+        expires_at: new Date(Date.now() + ttlMs).toISOString(),
+      }),
+    });
+  } catch { /* best effort */ }
+}
 
 async function getYahooSession(): Promise<{ cookie: string; crumb: string } | null> {
   if (yahooSession && Date.now() - yahooSession.at < YAHOO_SESSION_TTL_MS) {
     return { cookie: yahooSession.cookie, crumb: yahooSession.crumb };
+  }
+  // Cold-start warm-load from KV (skips the 2-request handshake).
+  const cached = await kvGet(YAHOO_KV_KEY);
+  if (cached?.value?.cookie && cached?.value?.crumb) {
+    const exp = cached.expires_at ? Date.parse(cached.expires_at) : 0;
+    if (exp > Date.now()) {
+      yahooSession = { cookie: cached.value.cookie, crumb: cached.value.crumb, at: Date.now() };
+      return { cookie: yahooSession.cookie, crumb: yahooSession.crumb };
+    }
   }
   try {
     // Step 1 — hit fc.yahoo.com to get an A1/A3 cookie.
@@ -253,6 +299,8 @@ async function getYahooSession(): Promise<{ cookie: string; crumb: string } | nu
       return null;
     }
     yahooSession = { cookie, crumb, at: Date.now() };
+    // Persist for other cold starts (best-effort, fire-and-forget).
+    kvSet(YAHOO_KV_KEY, { cookie, crumb }, YAHOO_SESSION_TTL_MS);
     return { cookie, crumb };
   } catch (e) {
     console.error("[yahoo] handshake error", e);
