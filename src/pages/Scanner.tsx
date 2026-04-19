@@ -231,6 +231,35 @@ export default function Scanner() {
 
   const [novaSpec] = useNovaFilter();
 
+  // ── UNIFIED LABEL SYSTEM (declared early so the filter below can use it) ──
+  // ONE label per row, used by the filter, top cards, AND the row badge.
+  // Source of truth: Final Rank's ActionLabel with explicit overrides:
+  //   1. Guard block on a BUY NOW → BLOCKED
+  //   2. CRL says EXIT + owned    → EXIT
+  //   3. Pick expiry STALE        → AVOID
+  type RowLabel = ActionLabel | "BLOCKED";
+  const labelFor = (r: SetupRow): RowLabel => {
+    const rk = rankMap.get(r.symbol)?.rank;
+    if (!rk) return "WAIT";
+    const exp = expiryStatus.get(`scanner:${r.symbol}`);
+    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
+    const guard = evaluateGuards({
+      symbol: r.symbol,
+      livePrice: r.price,
+      pickPrice: r.price,
+      optionType: r.bias === "bearish" ? "put" : "call",
+      direction: "long",
+      strike: r.price,
+      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
+    });
+    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
+    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
+    if (exp?.isStale) return "AVOID";
+    return rk.label;
+  };
+
+
   const filtered = useMemo(() => {
     return sortedRows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
@@ -238,8 +267,22 @@ export default function Scanner() {
       if (filters.search && !r.symbol.includes(filters.search.toUpperCase()) && !r.name.toUpperCase().includes(filters.search.toUpperCase())) return false;
       if (filters.sector !== "all" && r.sector !== filters.sector) return false;
       if (filters.bias !== "all" && r.bias !== filters.bias) return false;
-      if (filters.readiness !== "all" && r.readiness !== filters.readiness) return false;
-      if (filters.hideAvoid && r.readiness === "AVOID") return false;
+      // Readiness filter uses the UNIFIED action label (same one shown in the
+      // Action column) so "NOW" only returns rows whose final verdict is BUY NOW.
+      // Previously this checked the raw scout readiness which could disagree
+      // with the final rank — leading to "NOW filter shows WAIT rows".
+      if (filters.readiness !== "all") {
+        const unified = labelFor(r);
+        const matches =
+          (filters.readiness === "NOW"   && unified === "BUY NOW") ||
+          (filters.readiness === "WAIT"  && (unified === "WAIT" || unified === "WAIT PULLBACK" || unified === "WATCHLIST" || unified === "WATCHLIST ONLY" || unified === "EXPENSIVE ENTRY" || unified === "OVEREXTENDED")) ||
+          (filters.readiness === "AVOID" && (unified === "AVOID" || unified === "BLOCKED"));
+        if (!matches) return false;
+      }
+      if (filters.hideAvoid) {
+        const unified = labelFor(r);
+        if (unified === "AVOID" || unified === "BLOCKED") return false;
+      }
       if (r.setupScore < filters.minScore[0]) return false;
       if (r.relVolume < filters.minRelVol[0]) return false;
       if (r.ivRank < filters.ivrRange[0] || r.ivRank > filters.ivrRange[1]) return false;
@@ -297,35 +340,8 @@ export default function Scanner() {
     });
   }, [rows, settings, expiryStatus, sma]);
 
-  // ── UNIFIED LABEL SYSTEM ─────────────────────────────────────────────
-  // ONE label per row, used by BOTH the top cards AND the row badge.
-  // Source of truth: Final Rank's ActionLabel (BUY NOW / WATCHLIST / WAIT /
-  // AVOID / EXIT) with three explicit overrides in priority order:
-  //   1. Guard block on a BUY NOW → BLOCKED (counts as AVOID)
-  //   2. CRL says EXIT + owned    → EXIT
-  //   3. Pick expiry STALE        → AVOID
-  // Everything else uses rank.label as-is. No more competing CRL/Setup pills.
-  type RowLabel = ActionLabel | "BLOCKED";
-  const labelFor = (r: SetupRow): RowLabel => {
-    const rk = rankMap.get(r.symbol)?.rank;
-    if (!rk) return "WAIT";
-    const exp = expiryStatus.get(`scanner:${r.symbol}`);
-    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
-    const guard = evaluateGuards({
-      symbol: r.symbol,
-      livePrice: r.price,
-      pickPrice: r.price,
-      optionType: r.bias === "bearish" ? "put" : "call",
-      direction: "long",
-      strike: r.price,
-      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
-      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
-    });
-    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
-    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
-    if (exp?.isStale) return "AVOID";
-    return rk.label;
-  };
+  // (labelFor + RowLabel are declared earlier so the filter useMemo can use them.)
+
 
   const counts = useMemo(() => {
     const tally = { "BUY NOW": 0, WATCHLIST: 0, WAIT: 0, AVOID: 0, EXIT: 0, warnings: 0 };
