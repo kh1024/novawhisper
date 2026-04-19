@@ -18,6 +18,7 @@ const base: SignalInput = {
   delta: 0.65,
   accountBalance: 100_000, // big enough that Gate 8 is a no-op for these tests
   contracts: 1,
+  expiryDate: "2099-01-16", // far-future Friday — Gate 9 passes
 };
 
 describe("validateSignal — 7-gate pipeline", () => {
