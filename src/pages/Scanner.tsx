@@ -621,8 +621,24 @@ function ChartLinks({ symbol, className }: { symbol: string; className?: string 
 }
 
 function DetailPanel({ row, onOpen }: { row: SetupRow; onOpen: () => void }) {
+  // Institutional strategy plan derived from this row's metrics.
+  // Pure function — recomputes only when the row changes.
+  const decision = selectStrategy({
+    symbol: row.symbol,
+    bias: row.bias,
+    price: row.price,
+    changePct: row.changePct,
+    ivRank: row.ivRank,
+    atrPct: row.atrPct,
+    rsi: row.rsi,
+    optionsLiquidity: row.optionsLiquidity,
+    earningsInDays: row.earningsInDays,
+    setupScore: row.setupScore,
+  });
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="space-y-4">
+      <StrategyPlaybookCard decision={decision} symbol={row.symbol} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {/* Score breakdown */}
       <div className="lg:col-span-1 space-y-2">
         <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
