@@ -136,6 +136,7 @@ function dteFromIso(iso: string): number {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
+    const startedAt = Date.now();
     if (!MASSIVE_KEY) {
       return new Response(JSON.stringify({ error: "MASSIVE_API_KEY not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -234,8 +235,23 @@ Deno.serve(async (req) => {
       }
       console.warn(`[massive options] ${underlying} HTTP ${status} after retries: ${text}`);
       return new Response(
-        JSON.stringify({ error: `Massive HTTP ${status}`, detail: text, underlying }),
-        { status, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        JSON.stringify({
+          ok: false,
+          degraded: true,
+          error: `Massive HTTP ${status}`,
+          detail: text,
+          underlying,
+          count: 0,
+          contracts: [],
+          fetchedAt: new Date().toISOString(),
+          source: "massive",
+          diagnostics: {
+            upstreamStatus: status,
+            attempts: 4,
+            processingMs: Date.now() - startedAt,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
     const d = await r.json();
