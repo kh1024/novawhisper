@@ -688,17 +688,39 @@ export default function Scanner() {
 
         {/* Card view */}
         {!isLoading && effectiveView === "cards" && filtered.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {filtered.map((r) => (
-              <SetupCard
-                key={r.symbol}
-                row={r}
-                rank={rankMap.get(r.symbol)?.rank ?? null}
-                closes={sma.map.get(r.symbol)?.closes ?? null}
-                onOpen={() => setOpenSymbol(r.symbol)}
-              />
-            ))}
-          </div>
+          isMobile ? (
+            // Mobile: virtualized stack of compact cards. Only renders the ~5
+            // rows currently visible — the full list of 50+ tickers never
+            // mounts at once. Each card is React.memo'd so a single price
+            // tick re-renders only that card.
+            <MobileScannerList
+              rows={filtered}
+              verdictByRow={verdictByRow}
+              buildContract={(r) => {
+                const c = deriveContractFromRow(r);
+                return {
+                  symbol: c.symbol,
+                  optionType: c.optionType as "call" | "put",
+                  direction: c.direction,
+                  strike: c.strike,
+                  expiry: c.expiry,
+                };
+              }}
+              onOpen={(s) => setOpenSymbol(s)}
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filtered.map((r) => (
+                <SetupCard
+                  key={r.symbol}
+                  row={r}
+                  rank={rankMap.get(r.symbol)?.rank ?? null}
+                  closes={sma.map.get(r.symbol)?.closes ?? null}
+                  onOpen={() => setOpenSymbol(r.symbol)}
+                />
+              ))}
+            </div>
+          )
         )}
 
         <ResearchDrawer symbol={openSymbol} onClose={() => setOpenSymbol(null)} />
