@@ -4,6 +4,7 @@
 // Status: verified (2+ sources within 0.25%) · close (<1%) · mismatch (≥1%) · stale (only 1 src) · unavailable.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
+import { isMassiveDown, markMassiveDown, isOutageStatus } from "../_shared/massiveOutage.ts";
 
 const ALPHA_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
@@ -191,6 +192,9 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
 
 async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
   if (!MASSIVE_KEY) return null;
+  // Kill-switch — skip Massive entirely while flagged offline. Hourly
+  // massive-ping clears the flag when API recovers.
+  if (await isMassiveDown()) return null;
   const cached = massiveCache.get(symbol);
   if (cached && Date.now() - cached.at < MASSIVE_TTL_MS) return cached.q;
   try {
@@ -206,6 +210,9 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
     }
     if (!r.ok) {
       console.warn(`[massive] ${symbol} HTTP ${r.status}`);
+      if (isOutageStatus(r.status)) {
+        await markMassiveDown(`HTTP ${r.status}`);
+      }
       keepPreviousOnBackoff(massiveCache, symbol, cached, MASSIVE_TTL_MS, 30_000);
       return cached?.q ?? null;
     }
