@@ -53,9 +53,11 @@ export interface PlanningPick {
   catalysts: string[];
   risks: string[];
   sources: ("youtube" | "quote")[];
-  optionType: "call" | "put" | "call_spread" | "put_spread" | "straddle" | "strangle";
+  /** Calls or puts only — multi-leg structures were retired across the app. */
+  optionType: "call" | "put";
   direction: "long" | "short";
   strike: number;
+  /** Kept on the type for back-compat with persisted rows; always undefined for new picks. */
   strikeShort?: number;
   expiry: string;
   playAt: number;
@@ -77,7 +79,12 @@ export function usePlanning(opts?: { includeYouTube?: boolean; ytQuery?: string 
     queryFn: async (): Promise<PlanningResult> => {
       const { data, error } = await supabase.functions.invoke("planning-synthesis", { body: opts ?? {} });
       if (error) throw error;
-      return data as PlanningResult;
+      const r = data as PlanningResult;
+      // Drop any legacy spread/condor/straddle picks that might come from cached responses.
+      const cleanedPicks = (r.synthesis?.picks ?? []).filter(
+        (p) => p.optionType === "call" || p.optionType === "put",
+      );
+      return { ...r, synthesis: { ...r.synthesis, picks: cleanedPicks } };
     },
     staleTime: 5 * 60_000,
     refetchInterval: 10 * 60_000,
