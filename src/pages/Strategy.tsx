@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useSettings, type TraderProfile } from "@/lib/settings";
+import { RedditIdeasCard } from "@/components/RedditIdeasCard";
+import { toast } from "sonner";
 import {
   recommendStrategies,
   RISK_LABELS,
@@ -156,6 +158,16 @@ export default function Strategy() {
           </div>
         </div>
       </Card>
+
+      {/* Reddit Ideas — live trending option posts */}
+      <RedditIdeasCard
+        onApply={(patch, idea) => {
+          setProfile(patch);
+          toast.success(`Loaded ${idea.symbol} ${idea.side.toUpperCase()} into builder`, {
+            description: `Outlook + horizon set from r/${idea.sub}. Pick a structure below.`,
+          });
+        }}
+      />
 
       {/* Suggestions */}
       <div className="space-y-5">
