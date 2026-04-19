@@ -63,10 +63,11 @@ export function useApiHealth() {
       // Massive powers both quotes-fetch and options-fetch under the hood.
       // We ping options-fetch as the Massive health proxy (it's the heaviest
       // Massive call) and reuse the quotes-fetch ping for the consensus row.
-      const [quotes, options, news] = await Promise.all([
+      const [quotes, options, news, publicCom] = await Promise.all([
         ping("quotes-fetch", { symbols: ["SPY"] }),
         ping("options-fetch", { underlying: "SPY", limit: 5 }),
         ping("news-fetch",   { category: "general", limit: 3 }),
+        ping("public-quotes-fetch", { symbols: ["SPY"] }),
       ]);
       const toStatus = (r: { ok: boolean; ms: number }) =>
         !r.ok ? "down" : r.ms > 4000 ? "degraded" : "ok";
@@ -74,6 +75,7 @@ export function useApiHealth() {
         { name: "Quotes (Finnhub + Alpha Vantage)", description: "Live verified prices — freshest-timestamp wins", status: toStatus(quotes),  latencyMs: quotes.ms,  detail: quotes.detail, functions: ["quotes-fetch"] },
         { name: "Massive (Options + Quotes backbone)",        description: "Throttled to 75 req/s/instance to stay under plan limits", status: toStatus(options), latencyMs: options.ms, detail: options.detail, functions: ["quotes-fetch", "options-fetch"] },
         { name: "Market News (Finnhub)",                      description: "Sentiment + headlines feed",                     status: toStatus(news),    latencyMs: news.ms,    detail: news.detail,    functions: ["news-fetch"] },
+        { name: "Public.com (Quotes)",                        description: "Brokerage market-data quotes — your account", status: toStatus(publicCom), latencyMs: publicCom.ms, detail: publicCom.detail, functions: ["public-quotes-fetch"] },
         { name: "Lovable AI Gateway",                         description: "Nova explanations",                              status: "ok",              latencyMs: null,       detail: "Routed via gateway — no key needed", functions: ["nova-chat", "ask-nova"] },
       ];
       // Mark anything the user has disabled so the dot/label reads "off"
