@@ -48,7 +48,12 @@ export interface SetupRow {
   earningsInDays: number | null;
   bias: Bias;
   trendLabel: string;
-  setupScore: number;         // 0-100
+  setupScore: number;         // 0-100 (regime + time-state adjusted)
+  rawSetupScore: number;      // 0-100 (pre-adjustment, for transparency)
+  grade: ConfidenceGrade;     // A / B / C / D from NOVA brain
+  regime: MarketRegime;       // current inferred regime
+  timeStateLabel: string;     // e.g. "Power Hour"
+  novaNotes: string[];        // why the regime/time-state nudged the score
   breakdown: ScoreBreakdown;
   readiness: Readiness;
   warnings: string[];
