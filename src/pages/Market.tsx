@@ -54,7 +54,7 @@ function MoverRow({ q, onClick }: { q: VerifiedQuote; onClick: () => void }) {
 }
 
 function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; oi?: number }) {
-  const isBull = p.bias === "bullish" || p.optionType === "call" || p.optionType === "call_spread";
+  const isBull = p.bias === "bullish" || p.optionType === "call";
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
     : "text-muted-foreground border-border bg-surface/50";

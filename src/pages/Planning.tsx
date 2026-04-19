@@ -241,8 +241,8 @@ type RiskTier = "safe" | "mild" | "aggressive";
  */
 function evalRisk(p: PlanningPick): { tier: RiskTier; volatilityTrap: boolean; trapReason?: string } {
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
-  const isCall = p.optionType.includes("call") || p.optionType === "straddle" || p.optionType === "strangle";
-  const isPut = p.optionType.includes("put");
+  const isCall = p.optionType === "call";
+  const isPut = p.optionType === "put";
   const playAt = Number(p.playAt) || 0;
   const strike = Number(p.strike) || 0;
   let itmPct = 0;
@@ -250,18 +250,14 @@ function evalRisk(p: PlanningPick): { tier: RiskTier; volatilityTrap: boolean; t
     if (isCall) itmPct = ((playAt - strike) / strike) * 100;
     else if (isPut) itmPct = ((strike - playAt) / strike) * 100;
   }
-  const isSpread = p.optionType.includes("spread");
   const absMoney = Math.abs(itmPct);
 
+  // Single-leg only world: tier purely by moneyness + DTE + conviction.
   let tier: RiskTier;
-  if (!isSpread && itmPct >= 3 && dte >= 21) {
-    tier = "safe"; // Deep ITM stock-replacement
-  } else if (isSpread && p.conviction === "A" && dte >= 14) {
-    tier = "safe"; // High-conviction defined-risk spread
-  } else if (!isSpread && absMoney <= 3 && dte >= 14 && p.conviction !== "C") {
-    tier = "mild"; // Near-the-money, decent DTE, decent conviction
-  } else if (isSpread && p.conviction === "B") {
-    tier = "mild";
+  if (itmPct >= 3 && dte >= 21) {
+    tier = "safe"; // ITM stock-replacement style
+  } else if (absMoney <= 3 && dte >= 14 && p.conviction !== "C") {
+    tier = "mild"; // Near-the-money, decent DTE + conviction
   } else {
     tier = "aggressive";
   }
@@ -269,10 +265,10 @@ function evalRisk(p: PlanningPick): { tier: RiskTier; volatilityTrap: boolean; t
   // Volatility-trap detection (only meaningful for the Aggressive tier).
   let volatilityTrap = false;
   let trapReason: string | undefined;
-  if (tier === "aggressive" && !isSpread) {
+  if (tier === "aggressive") {
     if (itmPct >= 10) {
       volatilityTrap = true;
-      trapReason = `Deep ITM (+${itmPct.toFixed(1)}%) on a single leg — paying intrinsic at the top. Prefer a vertical spread.`;
+      trapReason = `Deep ITM (+${itmPct.toFixed(1)}%) — paying intrinsic at the top, leverage edge is gone.`;
     } else if (p.conviction === "C" && dte < 7) {
       volatilityTrap = true;
       trapReason = `Low conviction + <7 DTE — lotto ticket, premium will decay fast.`;

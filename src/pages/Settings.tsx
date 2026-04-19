@@ -84,8 +84,8 @@ export default function Settings() {
               <Compass className="h-4 w-4 text-primary" /> Trader profile
             </h2>
             <p className="text-xs text-muted-foreground mt-1 max-w-md">
-              Drives the Strategy Builder. Tell Nova your risk, horizon and outlook and we'll match the right
-              option structures (credit spreads, iron condors, debit spreads, straddles, 0-DTE…).
+              Drives the Strategy Builder. Tell Nova your risk, horizon and outlook and we'll suggest the right
+              single-leg play — long calls, long puts, stock-replacement, or 0-DTE.
             </p>
           </div>
           <Button asChild size="sm" variant="outline">

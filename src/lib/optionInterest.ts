@@ -47,8 +47,7 @@ export function useOptionInterest(picks: ScoutPick[]): Map<string, PickInterest>
     if (!chain) return;
     const symPicks = picks.filter((p) => p.symbol === sym);
     for (const p of symPicks) {
-      const wantType: "call" | "put" =
-        p.optionType === "put" || p.optionType === "put_spread" ? "put" : "call";
+      const wantType: "call" | "put" = p.optionType === "put" ? "put" : "call";
       // Find closest strike + matching expiry
       const sameExp = chain.filter((c) => c.type === wantType && c.expiration === p.expiry);
       const pool = sameExp.length ? sameExp : chain.filter((c) => c.type === wantType);
@@ -65,7 +64,7 @@ export function useOptionInterest(picks: ScoutPick[]): Map<string, PickInterest>
 }
 
 export function pickInterestKey(p: ScoutPick): string {
-  const t = p.optionType === "put" || p.optionType === "put_spread" ? "put" : "call";
+  const t = p.optionType === "put" ? "put" : "call";
   return `${p.symbol}|${t}|${p.strike}|${p.expiry}`;
 }
 

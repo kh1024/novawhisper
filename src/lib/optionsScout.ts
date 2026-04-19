@@ -9,9 +9,11 @@ export type NovaRegime = "bull" | "bear" | "sideways" | "panic" | "meltup";
 export interface ScoutPick {
   symbol: string;
   strategy: string;
-  optionType: "call" | "put" | "call_spread" | "put_spread" | "straddle" | "strangle" | "iron_condor";
+  /** Calls or puts only — multi-leg structures were retired across the app. */
+  optionType: "call" | "put";
   direction: "long" | "short";
   strike: number;
+  /** Kept on the type for back-compat with persisted/legacy rows; always undefined for new picks. */
   strikeShort?: number;
   expiry: string;
   playAt: number;
@@ -45,6 +47,12 @@ export interface ScoutResult {
   fetchedAt: string;
 }
 
+// Single-leg only filter — drop any legacy spread/condor/straddle rows that
+// might still come back from cached/persisted runs.
+function isVanilla(p: ScoutPick): boolean {
+  return p.optionType === "call" || p.optionType === "put";
+}
+
 export function useOptionsScout(enabled = true) {
   return useQuery({
     queryKey: ["options-scout"],
@@ -53,8 +61,16 @@ export function useOptionsScout(enabled = true) {
       const { data, error } = await supabase.functions.invoke("options-scout", { body: {} });
       if (error) throw error;
       const r = data as ScoutResult;
+      const filt = (arr?: ScoutPick[]) => (arr ?? []).filter(isVanilla);
+      const cleaned: ScoutResult = {
+        ...r,
+        safe: filt(r.safe),
+        moderate: filt(r.moderate),
+        aggressive: filt(r.aggressive),
+        swing: filt(r.swing),
+      };
       // Back-compat: mirror moderate → mild for any legacy consumer.
-      return { ...r, mild: r.moderate ?? [] };
+      return { ...cleaned, mild: cleaned.moderate ?? [] };
     },
     staleTime: 10 * 60_000,
     refetchInterval: 15 * 60_000,

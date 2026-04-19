@@ -65,14 +65,19 @@ Deno.serve(async (req) => {
     const today = new Date().toISOString().slice(0, 10);
     const systemPrompt = `You are Nova, an experienced options trader analyzing tomorrow's session.
 You synthesize two things: (a) what finance YouTube creators are covering and their comment sections, (b) verified market quotes.
-Pick 5-8 tickers worth watching for the next session. For each, give a directional bias, a one-sentence thesis, key catalysts, risks, AND a concrete options play:
-- option type (call / put / spread / straddle) and direction (long / short)
+Pick 5-8 tickers worth watching for the next session. For each, give a directional bias, a one-sentence thesis, key catalysts, risks, AND a concrete options play.
+
+CRITICAL: This app trades CALLS or PUTS only — single leg, no multi-leg structures. Never propose spreads, condors, straddles, strangles, calendars, or any combo.
+
+For each pick:
+- option type: "call" or "put" (no other values allowed)
+- direction: "long" or "short"
 - exact strike price (number, USD) — pick a strike that fits the bias and current spot price from the quotes data
 - expiry date in YYYY-MM-DD (a real upcoming Friday weekly or monthly expiry — today is ${today})
 - "play at" underlying price (the spot level where the trade triggers)
 - premium estimate range
 
-If hype is high but data is weak, set bias to "fade" and structure the play accordingly. Never return vague entries — every pick must be tradeable.`;
+If hype is high but data is weak, set bias to "fade" and pick the contrarian put (or call) — never invent a multi-leg structure to express it. Never return vague entries — every pick must be tradeable.`;
 
     const userPrompt = `INTERNET TALK SUMMARY (next session planning)\n\nUniverse + per-source signals:\n${JSON.stringify(merged, null, 2)}\n\nTop YouTube videos:\n${JSON.stringify(topVideos, null, 2)}\n\nReturn a ranked watchlist via the tool with concrete strikes, expiries, and play-at prices for every pick.`;
 
@@ -106,10 +111,10 @@ If hype is high but data is weak, set bias to "fade" and structure the play acco
                       catalysts: { type: "array", items: { type: "string" } },
                       risks: { type: "array", items: { type: "string" } },
                       sources: { type: "array", items: { type: "string", enum: ["youtube", "quote"] } },
-                      optionType: { type: "string", enum: ["call", "put", "call_spread", "put_spread", "straddle", "strangle"], description: "Primary option leg type that fits the bias." },
+                      optionType: { type: "string", enum: ["call", "put"], description: "Single leg only — never propose spreads, condors, straddles, strangles, or any multi-leg combo." },
                       direction: { type: "string", enum: ["long", "short"] },
-                      strike: { type: "number", description: "Strike price in USD for the primary leg." },
-                      strikeShort: { type: "number", description: "Optional second strike for spreads (the short leg)." },
+                      strike: { type: "number", description: "Strike price in USD." },
+                      strikeShort: { type: "number", description: "DEPRECATED — leave omitted. Multi-leg structures are disabled." },
                       expiry: { type: "string", description: "Expiration date YYYY-MM-DD — pick a real upcoming Friday/monthly expiry." },
                       playAt: { type: "number", description: "Underlying spot price at which to enter the trade." },
                       premiumEstimate: { type: "string", description: "Rough premium estimate, e.g. '$1.20-$1.40' or 'collect $0.85 credit'." },
@@ -141,11 +146,15 @@ If hype is high but data is weak, set bias to "fade" and structure the play acco
     }
     const aiJson = await aiResp.json();
     const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
-    let synthesis: { marketTone: string; picks: unknown[] } = { marketTone: "", picks: [] };
+    let synthesis: { marketTone: string; picks: Array<Record<string, unknown>> } = { marketTone: "", picks: [] };
     if (toolCall?.function?.arguments) {
       try { synthesis = JSON.parse(toolCall.function.arguments); }
       catch (e) { console.error("[planning] parse tool args failed", e); }
     }
+    // Server-side guard: drop any non-call/put picks the model still produced.
+    synthesis.picks = (synthesis.picks ?? []).filter(
+      (p) => p.optionType === "call" || p.optionType === "put",
+    );
 
     return new Response(
       JSON.stringify({

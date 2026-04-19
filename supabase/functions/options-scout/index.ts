@@ -208,17 +208,17 @@ DTE → STRATEGY MAPPING:
 | 60-180 DTE  | Medium-term swings. Swing bucket.                     |
 | >180 DTE    | LEAPS only on strong long-term conviction (delta 0.60-0.75). |
 
-STRUCTURE PREFERENCE:
-- Bullish → bull call spread or CSP first; naked long call only if IV cheap + catalyst.
-- Bearish → bear put spread or call credit spread.
-- Neutral → iron condor / butterfly / calendar.
-- Income → covered call, collar, wheel.
+STRUCTURE PREFERENCE (CALLS / PUTS ONLY — multi-leg structures are disabled in this app):
+- Bullish → long call. Pick a delta band that matches conviction (Aggressive ATM, Balanced slight ITM, Conservative ITM 0.70-0.85).
+- Bearish → long put. Same delta-band rule.
+- Neutral / no clear edge → return [] for that bucket. DO NOT propose iron condors, calendars, butterflies, straddles, strangles, or vertical spreads — the user wants single-leg calls/puts only.
+- Income / hedging — express it as a single ITM call (synthetic-stock style) or a single put hedge, never as a spread.
 
-═══ FOUR BUCKETS ═══
-- SAFE — low-risk income/hedging. CCs, CSPs on blue chips, long-dated debit spreads on stable names. Defined risk, high P(profit). Conservative delta band.
-- MODERATE — moderate-risk directional. Vertical spreads, 30-45 DTE single-leg on liquid names with a clear catalyst. Balanced delta band.
-- AGGRESSIVE — high R/R. 0-7 DTE, naked single-leg on momentum, earnings straddles, unusual-activity follow-the-whale. Aggressive delta band.
-- SWING — multi-day to multi-week directional. 30-90 DTE single-leg or spreads on technical breakout / sector rotation / post-earnings drift names.
+═══ FOUR BUCKETS (single-leg only) ═══
+- SAFE — long ITM call/put with longer DTE (≥45 DTE), conservative delta band 0.70-0.85. Stock-replacement style.
+- MODERATE — 30-60 DTE single-leg on liquid names with a clear catalyst, balanced delta 0.55-0.70.
+- AGGRESSIVE — 0-7 DTE or ATM single-leg on momentum / earnings / unusual flow. Aggressive delta 0.45-0.55.
+- SWING — 30-90 DTE single-leg on technical breakout / sector rotation / post-earnings drift. Balanced-to-conservative delta.
 
 ═══ CONFIDENCE GRADING (weighted score 0-100) ═══
 - 20% Technical setup (trend, S/R, pattern, volume)
@@ -318,7 +318,10 @@ INSTRUCTIONS:
     try {
       const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const tiers = ["safe", "moderate", "aggressive", "swing"] as const;
-      const allPicks = tiers.flatMap((t) => ((buckets[t] as unknown[]) ?? []).map((p) => ({ tier: t, pick: p as Record<string, unknown> })));
+      const allPicks = tiers.flatMap((t) => ((buckets[t] as unknown[]) ?? [])
+        .map((p) => ({ tier: t, pick: p as Record<string, unknown> }))
+        // Single-leg only — drop anything the model still tried to sneak through.
+        .filter(({ pick }) => pick.optionType === "call" || pick.optionType === "put"));
       const { data: runRow, error: runErr } = await sb.from("web_picks_runs").insert({
         market_read: (buckets.marketRead as string) ?? "",
         source_count: allSources.length,
@@ -383,7 +386,7 @@ function pickSchema() {
     properties: {
       symbol: { type: "string", description: "Underlying ticker, e.g. AAPL" },
       strategy: { type: "string", description: "e.g. 'Covered call', 'Bull put spread', '0DTE call', 'Iron condor', 'Swing call'" },
-      optionType: { type: "string", enum: ["call", "put", "call_spread", "put_spread", "straddle", "strangle", "iron_condor"], description: "Primary leg type" },
+      optionType: { type: "string", enum: ["call", "put"], description: "Single-leg only. Multi-leg structures are disabled in this app." },
       direction: { type: "string", enum: ["long", "short"], description: "Buying (long) or selling (short) the primary leg" },
       strike: { type: "number", description: "Primary strike price in USD." },
       strikeShort: { type: "number", description: "Optional second strike for spreads/multi-leg." },

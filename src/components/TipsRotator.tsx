@@ -45,20 +45,14 @@ const TIPS: Tip[] = [
   { category: "options", title: "Open interest = liquidity", body: "OI under 100 = you'll get sliced. Look for OI above 500 on the strike you want to trade." },
   { category: "options", title: "Volume confirms today's interest", body: "High option volume + rising OI on one strike often signals smart-money positioning. That's what 'unusual activity' means." },
   { category: "options", title: "Contract = 100 shares", body: "1 call contract controls 100 shares. A $2 premium = $200 cost per contract. Sizing mistakes here destroy accounts." },
-  { category: "options", title: "Cash-secured put basics", body: "Short a put = you'll buy 100 shares at the strike if assigned. Only sell CSPs on stocks you actually want to own." },
-  { category: "options", title: "Covered call basics", body: "Own 100 shares + sell 1 call = collect premium, capped upside. Great for sideways/mildly bullish names you'd happily sell at the strike." },
 
-  // ── Spreads & strategies ───────────────────────────────────
-  { category: "strategy", title: "Vertical spread = defined risk", body: "Buy one strike + sell another in the same expiry. Max loss = debit paid (or width minus credit). No surprise blowups." },
-  { category: "strategy", title: "Bull put spread", body: "Sell a put + buy a lower put. Bullish/neutral. Keep the credit if stock stays above the short strike at expiry." },
-  { category: "strategy", title: "Bear call spread", body: "Sell a call + buy a higher call. Bearish/neutral. Defined risk, limited reward — good when IV is rich." },
-  { category: "strategy", title: "Iron condor", body: "Bull put spread + bear call spread on the same expiry. Profit if the stock chops between your short strikes. Earnings season trap if you're undisciplined." },
-  { category: "strategy", title: "Long straddle for events", body: "Buy a call + buy a put at the same strike. Profits on a big move either direction — needs a move bigger than the IV implies." },
-  { category: "strategy", title: "Calendar spread", body: "Sell a near-term option, buy a longer-dated one at the same strike. Profits from theta + IV expansion in the back month." },
-  { category: "strategy", title: "Match strategy to thesis", body: "Bullish + low IV → long calls or call debit spread. Bullish + high IV → short put or put credit spread. Direction AND vol matter." },
-  { category: "strategy", title: "Roll instead of forcing", body: "If your short option goes ITM but your thesis is intact, roll out (later expiry) and sometimes down/up to a better strike for a credit." },
-  { category: "strategy", title: "Take profits at 50%", body: "Closing a credit spread at 50% of max profit drastically improves risk-adjusted returns vs holding to expiry." },
-  { category: "strategy", title: "Don't double down on losers", body: "Adding to a losing options position is how accounts get blown up. Theta and IV won't bail you out." },
+  // ── Single-leg playbook ─────────────────────────────────────
+  { category: "strategy", title: "Long call basics", body: "Buy a call when you expect the stock to move up significantly before expiry. Max loss = premium paid. Pick ATM for leverage, ITM for safety." },
+  { category: "strategy", title: "Long put basics", body: "Buy a put when you expect the stock to drop. Max loss = premium paid. Same delta-band rules as calls, just inverted." },
+  { category: "strategy", title: "Stock-replacement call", body: "Deep-ITM call (Δ ≥ 0.80) tracks the stock ~1:1 with less capital and minimal theta drag. Great for high-priced names you'd own anyway." },
+  { category: "strategy", title: "Match strategy to thesis", body: "Bullish + low IV → long call (premium is on sale). Bearish + low IV → long put. High IV? Wait for IV to cool — long premium will get crushed." },
+  { category: "strategy", title: "Take profits on the way up", body: "Trim 50% at +50% to lock in cost basis, let the rest run with a trailing stop. Beats holding to expiry hoping for a moonshot." },
+  { category: "strategy", title: "Don't double down on losers", body: "Adding to a losing long-premium position is how accounts get blown up. Theta and IV won't bail you out." },
 
   // ── Risk management ────────────────────────────────────────
   { category: "risk", title: "1-2% rule", body: "Risk no more than 1-2% of account on a single options trade. One bad print should never end your week." },
@@ -95,7 +89,7 @@ const TIPS: Tip[] = [
   { category: "options", title: "0DTE = skill OR gambling", body: "Same-day expiration options have huge gamma and tiny theta-time. Either you have a real edge, or you're paying tuition." },
 
   // ── Catalyst & flow ────────────────────────────────────────
-  { category: "strategy", title: "Earnings expected move", body: "Take ATM straddle price ÷ stock price = market-implied % move through earnings. Trade only if your view differs from this." },
+  { category: "strategy", title: "Earnings expected move", body: "Take ATM call + ATM put price ÷ stock price = market-implied % move through earnings. Trade only if your view differs from this." },
   { category: "strategy", title: "Unusual options activity = clue", body: "Big sweeps on OTM strikes can signal informed positioning, but most are noise. Confirm with price action before following." },
   { category: "strategy", title: "Watch the VIX", body: "VIX > 25 = elevated fear, premium-selling shines. VIX < 14 = complacency, long-premium / hedges get cheap." },
   { category: "strategy", title: "Sector rotation > stock picks", body: "Most stocks follow their sector ETF. Get the sector right (XLF, XLK, XLE) and individual picks become much easier." },
