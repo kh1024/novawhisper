@@ -248,15 +248,40 @@ LOTTERY PICKS (3 trades — entertainment / speculative only):
 open interest, bid/ask spread, IV Rank / IV Percentile, expected move,
 support/resistance, breakouts, breakdowns, earnings/Fed/CPI/news catalysts.
 
-═══ STRIKE & EXPIRATION RULES ═══
-DELTA BANDS (long single-leg):
-| Approach     | Call Delta | Put Delta      |
-| Aggressive   | 0.45-0.55  | -0.45 to -0.55 |
-| Balanced     | 0.55-0.70  | -0.55 to -0.70 |
-| Conservative | 0.70-0.85  | -0.70 to -0.85 |
-- Never pick delta > 0.90 unless explicit synthetic-stock justification.
-- If a naked long looks inefficient (premium > 5-10% of stock OR breakeven move >
-  expected vol window), use a debit spread instead and explain why.
+═══ STRIKE & EXPIRATION RULES — PROFESSIONAL STRIKE SELECTION + CONTRACT SANITY ═══
+
+DELTA BANDS (long single-leg) — match strike to user risk profile:
+| Bucket       | Call Delta  | Put Delta      | Moneyness preference |
+| Conservative | 0.65-0.80   | -0.65 to -0.80 | Slight ITM / ITM     |
+| Moderate     | 0.50-0.65   | -0.50 to -0.65 | ATM / Slight ITM     |
+| Aggressive   | 0.35-0.55   | -0.35 to -0.55 | ATM / Slight OTM     |
+| Lottery      | 0.10-0.30   | -0.10 to -0.30 | OTM (small size)     |
+
+CONTRACT SANITY — REJECT BEFORE RECOMMENDING:
+1. CALL: if strike < playAt × 0.75 (>25% deep ITM) → REJECT. "Too deep ITM, poor leverage / expensive capital use." Use ATM call or call debit spread instead.
+2. CALL: if strike > playAt × 1.25 (>25% OTM) → only Lottery. NEVER label Conservative or Moderate.
+3. CALL: if strike > playAt × 1.50 (>50% OTM) → HARD REJECT.
+4. PUT mirrors: strike > playAt × 1.25 = deep ITM reject; strike < playAt × 0.75 = lottery only; strike < playAt × 0.50 = hard reject.
+
+REALISTIC MOVE CHECK:
+- moveNeededPct = |strike - playAt| / playAt × 100
+- If moveNeededPct > expectedMove × 1.5 → downgrade, label "Low probability strike"
+- If moveNeededPct > expectedMove × 2.0 → REJECT unless Lottery
+
+CAPITAL EFFICIENCY:
+- premium > 8% of underlying AND delta > 0.85 → suggest stock or debit spread instead.
+- naked long inefficient (premium > 5-10% of stock OR breakeven move > expected vol window) → use a debit spread and explain why.
+- Never pick delta > 0.90 unless explicit Stock-Replacement justification.
+
+LABEL CORRECTION (apply BEFORE returning):
+- Strike > 15% OTM → max label = Aggressive
+- Strike > 25% OTM → label = Lottery
+- Delta < 0.30 → label = Lottery
+- Delta > 0.75 AND liquid → may be Conservative
+
+IV LOGIC:
+- IV Rank > 80 → avoid naked longs unless catalyst; prefer debit spreads
+- IV Rank < 40 → prefer naked long calls/puts and debit spreads
 
 DTE → bucket:
 - 0-7 DTE  → lottery only (event-driven)
@@ -264,6 +289,12 @@ DTE → bucket:
 - 30-90 DTE → moderate / aggressive
 - 90-180 DTE → moderate / conservative
 - >180 DTE → LEAPS — conservative only, delta 0.60-0.75
+
+SCORING PENALTIES (apply to confidenceScore):
+- Deep ITM capital inefficient: -2 · Far OTM low prob: -2.5 · Wide spread: -1.5
+- Low OI: -1.5 · IV overpriced no catalyst: -1.5 · Move unrealistic: -2
+
+FINAL RULE: Do not recommend what merely exists in the chain. Recommend what is statistically and financially intelligent. If no good contract exists for a bucket, return [] for that bucket.
 
 ═══ RULES BY STRATEGY ═══
 LONG CALLS — prefer in bullish regime, strong uptrend, pullback to support,
@@ -400,11 +431,75 @@ INSTRUCTIONS:
       const strat = String(p.strategy ?? "").toLowerCase();
       const ot = String(p.optionType ?? "").toLowerCase();
       const dir = String(p.direction ?? "").toLowerCase();
-      // Hard reject any short premium / income leaks.
       if (dir === "short") return false;
       if (ot !== "call" && ot !== "put") return false;
       return ALLOWED_STRATS.some((a) => strat.includes(a));
     };
+
+    // ─── PROFESSIONAL STRIKE SELECTION + CONTRACT SANITY (server-side) ───
+    // Even if the model drifts, these rules guarantee no absurd ITM / far-OTM
+    // mislabeled picks reach the UI.
+    type Tier = "conservative" | "moderate" | "aggressive" | "lottery";
+    function sanityCheck(p: Record<string, unknown>, originalTier: Tier):
+      { keep: boolean; tier: Tier; reason?: string; penalty: number } {
+      const strike = Number(p.strike ?? 0);
+      const playAt = Number(p.playAt ?? 0);
+      const ot = String(p.optionType ?? "").toLowerCase();
+      const isSpread = /debit spread/i.test(String(p.strategy ?? ""));
+      if (!strike || !playAt) return { keep: true, tier: originalTier, penalty: 0 };
+
+      const moneynessPct = ((strike - playAt) / playAt) * 100;
+      const otmCallPct = ot === "call" ? moneynessPct : -moneynessPct;
+      const itmCallPct = -otmCallPct;
+      const otmPutPct = ot === "put" ? -moneynessPct : moneynessPct;
+      const itmPutPct = -otmPutPct;
+
+      if (ot === "call") {
+        if (otmCallPct > 50) return { keep: false, tier: originalTier, reason: "Call >50% OTM hard reject", penalty: 0 };
+        if (itmCallPct > 25 && !isSpread) return { keep: false, tier: originalTier, reason: "Call >25% deep ITM — capital inefficient", penalty: 0 };
+      } else if (ot === "put") {
+        if (otmPutPct > 50) return { keep: false, tier: originalTier, reason: "Put >50% OTM hard reject", penalty: 0 };
+        if (itmPutPct > 25 && !isSpread) return { keep: false, tier: originalTier, reason: "Put >25% deep ITM — capital inefficient", penalty: 0 };
+      }
+
+      let tier: Tier = originalTier;
+      const farOtm = ot === "call" ? otmCallPct : otmPutPct;
+      if (farOtm > 25) tier = "lottery";
+      else if (farOtm > 15 && (tier === "conservative" || tier === "moderate")) tier = "aggressive";
+
+      let penalty = 0;
+      if (farOtm > 25) penalty += 25;
+      else if (farOtm > 15) penalty += 10;
+      const deepItm = ot === "call" ? itmCallPct : itmPutPct;
+      if (deepItm > 15 && !isSpread) penalty += 20;
+      return { keep: true, tier, penalty };
+    }
+
+    const TIERS: Tier[] = ["conservative", "moderate", "aggressive", "lottery"];
+    const sanitized: Record<Tier, Record<string, unknown>[]> = {
+      conservative: [], moderate: [], aggressive: [], lottery: [],
+    };
+    for (const t of TIERS) {
+      const arr = (buckets[t] as unknown[] | undefined) ?? [];
+      for (const raw of arr) {
+        const p = raw as Record<string, unknown>;
+        if (!isAllowed(p)) continue;
+        const res = sanityCheck(p, t);
+        if (!res.keep) {
+          console.log(`[options-scout] sanity rejected ${p.symbol} ${p.strategy} ${p.strike}: ${res.reason}`);
+          continue;
+        }
+        if (res.penalty) {
+          const cs = Number(p.confidenceScore ?? 7);
+          p.confidenceScore = Math.max(1, cs - res.penalty / 10);
+        }
+        sanitized[res.tier].push(p);
+      }
+    }
+    buckets.conservative = sanitized.conservative;
+    buckets.moderate = sanitized.moderate;
+    buckets.aggressive = sanitized.aggressive;
+    buckets.lottery = sanitized.lottery;
 
     // 5) Persist this run + picks for history & performance tracking
     let runId: string | null = null;
