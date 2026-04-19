@@ -19,6 +19,7 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
 import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
 import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
+import { smartActionLabel } from "@/lib/actionCopy";
 import { useSnapshotUploader } from "@/lib/useSnapshotUploader";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
