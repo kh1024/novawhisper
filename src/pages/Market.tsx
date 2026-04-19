@@ -12,11 +12,12 @@ import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
 import { useTopCoins } from "@/lib/cryptoData";
 import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
 import { useOptionInterest, pickInterestKey, fmtOI } from "@/lib/optionInterest";
+import { useSma200, type SymbolSma } from "@/lib/sma200";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { GateValidationDashboard } from "@/components/GateValidationDashboard";
+import { validatePick } from "@/lib/gates";
 import { useQueryClient } from "@tanstack/react-query";
-import { labelFromWebPick, unifiedClasses, UNIFIED_HINTS } from "@/lib/unifiedLabel";
-import { Hint } from "@/components/Hint";
 import { cn } from "@/lib/utils";
 
 const INDICES = ["SPY", "QQQ", "DIA", "IWM", "VIX"];
@@ -55,17 +56,26 @@ function MoverRow({ q, onClick }: { q: VerifiedQuote; onClick: () => void }) {
   );
 }
 
-function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; oi?: number }) {
+function OptionPickRow({ p, onClick, oi, quote, sma }: {
+  p: ScoutPick; onClick: () => void; oi?: number;
+  quote?: VerifiedQuote | null; sma?: SymbolSma | null;
+}) {
   const isBull = p.bias === "bullish" || p.optionType === "call";
   const gradeTone = p.grade === "A" ? "text-bullish border-bullish/40 bg-bullish/10"
     : p.grade === "B" ? "text-warning border-warning/40 bg-warning/10"
     : "text-muted-foreground border-border bg-surface/50";
-  // Unified action label — same vocabulary as Scanner / Top Opportunities / Portfolio.
-  const action = labelFromWebPick(p);
+  const validation = useMemo(
+    () => validatePick({ pick: p, quote, sma }),
+    [p, quote, sma],
+  );
+  const blocked = validation.finalStatus === "BLOCKED";
   return (
     <button
       onClick={onClick}
-      className="w-full flex flex-col gap-1.5 p-2.5 rounded-md border border-border/60 hover:border-primary/40 active:bg-surface/60 transition-colors text-left"
+      className={cn(
+        "w-full flex flex-col gap-1.5 p-2.5 rounded-md border transition-colors text-left",
+        blocked ? "border-bearish/40 bg-bearish/5 hover:border-bearish/60" : "border-border/60 hover:border-primary/40 active:bg-surface/60",
+      )}
     >
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-mono font-bold text-sm">{p.symbol}</span>
@@ -74,11 +84,6 @@ function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; 
             {p.grade}
           </span>
         )}
-        <Hint label={UNIFIED_HINTS[action]}>
-          <span className={cn("text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help", unifiedClasses(action))}>
-            {action}
-          </span>
-        </Hint>
         <span className={cn("text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded",
           isBull ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish")}>
           {p.optionType.replace("_", " ")}
@@ -101,6 +106,7 @@ function OptionPickRow({ p, onClick, oi }: { p: ScoutPick; onClick: () => void; 
         {p.probability && <span className="text-muted-foreground">{p.probability} prob</span>}
         {p.premiumEstimate && <span className="text-muted-foreground mono">{p.premiumEstimate}</span>}
       </div>
+      <GateValidationDashboard result={validation} compact className="pt-1" />
     </button>
   );
 }
@@ -166,6 +172,11 @@ export default function Market() {
       return ob - oa;
     });
   }, [hotOptions, interestMap]);
+
+  // 200-SMA + quote maps for the gate validator on each Hottest Options card.
+  const hotSymbols = useMemo(() => Array.from(new Set(hotOptionsRanked.map((p) => p.symbol))), [hotOptionsRanked]);
+  const { map: smaMap } = useSma200(hotSymbols);
+  const quoteMap = useMemo(() => new Map(quotes.map((q) => [q.symbol, q])), [quotes]);
 
   // Search suggestions
   const searchResults = search.trim().length >= 1
@@ -301,6 +312,8 @@ export default function Market() {
                 key={`${p.symbol}-${i}`}
                 p={p}
                 oi={interestMap.get(pickInterestKey(p))?.oi}
+                quote={quoteMap.get(p.symbol) ?? null}
+                sma={smaMap.get(p.symbol) ?? null}
                 onClick={() => setFocused(p.symbol)}
               />
             ))}

@@ -1,19 +1,23 @@
-import { Bookmark, Check, FlaskConical } from "lucide-react";
+import { Bookmark, Check, FlaskConical, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAddPosition, type NewPosition } from "@/lib/portfolio";
 import { useSettings } from "@/lib/settings";
+import { Hint } from "@/components/Hint";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import type { ValidationResult } from "@/lib/gates";
 
 interface Props extends NewPosition {
   size?: "sm" | "xs";
   className?: string;
+  /** When the validator returns BLOCKED, the Save/Buy CTA is disabled (kill switch). */
+  validation?: ValidationResult | null;
 }
 
-export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props) {
+export function SaveToPortfolioButton({ size = "sm", className, validation, ...pick }: Props) {
   const add = useAddPosition();
   const [settings] = useSettings();
   const [saved, setSaved] = useState(false);
@@ -42,6 +46,34 @@ export function SaveToPortfolioButton({ size = "sm", className, ...pick }: Props
     Number(premium) > 0 && Number(contracts) > 0
       ? (Number(premium) * Number(contracts) * 100).toFixed(0)
       : null;
+
+  // Kill switch — Gate pipeline returned BLOCKED → no Buy/Save allowed.
+  const blocked = validation?.finalStatus === "BLOCKED";
+  const blockedReason = blocked
+    ? validation?.gateResults.find((g) => g.status === "BLOCKED")?.reasoning
+      ?? "A safety gate is blocking this trade."
+    : null;
+
+  if (blocked) {
+    return (
+      <Hint label={`🚫 BLOCKED — ${blockedReason}`}>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled
+          className={cn(
+            size === "xs" ? "h-6 px-2 text-[10px]" : "h-7 px-2 text-[11px]",
+            "border-bearish/40 bg-bearish/10 text-bearish opacity-80 cursor-not-allowed",
+            className,
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Lock className="mr-1 h-3 w-3" />
+          Blocked
+        </Button>
+      </Hint>
+    );
+  }
 
   return (
     <Popover open={open} onOpenChange={(o) => !saved && setOpen(o)}>
