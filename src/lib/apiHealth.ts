@@ -63,14 +63,12 @@ export function useApiHealth() {
       // Massive powers both quotes-fetch and options-fetch under the hood.
       // We ping options-fetch as the Massive health proxy (it's the heaviest
       // Massive call) and reuse the quotes-fetch ping for the consensus row.
-      const [quotes, options, news, publicCom, publicOpts, polyQ, polyO, sdQ, sdN] = await Promise.all([
+      const [quotes, options, news, publicCom, publicOpts, sdQ, sdN] = await Promise.all([
         ping("quotes-fetch", { symbols: ["SPY"] }),
         ping("options-fetch", { underlying: "SPY", limit: 5 }),
         ping("news-fetch",   { category: "general", limit: 3 }),
         ping("public-quotes-fetch", { symbols: ["SPY"] }),
         ping("public-options-fetch", { underlying: "SPY", limit: 5 }),
-        ping("polygon-quotes-fetch", { symbols: ["SPY"] }),
-        ping("polygon-options-fetch", { underlying: "SPY", limit: 5 }),
         ping("stockdata-quotes-fetch", { symbols: ["SPY"] }),
         ping("stockdata-news-fetch", { limit: 3 }),
       ]);
@@ -82,8 +80,6 @@ export function useApiHealth() {
         { name: "Market News (Finnhub)",                      description: "Sentiment + headlines feed",                     status: toStatus(news),    latencyMs: news.ms,    detail: news.detail,    functions: ["news-fetch"] },
         { name: "Public.com (Quotes)",                        description: "Brokerage market-data quotes — your account", status: toStatus(publicCom), latencyMs: publicCom.ms, detail: publicCom.detail, functions: ["public-quotes-fetch"] },
         { name: "Public.com (Options)",                       description: "Brokerage option chains — your account",      status: toStatus(publicOpts), latencyMs: publicOpts.ms, detail: publicOpts.detail, functions: ["public-options-fetch"] },
-        { name: "Polygon.io (Quotes)",                        description: "Last-trade quotes — POLYGON_API_KEY required", status: toStatus(polyQ),   latencyMs: polyQ.ms,   detail: polyQ.detail,   functions: ["polygon-quotes-fetch"] },
-        { name: "Polygon.io (Options)",                       description: "Option-chain snapshots — POLYGON_API_KEY required", status: toStatus(polyO), latencyMs: polyO.ms, detail: polyO.detail, functions: ["polygon-options-fetch"] },
         { name: "StockData.org (Quotes)",                     description: "Quotes feed — STOCKDATA_API_KEY required",      status: toStatus(sdQ),     latencyMs: sdQ.ms,     detail: sdQ.detail,     functions: ["stockdata-quotes-fetch"] },
         { name: "StockData.org (News)",                       description: "News feed — STOCKDATA_API_KEY required",        status: toStatus(sdN),     latencyMs: sdN.ms,     detail: sdN.detail,     functions: ["stockdata-news-fetch"] },
         { name: "Lovable AI Gateway",                         description: "Nova explanations",                              status: "ok",              latencyMs: null,       detail: "Routed via gateway — no key needed", functions: ["nova-chat", "ask-nova"] },
