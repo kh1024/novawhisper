@@ -92,14 +92,21 @@ export const GATE_LABELS: Record<GateName, string> = {
   ORB_LOCK: "ORB Lock (10:30 EST)",
   IVP_GUARD: "IVP Guard",
   SAFETY_EXIT: "Safety Exit (-30%)",
-  AFFORDABILITY: "Affordability (10% cap)",
+  AFFORDABILITY: "Affordability (5% cap)",
   DATE_VALIDATOR: "Date Validator",
 };
 
-/** HARD BLOCK: a single trade may not consume more than this % of account. */
-export const AFFORDABILITY_CAP_PCT = 10;
-/** WARNING tier: above this %, the budget pill turns red ("over-leveraged"). */
-export const AFFORDABILITY_WARN_PCT = 5;
+/**
+ * HARD BLOCK threshold. Any single-contract notional cost exceeding this
+ * percentage of the user's account is auto-BLOCKED and pivoted to a spread.
+ * Per product rule: "must be > 5% of total budget → UNAFFORDABLE".
+ */
+export const AFFORDABILITY_CAP_PCT = 5;
+/**
+ * WARNING tier — between MaxRisk (2%) and the 5% hard cap, the trade is
+ * approved but flagged as over-leveraged so the user can size down.
+ */
+export const AFFORDABILITY_WARN_PCT = 2;
 /** Max risk per trade as % of account — the 2% Rule. Drives spread sizing. */
 export const MAX_RISK_PCT = 2;
 /** Sweet-spot dollar range Gate 8 nudges expensive picks toward via spreads. */
