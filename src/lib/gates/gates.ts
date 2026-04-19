@@ -1,6 +1,6 @@
 // Pure gate implementations — no React, no I/O, easy to unit test.
 import type { SignalInput, GateResult } from "./types";
-import { AFFORDABILITY_CAP_PCT, AFFORDABILITY_WARN_PCT, MAX_RISK_PCT, SPREAD_SWEET_SPOT } from "./types";
+import { AFFORDABILITY_CAP_PCT, AFFORDABILITY_WARN_PCT, MAX_BIDASK_SPREAD_PCT, MAX_RISK_PCT, SPREAD_SWEET_SPOT } from "./types";
 
 export function gate1_DataIntegrity(i: SignalInput): GateResult {
   const staleness_s = (Date.now() - i.quoteTimestamp.getTime()) / 1000;
@@ -22,10 +22,33 @@ export function gate1_DataIntegrity(i: SignalInput): GateResult {
       reasoning: `Internal price ($${i.currentPrice.toFixed(2)}) differs from live feed ($${i.liveFeedPrice.toFixed(2)}) by ${driftPct}% (limit: 1.00%). Trading on drifted data risks executing at a price that no longer exists.`,
     };
   }
+
+  // ── Liquidity guard: penalize wide bid-ask spreads on the option ──
+  const bid = Number(i.bid);
+  const ask = Number(i.ask);
+  const haveQuote = Number.isFinite(bid) && Number.isFinite(ask) && bid > 0 && ask > 0 && ask >= bid;
+  if (haveQuote) {
+    const spreadFrac = (ask - bid) / ask;
+    const spreadPct = spreadFrac * 100;
+    const limitPct = MAX_BIDASK_SPREAD_PCT * 100;
+    if (spreadFrac > MAX_BIDASK_SPREAD_PCT) {
+      return {
+        gate: "DATA_INTEGRITY", passed: false, status: "BLOCKED",
+        label: `🔴 WIDE BID-ASK SPREAD (${spreadPct.toFixed(1)}%)`,
+        reasoning: `Slippage Risk — Bid $${bid.toFixed(2)} / Ask $${ask.toFixed(2)} = ${spreadPct.toFixed(1)}% spread (limit: ${limitPct.toFixed(0)}%). The gap between what you pay (Ask) and what you get back if you sell immediately (Bid) is over ${limitPct.toFixed(0)}%. You'd start this trade at a significant mathematical disadvantage. Avoid for better liquidity.`,
+      };
+    }
+    return {
+      gate: "DATA_INTEGRITY", passed: true, status: "APPROVED",
+      label: spreadPct < 3 ? "🟢 QUOTE LIVE · TIGHT SPREAD" : "🟢 QUOTE LIVE",
+      reasoning: `Quote is ${staleness_s.toFixed(0)}s old, drift ${(priceDrift * 100).toFixed(3)}%. Bid $${bid.toFixed(2)} / Ask $${ask.toFixed(2)} = ${spreadPct.toFixed(1)}% spread (limit ${limitPct.toFixed(0)}%). Data integrity confirmed.`,
+    };
+  }
+
   return {
     gate: "DATA_INTEGRITY", passed: true, status: "APPROVED",
     label: "🟢 QUOTE LIVE",
-    reasoning: `Quote is ${staleness_s.toFixed(0)}s old, drift ${(priceDrift * 100).toFixed(3)}%. Data integrity confirmed.`,
+    reasoning: `Quote is ${staleness_s.toFixed(0)}s old, drift ${(priceDrift * 100).toFixed(3)}%. Bid/ask not available — liquidity check skipped. Data integrity confirmed.`,
   };
 }
 
