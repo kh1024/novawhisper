@@ -586,16 +586,29 @@ function verify(
     return {
       symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
       sources, consensusSource: src.source, status: "verified",
-      diffPct: null, updatedAt: now, ...extendedFields,
+      diffPct: null, updatedAt: new Date(src.ts || Date.now()).toISOString(), ...extendedFields,
     };
   }
+  // ── FRESHEST-WINS RULE ────────────────────────────────────────────────
+  // The user-facing price MUST come from the source whose quote timestamp
+  // is the most recent. Older-timestamped sources (e.g. EOD providers like
+  // Alpha Vantage / Stooq, or Massive's `/prev` bar) are kept ONLY for
+  // cross-reference — never to override a fresher intraday tick.
+  // Window: drop any source >5 min behind the freshest during regular hours,
+  // 30 min off-hours (pre/post/closed have thinner liquidity & jitter).
+  const freshestTs = Math.max(...live.map((s) => s.ts || 0));
+  const windowMs = session === "regular" ? 5 * 60_000 : 30 * 60_000;
+  const fresh = live.filter((s) => freshestTs - (s.ts || 0) <= windowMs);
+  const eligible = fresh.length > 0 ? fresh : live;
+
   const prices = live.map((s) => s.price);
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const diff = ((maxP - minP) / minP) * 100;
   // Prefer real-time intraday: Yahoo > Finnhub > Massive > CNBC > Google > Stooq > Alpha.
+  // BUT only among the freshest-window sources.
   const order: SourceName[] = ["yahoo", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
-  const chosen = order.map((n) => live.find((s) => s.source === n)).find(Boolean) ?? live[0];
+  const chosen = order.map((n) => eligible.find((s) => s.source === n)).find(Boolean) ?? eligible[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
     symbol,
@@ -607,7 +620,8 @@ function verify(
     consensusSource: chosen.source,
     status,
     diffPct: +diff.toFixed(4),
-    updatedAt: now,
+    // Surface the *quote* time of the chosen source, not server-receive time.
+    updatedAt: new Date(chosen.ts || Date.now()).toISOString(),
     ...extendedFields,
   };
 }
