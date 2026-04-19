@@ -25,6 +25,7 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSettings } from "@/lib/settings";
+import { useBudget } from "@/lib/budget";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
 import { Hint } from "@/components/Hint";
@@ -153,6 +154,7 @@ export default function Scanner() {
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [maxLossBudget] = useBudget();
 
   const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
@@ -173,11 +175,12 @@ export default function Scanner() {
         ivRank: r.ivRank, atrPct: r.atrPct, rsi: r.rsi,
         optionsLiquidity: r.optionsLiquidity, earningsInDays: r.earningsInDays,
         setupScore: r.setupScore,
+        maxLossBudget,
       });
       m.set(r.symbol, { decision, rank: rankSetup(r, decision) });
     }
     return m;
-  }, [rows]);
+  }, [rows, maxLossBudget]);
 
   // Persist today's snapshot for the Performance dashboard (throttled to 1×/h).
   const snapshotInputs = useMemo(
@@ -685,12 +688,14 @@ function DetailPanel({ row, decision, rank, onOpen }: {
   rank: RankResult | null;
   onOpen: () => void;
 }) {
+  const [budget] = useBudget();
   // Fall back to recomputing if the parent didn't pass them in (defensive).
   const dec = decision ?? selectStrategy({
     symbol: row.symbol, bias: row.bias, price: row.price, changePct: row.changePct,
     ivRank: row.ivRank, atrPct: row.atrPct, rsi: row.rsi,
     optionsLiquidity: row.optionsLiquidity, earningsInDays: row.earningsInDays,
     setupScore: row.setupScore,
+    maxLossBudget: budget,
   });
   return (
     <div className="space-y-4">

@@ -8,20 +8,22 @@ import { useLiveQuotes } from "@/lib/liveData";
 import { computeSetups } from "@/lib/setupScore";
 import { selectStrategy } from "@/lib/strategySelector";
 import { rankSetup } from "@/lib/finalRank";
+import { useBudget } from "@/lib/budget";
 
 export function LiveMiniScanner() {
   const query = useLiveQuotes(undefined, { refetchMs: 60_000 });
   const quotes = query.data;
   const loading = query.isLoading;
+  const [budget] = useBudget();
 
   const rows = useMemo(() => {
     if (!quotes?.length) return [];
     const setups = computeSetups(quotes);
     return setups
-      .map((s) => ({ s, rank: rankSetup(s, selectStrategy(s)) }))
+      .map((s) => ({ s, rank: rankSetup(s, selectStrategy({ ...s, maxLossBudget: budget })) }))
       .sort((a, b) => b.rank.finalRank - a.rank.finalRank)
       .slice(0, 5);
-  }, [quotes]);
+  }, [quotes, budget]);
 
   const today = new Date().toISOString().slice(0, 10);
 
