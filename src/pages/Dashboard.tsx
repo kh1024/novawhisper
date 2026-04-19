@@ -66,25 +66,45 @@ function scoutToOptionPick(s: ScoutPick, bucket: RiskBucket, idx: number): Optio
 
 export default function Dashboard() {
   const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
+  const { data: scout } = useOptionsScout();
   const allPicks = useMemo(() => getMockPicks(60), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
 
+  // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   const picks = useMemo(() => {
-    // App is single-leg only — keep just long calls and long puts.
-    const singleLeg = allPicks.filter((p) => p.strategy === "long-call" || p.strategy === "long-put");
-    // When NOVA filter is active, ignore the risk tab so the user's natural-
-    // language ask drives the result set across all buckets.
-    const base = novaActive ? singleLeg : singleLeg.filter((p) => p.riskBucket === riskTab);
-    return base
+    const bucketMap: Record<RiskBucket, ScoutPick[]> = {
+      safe: scout?.conservative ?? [],
+      mild: scout?.moderate ?? [],
+      aggressive: scout?.aggressive ?? [],
+      lottery: scout?.lottery ?? [],
+    };
+    const singleLegMock = allPicks.filter((p) =>
+      p.strategy === "long-call" || p.strategy === "long-put" ||
+      p.strategy === "leaps-call" || p.strategy === "leaps-put"
+    );
+
+    let pool: OptionPick[];
+    if (novaActive) {
+      const allScout = (["safe", "mild", "aggressive", "lottery"] as RiskBucket[])
+        .flatMap((b) => bucketMap[b].map((s, i) => scoutToOptionPick(s, b, i)));
+      pool = allScout.length > 0 ? allScout : singleLegMock;
+    } else {
+      const liveBucket = bucketMap[riskTab].map((s, i) => scoutToOptionPick(s, riskTab, i));
+      pool = liveBucket.length > 0
+        ? liveBucket
+        : singleLegMock.filter((p) => p.riskBucket === riskTab);
+    }
+
+    return pool
       .filter((p) => pickMatchesFilter({
         symbol: p.symbol,
         strategy: p.strategy,
         riskBucket: p.riskBucket,
         bias: p.bias,
-        optionType: p.strategy === "long-put" ? "put" : "call",
+        optionType: p.strategy === "long-put" || p.strategy === "leaps-put" ? "put" : "call",
         expiration: p.expiration,
         dte: p.dte,
         premium: p.premium,
@@ -93,7 +113,7 @@ export default function Dashboard() {
         earningsInDays: p.earningsInDays ?? null,
       }, novaSpec))
       .slice(0, novaActive ? 12 : 6);
-  }, [allPicks, riskTab, novaSpec, novaActive]);
+  }, [allPicks, riskTab, novaSpec, novaActive, scout]);
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
