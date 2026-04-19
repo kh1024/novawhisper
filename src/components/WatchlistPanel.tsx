@@ -10,8 +10,9 @@ import type { PortfolioPosition } from "@/lib/portfolio";
 import { TickerPrice } from "@/components/TickerPrice";
 import { Sparkline } from "@/components/Sparkline";
 import { useSma200 } from "@/lib/sma200";
-import { PickMetaRow, type Timing } from "@/components/PickMetaRow";
-
+import { PickMetaRow, VerdictBadge } from "@/components/PickMetaRow";
+import { computeVerdict } from "@/lib/verdictModel";
+import { useBudget } from "@/lib/budget";
 
 interface Props {
   onOpenSymbol?: (symbol: string) => void;
@@ -44,31 +45,21 @@ function toPseudoPosition(w: WatchlistItem): PortfolioPosition {
   };
 }
 
-/** Friendly label + classes for a verdict signal. */
-function signalChip(action?: string, status?: string) {
+/** Translate the legacy verdict signal into the upstream label our shared
+ *  verdict model understands. Lets one badge speak for the whole row. */
+function upstreamFromVerdict(action?: string, status?: string): string {
   const a = (action ?? "").toLowerCase();
   const s = (status ?? "").toLowerCase();
-  if (a === "cut" || s.includes("trouble") || s.includes("bleeding"))
-    return { label: "AVOID", cls: "border-bearish/50 bg-bearish/15 text-bearish" };
-  if (a === "take_profit" || s.includes("expiring"))
-    return { label: "EXIT", cls: "border-warning/50 bg-warning/15 text-warning" };
-  if (s === "winning" || s === "running fine")
-    return { label: "BUY NOW", cls: "border-bullish/50 bg-bullish/15 text-bullish" };
-  return { label: "WAIT", cls: "border-muted-foreground/40 bg-muted/40 text-foreground" };
-}
-
-/** Map the verdict signal into the shared Timing label vocabulary. */
-function timingFromVerdict(action?: string, status?: string): Timing | undefined {
-  const chip = signalChip(action, status);
-  if (chip.label === "BUY NOW") return "ready";
-  if (chip.label === "EXIT") return "exit";
-  if (chip.label === "AVOID") return "avoid";
-  return undefined; // let PickMetaRow pick "watch"/"wait" from market clock
+  if (a === "cut" || s.includes("trouble") || s.includes("bleeding")) return "AVOID";
+  if (a === "take_profit" || s.includes("expiring")) return "EXIT";
+  if (s === "winning" || s === "running fine") return "BUY NOW";
+  return "WAIT";
 }
 
 export function WatchlistPanel({ onOpenSymbol }: Props) {
   const { data: items = [], isLoading } = useWatchlist();
   const remove = useRemoveFromWatchlist();
+  const [budget] = useBudget();
   const pseudo = useMemo(() => items.map(toPseudoPosition), [items]);
   const verdictQ = useVerdicts(pseudo);
   // Daily closes for sparklines — same 24h cache as the rest of the app.
@@ -94,7 +85,7 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
           {verdictQ.isFetching && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
         </div>
         <span className="text-[10px] text-muted-foreground">
-          Live verdicts refresh every few minutes.
+          Saved by you · Live verdict refreshes every few minutes.
         </span>
       </div>
 
@@ -103,17 +94,28 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
       ) : items.length === 0 ? (
         <div className="text-xs text-muted-foreground py-8 text-center">
           Tap the <Star className="inline h-3 w-3 -mt-0.5" /> Watch button on any pick (Scanner, Market,
-          Strategy, Planning, Research) to track it here with a live Buy / Wait / Avoid verdict.
+          Strategy, Planning, Research) to track it here with a live Buy Now / Watchlist / Wait / Avoid verdict.
         </div>
       ) : (
         <div className="space-y-2">
           {items.map((w) => {
             const v = verdictMap.get(w.id);
             const live = quoteMap.get(w.symbol);
-            const chip = signalChip(v?.action, v?.status);
-            const isPut = w.option_type === "put";
+            const upstream = upstreamFromVerdict(v?.action, v?.status);
             const entry = w.entry_price != null ? Number(w.entry_price) : null;
             const delta = entry != null && live?.price ? ((live.price - entry) / entry) * 100 : null;
+            const verdictResult = computeVerdict({
+              symbol: w.symbol,
+              rawBias: w.bias,
+              optionType: w.option_type,
+              strike: w.strike,
+              price: live?.price ?? null,
+              changePct: live?.changePct ?? null,
+              budget,
+              riskBucket: w.tier,
+              upstreamLabel: upstream,
+              isReady: upstream === "BUY NOW",
+            });
             return (
               <div
                 key={w.id}
@@ -141,15 +143,7 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                       </span>
                     )}
                   </div>
-                  <PickMetaRow
-                    className="mt-1.5"
-                    bias={w.bias}
-                    optionType={w.option_type}
-                    strike={w.strike}
-                    expiry={w.expiry}
-                    tier={w.tier}
-                    timing={timingFromVerdict(v?.action, v?.status)}
-                  />
+                  <PickMetaRow className="mt-1.5" result={verdictResult} expiry={w.expiry} />
                   {w.thesis && (
                     <div className="text-xs text-muted-foreground truncate mt-1">{w.thesis}</div>
                   )}
@@ -178,32 +172,26 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                 </div>
 
                 <div className="shrink-0 flex flex-col items-end gap-1.5">
-                  <Hint label={
-                    chip.label === "BUY NOW" ? "NOVA verdict says it's a high-conviction entry right now."
-                    : chip.label === "EXIT" ? "Take profit / cut — the setup is breaking down."
-                    : chip.label === "AVOID" ? "Edge gone — better to skip this one."
-                    : "Mixed signals — wait for confirmation before entering."
-                  }>
-                    <span className={`text-[10px] font-bold tracking-wider px-2 py-1 rounded border cursor-help ${chip.cls}`}>
-                      {chip.label}
-                    </span>
-                  </Hint>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70">Live</span>
+                    <VerdictBadge verdict={verdictResult.verdict} reason={verdictResult.reason} />
+                  </div>
                   <div className="flex items-center gap-1">
                     <Hint label="Open research">
                       <Button
                         size="sm"
-                        variant="ghost"
-                        className="h-6 w-6 p-0"
+                        variant="outline"
+                        className="h-7 px-2 gap-1"
                         onClick={(e) => { e.stopPropagation(); onOpenSymbol?.(w.symbol); }}
                       >
-                        <ExternalLink className="h-3 w-3" />
+                        <ExternalLink className="h-3 w-3" /> Open
                       </Button>
                     </Hint>
                     <Hint label="Remove from watchlist">
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-bearish"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-bearish"
                         onClick={(e) => { e.stopPropagation(); remove.mutate(w.id); }}
                       >
                         <Trash2 className="h-3 w-3" />
