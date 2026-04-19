@@ -10,7 +10,7 @@ import {
   detectTimeState, inferRegime, adjustForRegime, scoreToGrade,
   type ConfidenceGrade, type MarketRegime,
 } from "./novaBrain";
-import { computeStreakDays } from "./streak";
+import { computeStreakDays, computeRSI14 } from "./streak";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
@@ -153,10 +153,17 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   const avgVolume = estimateAvgVolume(q.symbol, marketCap);
   const relVolume = q.volume > 0 ? +(q.volume / avgVolume).toFixed(2) : 0;
 
-  // Estimated technicals (deterministic per symbol; nudged by today's %chg
-  // *including* any pre/post move so the verdict updates after-hours)
-  const baseRsi = 45 + r() * 25; // 45-70
-  const rsi = clamp(Math.round(baseRsi + effectiveChangePct * 1.4), 5, 95);
+  // Real Wilder RSI(14) when closes are available; otherwise fall back to a
+  // deterministic seed nudged by today's %chg.
+  let rsi: number;
+  let rsiEst = true;
+  if (ctx?.closes && ctx.closes.length >= 15) {
+    rsi = computeRSI14(ctx.closes);
+    rsiEst = false;
+  } else {
+    const baseRsi = 45 + r() * 25; // 45-70
+    rsi = clamp(Math.round(baseRsi + effectiveChangePct * 1.4), 5, 95);
+  }
 
   // Real EMA distances when daily closes are available; otherwise fall back to
   // the deterministic seed so the UI stays populated for thinly-covered tickers.
@@ -341,7 +348,7 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   return {
     symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
-    ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst: true,
+    ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst,
     emaDist20, emaDist50, emaEst,
     optionsLiquidity, earningsInDays, bias, trendLabel,
     setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
