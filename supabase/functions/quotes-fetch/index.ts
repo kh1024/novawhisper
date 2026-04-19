@@ -10,7 +10,7 @@ const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 
 const BATCH_CONCURRENCY = 4;
 
-type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq";
+type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | "cnbc" | "google";
 
 interface SourceQuote {
   source: SourceName;
@@ -58,12 +58,16 @@ const MASSIVE_TTL_MS = 30_000;
 const ALPHA_TTL_MS = 60 * 60_000; // Alpha free is 25/day
 const YAHOO_TTL_MS = 30_000;
 const STOOQ_TTL_MS = 60_000;
+const CNBC_TTL_MS = 60_000;
+const GOOGLE_TTL_MS = 60_000;
 const quoteCache = new Map<string, { quote: VerifiedQuote; at: number }>();
 const finnhubCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const alphaCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const massiveCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const yahooCache = new Map<string, { q: SourceQuote | null; at: number }>();
 const stooqCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const cnbcCache = new Map<string, { q: SourceQuote | null; at: number }>();
+const googleCache = new Map<string, { q: SourceQuote | null; at: number }>();
 
 let alphaChain: Promise<unknown> = Promise.resolve();
 function throttleAlpha<T>(fn: () => Promise<T>): Promise<T> {
