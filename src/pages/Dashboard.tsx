@@ -465,7 +465,10 @@ export default function Dashboard() {
             )}
           />
         </div>
-      </div>
+            </div>
+          )},
+        ]}
+      />
 
       <ResearchDrawer symbol={openSymbol} onClose={() => setOpenSymbol(null)} />
     </div>
