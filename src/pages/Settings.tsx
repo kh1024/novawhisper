@@ -270,26 +270,7 @@ export default function Settings() {
             <div className="text-xs text-muted-foreground py-4 text-center">Pinging providers…</div>
           )}
           {health.map((h) => (
-            <div
-              key={h.name}
-              className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30"
-            >
-              <StatusDot status={h.status} />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{h.name}</div>
-                <div className="text-[11px] text-muted-foreground truncate">{h.description} · {h.detail}</div>
-              </div>
-              <div className="text-right shrink-0">
-                <div className="font-mono text-xs">
-                  {h.latencyMs == null ? "—" : `${h.latencyMs}ms`}
-                </div>
-                <div className={`text-[10px] uppercase tracking-wider ${
-                  h.status === "ok" ? "text-bullish" : h.status === "degraded" ? "text-warning" : "text-bearish"
-                }`}>
-                  {h.status}
-                </div>
-              </div>
-            </div>
+            <HealthRow key={h.name} h={h} />
           ))}
         </div>
       </Card>
