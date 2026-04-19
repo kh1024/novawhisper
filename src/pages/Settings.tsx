@@ -40,10 +40,10 @@ function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
  */
 function HealthRow({ h }: { h: SourceHealth }) {
   const rate = useRequestRate60s(h.functions);
-  // Massive's plan rejects above ~100 req/s. Yellow at 60+, red at 90+.
+  // Massive is throttled server-side to 75/s/instance. Yellow at 50, red at 70.
   const rateTone =
-    rate >= 90 ? "text-bearish" :
-    rate >= 60 ? "text-warning" :
+    rate >= 70 ? "text-bearish" :
+    rate >= 50 ? "text-warning" :
     "text-muted-foreground";
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30">
