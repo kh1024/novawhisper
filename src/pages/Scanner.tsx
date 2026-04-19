@@ -385,10 +385,12 @@ export default function Scanner() {
                     {[
                       { k: "Ticker" }, { k: "Last" }, { k: "% Chg" },
                       { k: "Rel Vol", tip: "Volume vs estimated avg" },
-                      { k: "Trend" }, { k: "IVR", tip: "Estimated until live IV wired" },
-                      { k: "RSI", tip: "Estimated" }, { k: "ATR%", tip: "Estimated" },
-                      { k: "Opt Liq", tip: "Options liquidity proxy" },
-                      { k: "Setup", tip: "Weighted final score 0–100" },
+                      { k: "Trend" },
+                      { k: "IVR", tip: "IV Rank — green <30 (cheap premium), red >60 (rich premium)" },
+                      { k: "RSI", tip: "Estimated — green 45–60 (healthy), red <30 or >70 (over-extended)" },
+                      { k: "ATR%", tip: "Estimated — green <2% (calm), red >4% (volatile)" },
+                      { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
+                      { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
                       { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
                       { k: "Readiness" }, { k: "" },
                     ].map((h) => (
