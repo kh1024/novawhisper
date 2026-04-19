@@ -331,9 +331,21 @@ export default function Dashboard() {
                   <div className={`mono text-sm font-semibold ${blocked ? "text-muted-foreground line-through" : "text-bullish"}`}>{p.annualized}% ann.</div>
                   <div className="text-[10px] text-muted-foreground">${p.premium} • {p.dte}d</div>
                 </div>
-                <div className="text-right shrink-0 w-12">
+                <div className="text-right shrink-0 w-20">
                   <div className={`mono text-lg font-semibold ${blocked ? "text-muted-foreground" : ""}`}>{p.score}</div>
-                  <div className="text-[10px] text-muted-foreground">Grade {p.confidence}</div>
+                  <Hint label={
+                    action === "BUY"
+                      ? "High conviction — score ≥ 80. Take the trade now."
+                      : action === "WATCHLIST"
+                      ? "Solid setup — score 65–79. Wait for a confirmed entry."
+                      : action === "WAIT"
+                      ? "Mixed signals — score 50–64. Monitor, no action yet."
+                      : "No edge — skip."
+                  }>
+                    <span className={`mt-0.5 inline-block text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help ${labelClasses(action)}`}>
+                      {action}
+                    </span>
+                  </Hint>
                 </div>
                 {blocked ? (
                   <Hint label={guard.worst?.message ?? "NOVA Guard blocked this signal."}>
