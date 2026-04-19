@@ -69,6 +69,14 @@ Deno.serve(async (req) => {
     }
     const symbols = Array.from(new Set(parsed.data.symbols.map((s) => s.toUpperCase())));
 
+    // Kill-switch — if Massive is flagged offline, don't waste the call;
+    // hourly massive-ping will clear the flag when API recovers.
+    if (await isMassiveDown()) {
+      return new Response(JSON.stringify({ ok: true, broadcast: 0, note: "massive_offline" }), {
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch all quotes in parallel (throttle handles fairness).
     const ticks = (await Promise.all(symbols.map(async (sym) => {
       const q = await fetchMassiveQuote(sym, key);
