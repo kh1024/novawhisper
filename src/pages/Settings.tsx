@@ -21,6 +21,7 @@ import {
 } from "@/lib/settings";
 import { useApiHealth } from "@/lib/apiHealth";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
+import { KvCacheAdminCard } from "@/components/KvCacheAdminCard";
 
 const PORTFOLIO_PRESETS = [5_000, 10_000, 25_000, 50_000, 100_000];
 const RISK_PRESETS = [1, 2, 3, 5, 10];
@@ -794,6 +795,9 @@ export default function Settings() {
 
       {/* ───────────── Background cron (server-side, runs even when app closed) ───────────── */}
       <BackgroundCronCard />
+
+      {/* ───────────── Backend cache (kv_cache inspector) ───────────── */}
+      <KvCacheAdminCard />
     </div>
   );
 }
