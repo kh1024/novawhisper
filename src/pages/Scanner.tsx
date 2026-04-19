@@ -205,7 +205,7 @@ export default function Scanner() {
   const [novaSpec] = useNovaFilter();
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    return sortedRows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
       if (exp?.isTimedOut) return false;          // remove old setups
       if (filters.search && !r.symbol.includes(filters.search.toUpperCase()) && !r.name.toUpperCase().includes(filters.search.toUpperCase())) return false;
@@ -222,8 +222,6 @@ export default function Scanner() {
       if (filters.excludeEarnings && r.earningsInDays != null && r.earningsInDays <= 7) return false;
 
       // NOVA natural-language filter — applied on top of UI filters.
-      // Scanner rows don't carry per-contract premium so the budget gate
-      // is skipped here; symbol/bias/optionType/score still apply.
       const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
       const ok = pickMatchesFilter({
         symbol: r.symbol,
@@ -236,7 +234,7 @@ export default function Scanner() {
 
       return true;
     });
-  }, [rows, filters, expiryStatus, novaSpec]);
+  }, [sortedRows, filters, expiryStatus, novaSpec]);
 
   // Fire webhook for any NEW scanner row whose CRL verdict is GO.
   // Dedupe key includes the date so the same GO re-fires once per trading day.
