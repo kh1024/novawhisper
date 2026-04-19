@@ -42,12 +42,22 @@ const SYMPATHY_MAP: Record<string, string[]> = {
 function genSeries(symbol: string, base: number, n = 60) {
   let h = 0;
   for (let i = 0; i < symbol.length; i++) h = (h * 31 + symbol.charCodeAt(i)) >>> 0;
-  const out: { d: number; v: number; sma?: number }[] = [];
+  const out: { d: number; v: number; sma?: number; date: string; ts: number }[] = [];
   let v = base * 0.92;
+  // Build a calendar-day series anchored to today, walking backwards n days.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   for (let i = 0; i < n; i++) {
     h = (h * 1664525 + 1013904223) >>> 0;
     v += ((h % 1000) / 1000 - 0.48) * (base * 0.015);
-    out.push({ d: i, v: +v.toFixed(2) });
+    const dt = new Date(today);
+    dt.setDate(today.getDate() - (n - 1 - i));
+    out.push({
+      d: i,
+      v: +v.toFixed(2),
+      date: dt.toISOString().slice(0, 10),
+      ts: dt.getTime(),
+    });
   }
   // anchor end to current spot
   out[out.length - 1].v = +base.toFixed(2);
@@ -291,10 +301,10 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         )}
                       </div>
                     </div>
-                    <div className="h-48">
+                    <div className="h-52">
                       {q ? (
                         <ResponsiveContainer width="100%" height="100%">
-                          <ComposedChart data={series} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
+                          <ComposedChart data={series} margin={{ top: 6, right: 8, bottom: 18, left: 0 }}>
                             <defs>
                               <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
@@ -302,7 +312,17 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                               </linearGradient>
                             </defs>
                             <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} opacity={0.35} />
-                            <XAxis dataKey="d" hide />
+                            <XAxis
+                              dataKey="date"
+                              tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }}
+                              axisLine={false}
+                              tickLine={false}
+                              minTickGap={40}
+                              tickFormatter={(d: string) => {
+                                const dt = new Date(d);
+                                return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+                              }}
+                            />
                             <YAxis
                               domain={["auto", "auto"]}
                               orientation="right"
@@ -319,7 +339,10 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                                 borderRadius: 8,
                                 fontSize: 12,
                               }}
-                              labelFormatter={(d) => `Day ${Number(d) + 1}`}
+                              labelFormatter={(d: string) => {
+                                const dt = new Date(d);
+                                return dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+                              }}
                               formatter={(value: number, name) =>
                                 [`$${Number(value).toFixed(2)}`, name === "sma" ? "SMA20" : "Price"]
                               }
