@@ -135,6 +135,9 @@ async function fetchFundamentals(symbol: string) {
     recommendationKey,
     numberOfAnalystOpinions: analystCount,
 
+    nextEarningsDate,
+    earningsInDays,
+
     fetchedAt: new Date().toISOString(),
     source: "finnhub",
   };
