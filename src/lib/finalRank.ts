@@ -20,13 +20,25 @@ import type { StrategyDecision } from "./strategySelector";
 import { getLabelMultiplier } from "./learningWeights";
 
 // Plain-English action language used across the whole app (institutional spec):
-//   BUY NOW    — score ≥ 80, setup triggered now, take the trade
-//   WATCHLIST  — score 70–79, setup close, wait for confirmed trigger
-//   WAIT       — score 50–69, mixed signals, monitor
-//   AVOID      — score < 50 OR poor liquidity / IV trap / earnings risk
-//   EXIT       — only emitted for held portfolio positions whose thesis broke;
-//                Scanner never returns EXIT.
-export type ActionLabel = "BUY NOW" | "WATCHLIST" | "WAIT" | "AVOID" | "EXIT";
+//   BUY NOW          — score ≥ 80, take the trade
+//   WATCHLIST        — score 70–79, setup close, wait for confirmed trigger
+//   WAIT PULLBACK    — strong setup but price extended; wait for a better entry
+//   EXPENSIVE ENTRY  — strong thesis but contract is deep ITM / capital-inefficient
+//   OVEREXTENDED     — already up huge today (chase risk) — let it cool
+//   WATCHLIST ONLY   — decent score but one liquidity/IV concern; track, don't trade
+//   WAIT             — score 50–69, mixed signals, monitor
+//   AVOID            — true bearish setup OR illiquid / IV trap / earnings binary
+//   EXIT             — portfolio-only; Scanner never returns EXIT.
+export type ActionLabel =
+  | "BUY NOW"
+  | "WATCHLIST"
+  | "WAIT PULLBACK"
+  | "EXPENSIVE ENTRY"
+  | "OVEREXTENDED"
+  | "WATCHLIST ONLY"
+  | "WAIT"
+  | "AVOID"
+  | "EXIT";
 
 /** Map any 0–100 confidence/rank score to the canonical action label.
  *  Never returns EXIT — that label is reserved for portfolio-held positions. */
@@ -220,14 +232,29 @@ function computePenalties(row: SetupRow, decision: StrategyDecision): Penalty[] 
 // ── Action Label (Part 7) ───────────────────────────────────────────────────
 // Spec mapping: Scanner only emits BUY NOW / WATCHLIST / WAIT / AVOID.
 // EXIT is portfolio-only and never produced here.
-function labelFor(rank: number, decision: StrategyDecision, penalties: Penalty[]): ActionLabel {
-  if (decision.action === "WAIT — no edge") return "AVOID";
-  // Hard-AVOID triggers — these dominate the score-based label.
-  const hardAvoid = penalties.some((p) =>
-    p.code === "ILLIQUID_OI" || p.code === "IV_TRAP" || p.code === "EARNINGS_48H" || p.code === "DEEP_ITM",
-  );
-  if (hardAvoid && rank < 75) return "AVOID";
-  return actionFromScore(rank);
+function labelFor(rank: number, decision: StrategyDecision, penalties: Penalty[], row: SetupRow): ActionLabel {
+  if (decision.action === "WAIT — no edge") {
+    // No edge but bullish underlying → don't say AVOID, say WATCHLIST ONLY.
+    if (rank >= 55 || row.bias === "bullish") return "WATCHLIST ONLY";
+    return "AVOID";
+  }
+  const codes = new Set(penalties.map((p) => p.code));
+  // Real bearish/illiquid traps still earn AVOID.
+  const trueAvoid =
+    codes.has("ILLIQUID_OI") ||
+    codes.has("EARNINGS_48H") ||
+    (codes.has("IV_TRAP") && row.bias !== "bullish");
+  if (trueAvoid && rank < 75) return "AVOID";
+  // Context-aware "wait" labels for setups that are otherwise strong:
+  if (codes.has("DEEP_ITM") && rank >= 55) return "EXPENSIVE ENTRY";
+  if (codes.has("CHASE") && rank >= 55) return "OVEREXTENDED";
+  if (codes.has("HIGH_ATR") && rank >= 60) return "WAIT PULLBACK";
+  // If raw score lands in AVOID-land but bullish bias + decent setup → WATCHLIST ONLY.
+  const baseLabel = actionFromScore(rank);
+  if (baseLabel === "AVOID" && row.bias === "bullish" && row.setupScore >= 55) {
+    return "WATCHLIST ONLY";
+  }
+  return baseLabel;
 }
 
 // ── Public entry point ──────────────────────────────────────────────────────
@@ -245,7 +272,7 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
   );
   // Self-learning bias: gently nudge the score per label using historical
   // hit-rate multipliers (clamped to 0.85–1.15 in the DB).
-  const provisionalLabel = labelFor(baseRank, decision, penalties);
+  const provisionalLabel = labelFor(baseRank, decision, penalties, row);
   const mult = getLabelMultiplier(provisionalLabel);
   const rank = clamp(Math.round(baseRank * mult));
 
@@ -254,7 +281,7 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
     readinessScore: readiness.total,
     optionsScore: options.total,
     finalRank: rank,
-    label: labelFor(rank, decision, penalties),
+    label: labelFor(rank, decision, penalties, row),
     penalties,
     optionsBreakdown: {
       strikeEfficiency: options.strikeEfficiency,
@@ -279,10 +306,14 @@ export function rankSetup(row: SetupRow, decision: StrategyDecision): RankResult
 /** Tailwind classes for an Action Label badge. */
 export function labelClasses(label: ActionLabel): string {
   switch (label) {
-    case "BUY NOW":     return "bg-bullish/20 text-bullish border-bullish/50";
-    case "WATCHLIST":   return "bg-primary/10 text-primary border-primary/40";
-    case "WAIT":        return "bg-warning/10 text-warning border-warning/40";
-    case "AVOID":       return "bg-bearish/15 text-bearish border-bearish/40";
-    case "EXIT":        return "bg-bearish/25 text-bearish border-bearish/60";
+    case "BUY NOW":         return "bg-bullish/20 text-bullish border-bullish/50";
+    case "WATCHLIST":       return "bg-primary/10 text-primary border-primary/40";
+    case "WATCHLIST ONLY":  return "bg-primary/10 text-primary border-primary/40";
+    case "WAIT PULLBACK":   return "bg-warning/15 text-warning border-warning/50";
+    case "EXPENSIVE ENTRY": return "bg-warning/15 text-warning border-warning/50";
+    case "OVEREXTENDED":    return "bg-warning/15 text-warning border-warning/50";
+    case "WAIT":            return "bg-warning/10 text-warning border-warning/40";
+    case "AVOID":           return "bg-bearish/15 text-bearish border-bearish/40";
+    case "EXIT":            return "bg-bearish/25 text-bearish border-bearish/60";
   }
 }
