@@ -46,6 +46,7 @@ function moneynessOf(optionType: "call" | "put", strike: number, spot: number | 
 }
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
+const SECTIONS_STORAGE_KEY = "nova_dashboard_sections_order";
 
 type RiskBucket = "safe" | "mild" | "aggressive" | "lottery";
 
@@ -146,95 +147,114 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
-      {/* NOVA status — adaptive regime + time-state read */}
-      <NovaStatusStrip />
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
+          Drag the grip on the left of any section to reorder
+        </span>
+        <Hint label="Reset section order to default">
+          <button
+            onClick={() => { window.localStorage.removeItem(SECTIONS_STORAGE_KEY); window.location.reload(); }}
+            aria-label="Reset section order"
+            className="text-muted-foreground/60 hover:text-foreground transition-colors p-1"
+          >
+            <RotateCcw className="h-3 w-3" />
+          </button>
+        </Hint>
+      </div>
 
-      {/* NOVA AI filter — natural-language pick filter shared across surfaces */}
-      <NovaFilterBar />
-
-      {/* Hero strip — plain-English meters */}
-      <MarketHeroCards />
-
-      {/* ETF strip */}
-      <Card className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-                    <Info className="h-3 w-3" /> About prices
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-relaxed">
-                  Prices come from Finnhub + Alpha Vantage and may be delayed up to ~15 minutes vs. live brokerage feeds (e.g. Robinhood). Use for research, not order entry.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            {quotesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-            <TooltipProvider delayDuration={150}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="pill pill-bullish cursor-help">
-                    <ShieldCheck className="h-3 w-3" /> {verifiedCount}/{quotes.length} good
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  Two providers agree on the price (within 1%).
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <span>{etfs.length} ETFs</span>
-          </div>
-        </div>
-        {etfs.length === 0 && !quotesLoading ? (
-          <div className="text-xs text-muted-foreground py-6 text-center min-h-[88px] flex items-center justify-center">No ETF quotes available right now.</div>
-        ) : etfs.length === 0 && quotesLoading ? (
-          // Reserve space while quotes load so content below doesn't jump (CLS fix).
-          <div className="min-h-[88px]" aria-hidden />
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 min-h-[88px]">
-            {etfs.map((e) => {
-              const up = e.change >= 0;
-              const meta = statusMeta(e.status);
-              return (
-                <TooltipProvider key={e.symbol} delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={() => setOpenSymbol(e.symbol)}
-                        className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all w-full"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono text-xs font-semibold">{e.symbol}</span>
-                          <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
-                            {up ? "+" : ""}{e.changePct.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
-                        <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs max-w-[220px]">
-                      {meta.tip}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              );
-            })}
+      <SortableList
+        storageKey={SECTIONS_STORAGE_KEY}
+        className="space-y-6"
+        renderItem={(item, handle) => (
+          <div className="relative group">
+            <div className="absolute -left-2 top-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+              {handle}
+            </div>
+            {item.node}
           </div>
         )}
-      </Card>
-
-      {/* Personal watchlist — bookmarked picks from anywhere on the site, with live verdicts */}
-      <WatchlistPanel onOpenSymbol={setOpenSymbol} />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Top opportunities */}
-        <Card className="glass-card p-5 lg:col-span-2">
+        items={[
+          { id: "nova-status", node: <NovaStatusStrip /> },
+          { id: "nova-filter", node: <NovaFilterBar /> },
+          { id: "hero", node: <MarketHeroCards /> },
+          { id: "etfs", node: (
+            <Card className="glass-card p-5">
+              <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold tracking-wide">Sector ETFs</h2>
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                          <Info className="h-3 w-3" /> About prices
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[280px] text-xs leading-relaxed">
+                        Prices come from Finnhub + Alpha Vantage and may be delayed up to ~15 minutes vs. live brokerage feeds (e.g. Robinhood). Use for research, not order entry.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  {quotesLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="pill pill-bullish cursor-help">
+                          <ShieldCheck className="h-3 w-3" /> {verifiedCount}/{quotes.length} good
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        Two providers agree on the price (within 1%).
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <span>{etfs.length} ETFs</span>
+                </div>
+              </div>
+              {etfs.length === 0 && !quotesLoading ? (
+                <div className="text-xs text-muted-foreground py-6 text-center min-h-[88px] flex items-center justify-center">No ETF quotes available right now.</div>
+              ) : etfs.length === 0 && quotesLoading ? (
+                <div className="min-h-[88px]" aria-hidden />
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 min-h-[88px]">
+                  {etfs.map((e) => {
+                    const up = e.change >= 0;
+                    const meta = statusMeta(e.status);
+                    return (
+                      <TooltipProvider key={e.symbol} delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setOpenSymbol(e.symbol)}
+                              className="text-left p-3 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all w-full"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-xs font-semibold">{e.symbol}</span>
+                                <span className={`text-[10px] mono ${up ? "text-bullish" : "text-bearish"}`}>
+                                  {up ? "+" : ""}{e.changePct.toFixed(2)}%
+                                </span>
+                              </div>
+                              <div className="mono text-sm mt-1">${e.price.toFixed(2)}</div>
+                              <div className={`pill ${meta.cls} mt-1.5 text-[9px]`}>{meta.label}</div>
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                            {meta.tip}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          )},
+          { id: "watchlist", node: <WatchlistPanel onOpenSymbol={setOpenSymbol} /> },
+          { id: "opportunities-grid", node: (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Top opportunities */}
+              <Card className="glass-card p-5 lg:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-primary" />
@@ -445,7 +465,10 @@ export default function Dashboard() {
             )}
           />
         </div>
-      </div>
+            </div>
+          )},
+        ]}
+      />
 
       <ResearchDrawer symbol={openSymbol} onClose={() => setOpenSymbol(null)} />
     </div>
