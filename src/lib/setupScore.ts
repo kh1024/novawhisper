@@ -219,8 +219,8 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
     riskAdjusted: Math.round(riskAdjusted),
   };
 
-  // Weighted final
-  const setupScore = Math.round(
+  // Weighted final (raw, before regime/time-state adjustment)
+  const rawSetupScore = Math.round(
     breakdown.liquidity   * 0.22 +
     breakdown.technical   * 0.22 +
     breakdown.volatility  * 0.14 +
@@ -228,6 +228,15 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
     breakdown.catalyst    * 0.10 +
     breakdown.riskAdjusted * 0.14
   );
+
+  // NOVA brain — adjust for current regime + time-state
+  const adj = adjustForRegime({
+    rawScore: rawSetupScore, bias, ivRank, timeState: time.state, regime,
+  });
+  const setupScore = adj.score;
+  const novaNotes = adj.notes;
+  const grade = scoreToGrade(setupScore);
+  const timeStateLabel = ctx?.timeStateLabel ?? time.label;
 
   // Warnings
   const warnings: string[] = [];
