@@ -101,6 +101,7 @@ export default function Dashboard() {
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
+  const [showBlocked, setShowBlocked] = useState(false);
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
@@ -167,6 +168,28 @@ export default function Dashboard() {
   // 200-day SMA cache (24h) — drives the long-term trend gate.
   const pickSymbols = useMemo(() => Array.from(new Set(picks.map((p) => p.symbol))), [picks]);
   const sma = useSma200(pickSymbols);
+
+  // Pre-compute the guard verdict for each pick so we can hide the BLOCKED rows
+  // by default (they only clutter the list — users can opt-in to see them).
+  const picksWithGuard = useMemo(() => picks.map((p) => {
+    const isPut = p.strategy === "long-put" || p.strategy === "leaps-put";
+    const optionType = isPut ? ("put" as const) : ("call" as const);
+    const live = quoteMap.get(p.symbol);
+    const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
+    const guard = evaluateGuards({
+      symbol: p.symbol,
+      pickPrice,
+      livePrice: live?.price ?? null,
+      riskBucket: p.riskBucket,
+      optionType,
+      direction: "long",
+      strike: p.strike,
+      sma200: sma.map.get(p.symbol)?.sma200 ?? null,
+    });
+    return { p, guard, blocked: guard.shouldBlockSignal, optionType, live, pickPrice };
+  }), [picks, quoteMap, sma]);
+  const blockedCount = picksWithGuard.filter((x) => x.blocked).length;
+  const visiblePicks = showBlocked ? picksWithGuard : picksWithGuard.filter((x) => !x.blocked);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
@@ -323,24 +346,10 @@ export default function Dashboard() {
           )}
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
-            {picks.map((p) => {
+            {visiblePicks.map(({ p, guard, blocked, optionType, live, pickPrice }) => {
               const isPut = p.strategy === "long-put" || p.strategy === "leaps-put";
               const isLeaps = p.strategy === "leaps-call" || p.strategy === "leaps-put";
-              const optionType = isPut ? "put" : "call";
               const direction = "long" as const;
-              const live = quoteMap.get(p.symbol);
-              const pickPrice = TICKER_UNIVERSE.find((u) => u.symbol === p.symbol)?.base ?? null;
-              const guard = evaluateGuards({
-                symbol: p.symbol,
-                pickPrice,
-                livePrice: live?.price ?? null,
-                riskBucket: p.riskBucket,
-                optionType,
-                direction,
-                strike: p.strike,
-                sma200: sma.map.get(p.symbol)?.sma200 ?? null,
-              });
-              const blocked = guard.shouldBlockSignal;
               const money = moneynessOf(optionType, p.strike, live?.price ?? pickPrice ?? null);
               // Action label is driven by the score (0–100). Blocked picks
               // are forced to AVOID so the language stays consistent.
@@ -444,6 +453,19 @@ export default function Dashboard() {
               </div>
             );})}
           </div>
+          {blockedCount > 0 && (
+            <div className="mt-3 flex items-center justify-between rounded-md border border-border/60 bg-surface/30 px-3 py-2 text-[11px] text-muted-foreground">
+              <span>
+                <span className="font-mono font-semibold text-foreground">{blockedCount}</span> pick{blockedCount === 1 ? "" : "s"} hidden — blocked by safety gates (stale data, wide spread, IV trap, exhaustion, etc.)
+              </span>
+              <button
+                onClick={() => setShowBlocked((v) => !v)}
+                className="text-[11px] font-semibold tracking-wide text-primary hover:underline underline-offset-2"
+              >
+                {showBlocked ? "Hide blocked" : "Show blocked"}
+              </button>
+            </div>
+          )}
         </Card>
 
         {/* Right column — drag to reorder */}
