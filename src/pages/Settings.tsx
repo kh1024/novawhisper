@@ -21,7 +21,8 @@ import {
 import { useApiHealth } from "@/lib/apiHealth";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 
-const PRESETS = [250, 500, 1000, 2500, 5000];
+const PORTFOLIO_PRESETS = [5_000, 10_000, 25_000, 50_000, 100_000];
+const RISK_PRESETS = [1, 2, 3, 5, 10];
 
 function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
   if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-bullish" />;
@@ -30,21 +31,27 @@ function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
 }
 
 export default function Settings() {
-  const [budget, setBudget] = useBudget();
-  const [draft, setDraft] = useState<string>(String(budget));
+  const { portfolio, riskPct, budget, setPortfolioSize, setRiskPct } = useCapitalSettings();
+  const [portfolioDraft, setPortfolioDraft] = useState<string>(String(portfolio));
+  const [riskDraft, setRiskDraft] = useState<string>(String(riskPct));
   const [savedFlash, setSavedFlash] = useState(false);
   const [settings, updateSettings] = useSettings();
   const { data: health = [], isLoading: healthLoading, refetch: refetchHealth } = useApiHealth();
 
-  useEffect(() => setDraft(String(budget)), [budget]);
+  useEffect(() => setPortfolioDraft(String(portfolio)), [portfolio]);
+  useEffect(() => setRiskDraft(String(riskPct)), [riskPct]);
 
   const flashSaved = () => {
     setSavedFlash(true);
     setTimeout(() => setSavedFlash(false), 1200);
   };
 
-  const commit = (v: number) => {
-    setBudget(v);
+  const commitPortfolio = (v: number) => {
+    setPortfolioSize(Math.max(100, v));
+    flashSaved();
+  };
+  const commitRisk = (v: number) => {
+    setRiskPct(Math.min(100, Math.max(0.1, v)));
     flashSaved();
   };
 
