@@ -82,6 +82,21 @@ function rng(seed: string) {
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
+/**
+ * Standard EMA over the last `period` closes. Pure + deterministic.
+ * Returns null when there isn't enough history.
+ */
+function computeEMA(closes: number[], period: number): number | null {
+  if (!Array.isArray(closes) || closes.length < period + 1) return null;
+  const tail = closes.slice(-(period + 1));
+  const k = 2 / (period + 1);
+  let ema = tail[0];
+  for (let i = 1; i < tail.length; i++) {
+    ema = tail[i] * k + ema * (1 - k);
+  }
+  return ema;
+}
+
 // Sector-aware ATR baseline (% of price). Real-world ranges.
 const SECTOR_ATR: Record<string, number> = {
   ETF: 1.1,
@@ -116,7 +131,7 @@ function estimateOptionsLiquidity(symbol: string, marketCap?: number) {
   return 48;
 }
 
-export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; timeStateLabel?: string; timeState?: ReturnType<typeof detectTimeState>; realIvp?: number | null }): SetupRow {
+export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; timeStateLabel?: string; timeState?: ReturnType<typeof detectTimeState>; realIvp?: number | null; earningsInDays?: number | null; closes?: number[] | null }): SetupRow {
   const meta = TICKER_UNIVERSE.find((t) => t.symbol === q.symbol);
   const sector = q.sector ?? meta?.sector ?? "—";
   const name = q.name ?? meta?.name ?? q.symbol;
@@ -143,10 +158,27 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   const baseRsi = 45 + r() * 25; // 45-70
   const rsi = clamp(Math.round(baseRsi + effectiveChangePct * 1.4), 5, 95);
 
-  const baseEma20 = (r() - 0.5) * 4; // -2 to +2
-  const baseEma50 = (r() - 0.5) * 8; // -4 to +4
-  const emaDist20 = +(baseEma20 + effectiveChangePct * 0.4).toFixed(2);
-  const emaDist50 = +(baseEma50 + effectiveChangePct * 0.25).toFixed(2);
+  // Real EMA distances when daily closes are available; otherwise fall back to
+  // the deterministic seed so the UI stays populated for thinly-covered tickers.
+  let emaDist20 = 0;
+  let emaDist50 = 0;
+  let emaEst = true;
+  if (ctx?.closes && ctx.closes.length > 0) {
+    const ema20 = computeEMA(ctx.closes, 20);
+    const ema50 = computeEMA(ctx.closes, 50);
+    if (ema20 && ema20 > 0) {
+      emaDist20 = +(((q.price - ema20) / ema20) * 100).toFixed(2);
+    }
+    if (ema50 && ema50 > 0) {
+      emaDist50 = +(((q.price - ema50) / ema50) * 100).toFixed(2);
+    }
+    if (ema20 && ema50) emaEst = false;
+  } else {
+    const baseEma20 = (r() - 0.5) * 4; // -2 to +2
+    const baseEma50 = (r() - 0.5) * 8; // -4 to +4
+    emaDist20 = +(baseEma20 + effectiveChangePct * 0.4).toFixed(2);
+    emaDist50 = +(baseEma50 + effectiveChangePct * 0.25).toFixed(2);
+  }
 
   const atrBase = SECTOR_ATR[sector] ?? 2.2;
   const atrPct = +(atrBase * (0.85 + r() * 0.4)).toFixed(2);
@@ -158,7 +190,9 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
     ? Math.round(Math.max(0, Math.min(100, ctx!.realIvp as number)))
     : Math.round(clamp(40 + r() * 50 + Math.abs(effectiveChangePct) * 2, 5, 98));
 
-  const earningsInDays = r() > 0.78 ? Math.floor(r() * 21) : null;
+  // Earnings calendar: caller passes real `earningsInDays` from a fundamentals
+  // feed when available. Null = no known earnings risk (penalty engine no-ops).
+  const earningsInDays = ctx?.earningsInDays ?? null;
 
   // Bias
   let bias: Bias = "neutral";
@@ -294,10 +328,9 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   dataQuality = clamp(dataQuality);
 
   // ── Conflict Resolution Layer ──
-  // Streak now comes from the shared helper (real closes when available; the
-  // scanner pipeline doesn't have the daily-close array on hand, so this stays
-  // 0 here and the adapter feeds the real value into Gate 4).
-  const realStreak = computeStreakDays([]);
+  // Streak from real closes when the caller passed them; otherwise 0 (the
+  // gate adapter computes the real streak from sma.closes downstream).
+  const realStreak = computeStreakDays(ctx?.closes ?? []);
   const synEma8 = q.price > 0 && emaDist20 !== 0 ? q.price / (1 + emaDist20 / 100) : null;
   const crlOut = runConflictResolution({
     rsi, ema8: synEma8, spot: q.price, winningStreakDays: realStreak,
@@ -309,7 +342,7 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
     symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
     ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst: true,
-    emaDist20, emaDist50, emaEst: true,
+    emaDist20, emaDist50, emaEst,
     optionsLiquidity, earningsInDays, bias, trendLabel,
     setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
     breakdown, readiness, warnings, whyValid, whyWeak, dataQuality,
@@ -323,7 +356,18 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   };
 }
 
-export function computeSetups(quotes: VerifiedQuote[], ctx?: { regime?: MarketRegime }): SetupRow[] {
+export function computeSetups(
+  quotes: VerifiedQuote[],
+  ctx?: {
+    regime?: MarketRegime;
+    /** Per-symbol IVP from a live options chain (0–100). */
+    realIvpBySymbol?: Map<string, number | null> | Record<string, number | null>;
+    /** Per-symbol days-to-next-earnings from a fundamentals feed. */
+    earningsBySymbol?: Map<string, number | null> | Record<string, number | null>;
+    /** Per-symbol daily-close array for real EMA + streak math. */
+    closesBySymbol?: Map<string, number[] | null> | Record<string, number[] | null>;
+  },
+): SetupRow[] {
   // Infer regime once per scan from index quotes if not provided.
   const time = detectTimeState();
   let regime: MarketRegime = ctx?.regime ?? "sideways";
@@ -336,5 +380,22 @@ export function computeSetups(quotes: VerifiedQuote[], ctx?: { regime?: MarketRe
       diaChangePct: find("DIA")?.changePct ?? null,
     }).regime;
   }
-  return quotes.map((q) => computeSetup(q, { regime, timeState: time, timeStateLabel: time.label }));
+  const lookup = <T,>(
+    src: Map<string, T> | Record<string, T> | undefined,
+    sym: string,
+  ): T | null => {
+    if (!src) return null;
+    if (src instanceof Map) return (src.get(sym) ?? null) as T | null;
+    return ((src as Record<string, T>)[sym] ?? null) as T | null;
+  };
+  return quotes.map((q) =>
+    computeSetup(q, {
+      regime,
+      timeState: time,
+      timeStateLabel: time.label,
+      realIvp: lookup<number | null>(ctx?.realIvpBySymbol, q.symbol),
+      earningsInDays: lookup<number | null>(ctx?.earningsBySymbol, q.symbol),
+      closes: lookup<number[] | null>(ctx?.closesBySymbol, q.symbol),
+    }),
+  );
 }
