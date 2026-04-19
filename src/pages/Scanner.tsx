@@ -21,6 +21,7 @@ import { selectStrategy } from "@/lib/strategySelector";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useSettings } from "@/lib/settings";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToPortfolioButton } from "@/components/SaveToPortfolioButton";
@@ -381,7 +382,7 @@ export default function Scanner() {
         )}
 
         {/* Table view */}
-        {!isLoading && view === "table" && filtered.length > 0 && (
+        {!isLoading && effectiveView === "table" && filtered.length > 0 && (
           <Card className="glass-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -546,7 +547,7 @@ export default function Scanner() {
         )}
 
         {/* Card view */}
-        {!isLoading && view === "cards" && filtered.length > 0 && (
+        {!isLoading && effectiveView === "cards" && filtered.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map((r) => <SetupCard key={r.symbol} row={r} onOpen={() => setOpenSymbol(r.symbol)} />)}
           </div>
