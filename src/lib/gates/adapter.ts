@@ -33,7 +33,7 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     entryPremium: position?.entry_premium != null ? Number(position.entry_premium) : 0,
     currentPremium: currentPremium ?? (position?.entry_premium != null ? Number(position.entry_premium) : 0),
     // Treat the cached pick's playAt as the "internal" price; live quote as the feed.
-    quoteTimestamp: quote?.fetchedAt ? new Date(quote.fetchedAt) : new Date(),
+    quoteTimestamp: quote?.updatedAt ? new Date(quote.updatedAt) : new Date(),
     liveFeedPrice: livePrice,
     rsi14: 55,                                      // unknown — neutral default
     streakDays: 1,                                  // unknown — neutral default
