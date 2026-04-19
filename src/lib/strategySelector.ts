@@ -246,9 +246,47 @@ export function selectStrategy(inp: StrategyInputs): StrategyDecision {
   }
 
   const longStrike = pickStrike(inp, action, sizing);
-  const { dte, reason: expiryReason } = pickDte(inp);
+  const initial = pickDte(inp);
+  let dte = initial.dte;
+  let expiryReason = initial.reason;
+  let rr = computeRewardRisk(inp, action, longStrike, dte);
+
+  // ── Auto-downsize DTE so 1-contract premium fits the per-trade budget ──
+  if (inp.maxLossBudget && inp.maxLossBudget > 0 && rr.maxLossPerContract > inp.maxLossBudget) {
+    const candidates = [dte, 30, 21, 14, 10, 7].filter((d) => d > 0 && d < dte);
+    let bestDte = dte;
+    let bestRr = rr;
+    let fit = false;
+    for (const cand of candidates) {
+      const candRr = computeRewardRisk(inp, action, longStrike, cand);
+      if (candRr.maxLossPerContract <= inp.maxLossBudget) {
+        bestDte = cand;
+        bestRr = candRr;
+        fit = true;
+        break;
+      }
+      // track cheapest as fallback
+      if (candRr.maxLossPerContract < bestRr.maxLossPerContract) {
+        bestDte = cand;
+        bestRr = candRr;
+      }
+    }
+    if (fit) {
+      dte = bestDte;
+      rr = bestRr;
+      expiryReason = `Auto-shortened to ${dte} DTE so 1-contract premium ($${rr.maxLossPerContract}) fits your $${inp.maxLossBudget} per-trade cap.`;
+    } else {
+      // Keep cheapest tested but flag it.
+      dte = bestDte;
+      rr = bestRr;
+      expiryReason = `Even ${dte} DTE costs $${rr.maxLossPerContract} per contract — exceeds your $${inp.maxLossBudget} cap.`;
+      warnings.push(
+        `Over budget: 1 contract ≈ $${rr.maxLossPerContract} vs $${inp.maxLossBudget} cap — symbol too expensive for your size.`,
+      );
+    }
+  }
+
   const expiry = expiryFromDte(dte);
-  const rr = computeRewardRisk(inp, action, longStrike, dte);
 
   const stopUnderlying = leaning === "bullish"
     ? round1(inp.price * (1 - inp.atrPct / 100 * 1.5))
@@ -264,7 +302,7 @@ export function selectStrategy(inp: StrategyInputs): StrategyDecision {
   const target = `Underlying $${targetUnderlying} (1σ move) → ~$${rr.targetProfitPerContract} per contract.`;
   const stop = `Underlying $${stopUnderlying} or 50% of premium (~$${Math.round(rr.maxLossPerContract * 0.5)}).`;
 
-  if (rr.maxLossPerContract > 500) {
+  if (rr.maxLossPerContract > 500 && (!inp.maxLossBudget || rr.maxLossPerContract > inp.maxLossBudget)) {
     warnings.push(`Max loss per contract $${rr.maxLossPerContract} — keep size ≤ 1–2% of account.`);
   }
   if (rr.rewardRiskLabel === "Poor") {
