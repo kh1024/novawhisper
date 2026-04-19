@@ -83,6 +83,7 @@ export function SafetyExitAlert() {
         liveFeedPrice: spot,
         rsi14: 50, streakDays: 0, sma200: spot, ivPercentile: 50,
         marketTime: new Date(), delta: 0.5,
+        accountBalance: 0, // not used by gate 7
       });
       if (result.status === "BLOCKED") {
         const exitThreshold = Number(p.entry_premium) * 0.70;
