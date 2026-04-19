@@ -348,7 +348,7 @@ export function computeSetup(q: VerifiedQuote, ctx?: { regime?: MarketRegime; ti
   return {
     symbol: q.symbol, name, sector, price: q.price, changePct: effectiveChangePct,
     volume: q.volume, avgVolume, relVolume,
-    ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst: true,
+    ivRank, ivRankEst: !ivRankReal, atrPct, atrPctEst: true, rsi, rsiEst,
     emaDist20, emaDist50, emaEst,
     optionsLiquidity, earningsInDays, bias, trendLabel,
     setupScore, rawSetupScore, grade, regime, timeStateLabel, novaNotes,
