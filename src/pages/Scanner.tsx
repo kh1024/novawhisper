@@ -688,12 +688,14 @@ function DetailPanel({ row, decision, rank, onOpen }: {
   rank: RankResult | null;
   onOpen: () => void;
 }) {
+  const [budget] = useBudget();
   // Fall back to recomputing if the parent didn't pass them in (defensive).
   const dec = decision ?? selectStrategy({
     symbol: row.symbol, bias: row.bias, price: row.price, changePct: row.changePct,
     ivRank: row.ivRank, atrPct: row.atrPct, rsi: row.rsi,
     optionsLiquidity: row.optionsLiquidity, earningsInDays: row.earningsInDays,
     setupScore: row.setupScore,
+    maxLossBudget: budget,
   });
   return (
     <div className="space-y-4">
