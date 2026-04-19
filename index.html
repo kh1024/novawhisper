@@ -12,23 +12,31 @@
     <link rel="preconnect" href="https://yrsjhpkrxxcbwlnaegks.supabase.co" crossorigin>
     <link rel="dns-prefetch" href="https://yrsjhpkrxxcbwlnaegks.supabase.co">
 
-    <!-- TODO: Update og:title to match your application name -->
-    
-    
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/35d07a13-67c4-467b-83be-283dbf85c40b/id-preview-178f474c--0617b0f2-fc5f-49e5-9052-e2d2fb1408e9.lovable.app-1776540269641.png">
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
     <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/35d07a13-67c4-467b-83be-283dbf85c40b/id-preview-178f474c--0617b0f2-fc5f-49e5-9052-e2d2fb1408e9.lovable.app-1776540269641.png">
-    <meta property="og:title" content="Lovable App">
-  <meta name="twitter:title" content="Lovable App">
-  <meta property="og:description" content="Nova Market Compass is an AI-assisted options research terminal for market scanning and trade analysis.">
-  <meta name="twitter:description" content="Nova Market Compass is an AI-assisted options research terminal for market scanning and trade analysis.">
-</head>
+    <meta property="og:title" content="Nova Market Compass">
+    <meta name="twitter:title" content="Nova Market Compass">
+    <meta property="og:description" content="Nova Market Compass is an AI-assisted options research terminal for market scanning and trade analysis.">
+    <meta name="twitter:description" content="Nova Market Compass is an AI-assisted options research terminal for market scanning and trade analysis.">
+
+    <style>
+      /* Critical inline styles so the browser can paint the app shell BEFORE
+         any JS or external CSS is parsed — gives First Contentful Paint
+         something to render immediately. React replaces #root on mount. */
+      html, body { margin: 0; padding: 0; background: #0b1018; color: #e6edf6; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      #root { min-height: 100vh; }
+      .app-boot { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: #6b7a90; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; }
+      .app-boot::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #1f2a3d; border-top-color: #3b82f6; margin-right: 10px; animation: app-boot-spin 0.8s linear infinite; display: inline-block; }
+      @keyframes app-boot-spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="app-boot">Loading Nova</div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
