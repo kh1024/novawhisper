@@ -178,10 +178,20 @@ export default function Scanner() {
   const [settings] = useSettings();
   useEffect(() => {
     // Use effectiveVerdict so RSI-flipped rows don't fire false GO alerts.
+    // Also drop rows whose NOVA Guards block the signal (200-SMA gate, etc.).
     const goRows = rows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
       const v = exp?.effectiveVerdict ?? r.crl?.verdict;
-      return v === "GO" && !exp?.isStale && !exp?.isTimedOut;
+      const g = evaluateGuards({
+        symbol: r.symbol,
+        livePrice: r.price,
+        pickPrice: r.price,
+        optionType: r.bias === "bearish" ? "put" : "call",
+        direction: "long",
+        strike: r.price,
+        sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+      });
+      return v === "GO" && !exp?.isStale && !exp?.isTimedOut && !g.shouldBlockSignal;
     });
     if (goRows.length === 0) return;
     const today = new Date().toISOString().slice(0, 10);
@@ -195,7 +205,7 @@ export default function Scanner() {
         risk: r.crl?.riskBadge,
       })),
     });
-  }, [rows, settings, expiryStatus]);
+  }, [rows, settings, expiryStatus, sma]);
 
   const counts = useMemo(() => ({
     now: rows.filter((r) => r.readiness === "NOW").length,
