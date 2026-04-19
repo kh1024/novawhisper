@@ -45,11 +45,15 @@ const DATA_ICON = {
 export function NovaVerdictCard({
   card,
   closes,
+  symbol,
 }: {
   card: NovaCard;
   /** Optional recent daily closes — last 20 are used for a tiny trend sparkline. */
   closes?: number[];
+  /** Optional underlying symbol — enables the "Chain" jump button when present. */
+  symbol?: string;
 }) {
+  const navigate = useNavigate();
   const [showFull, setShowFull] = useState(false);
   const [sparkMode, setSparkMode] = useState<"price" | "rsi">("price");
   const style = ACTION_STYLES[card.action];
