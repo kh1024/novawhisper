@@ -294,6 +294,11 @@ export default function Dashboard() {
           {picks.length === 0 && (
             <div className="text-xs text-muted-foreground py-6 text-center">No {riskTab} picks right now. Try another risk level.</div>
           )}
+          {allOverBudget && (
+            <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[11px] leading-snug">
+              No {riskTab} contracts fit your <span className="font-mono">${budget.toLocaleString()}</span> per-trade cap right now — showing the cheapest options below. Each row suggests a budget-friendly alt ticker. Adjust capital/risk in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
+            </div>
+          )}
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
           <div className="space-y-2 min-h-[480px]">
             {picks.map((p) => {
