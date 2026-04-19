@@ -125,6 +125,8 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     contracts: contracts ?? 1,
     grade: pick.grade,
     expiryDate: sync.expiry,
+    bid: atmContract?.bid,
+    ask: atmContract?.ask,
   };
 
   return validateSignal(input);
