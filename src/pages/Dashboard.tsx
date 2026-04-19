@@ -102,6 +102,13 @@ export default function Dashboard() {
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
   const [showBlocked, setShowBlocked] = useState(false);
+  // Weekend Kill-Switch — only meaningful on Sat/Sun. Default ON so users
+  // don't see Friday-frozen "ghost" picks on a quiet Saturday morning.
+  const isWeekend = useMemo(() => {
+    const dow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })).getDay();
+    return dow === 0 || dow === 6;
+  }, []);
+  const [hideWeekendGhosts, setHideWeekendGhosts] = useState(true);
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
