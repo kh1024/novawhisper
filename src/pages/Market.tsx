@@ -18,6 +18,7 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { GateValidationDashboard } from "@/components/GateValidationDashboard";
 import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
+import { useResolvedIvp } from "@/lib/gates/useResolvedIvp";
 import { useCapitalSettings } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
@@ -72,9 +73,15 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
   // runs on a real ATM IV vs. the chain's IV envelope instead of a PRNG.
   const { data: chainData } = useOptionsChain(p.symbol, 150);
   const chain = chainData?.contracts ?? null;
+  // True 52-week IVP from iv_history (returns null until ≥60 samples exist;
+  // adapter then falls back to the chain envelope automatically).
+  const resolvedIvp = useResolvedIvp(p.symbol, chain, quote?.price ?? p.playAt, p.optionType);
   const validation = useMemo(
-    () => validatePick({ pick: p, quote, sma, accountBalance, chain }),
-    [p, quote, sma, accountBalance, chain],
+    () => validatePick({
+      pick: p, quote, sma, accountBalance, chain,
+      ivPercentile: resolvedIvp?.ivp ?? null,
+    }),
+    [p, quote, sma, accountBalance, chain, resolvedIvp?.ivp],
   );
   const blocked = validation.finalStatus === "BLOCKED";
   return (
