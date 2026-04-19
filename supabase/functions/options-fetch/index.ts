@@ -7,6 +7,7 @@ const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const CACHE_TTL_MS = 60_000; // 60s memoization for options snapshots
+const STALE_CACHE_MAX_AGE_MS = 6 * 60 * 60_000; // serve last good chain for up to 6h if Massive is temporarily down
 
 async function kvGet(key: string): Promise<{ value: any; expires_at: string | null } | null> {
   if (!SUPABASE_URL || !SERVICE_ROLE) return null;
@@ -40,6 +41,27 @@ async function kvSet(key: string, value: unknown, ttlMs: number): Promise<void> 
     });
     await r.text().catch(() => "");
   } catch { /* best effort */ }
+}
+
+function readCachedPayload(
+  cached: { value: any; expires_at: string | null } | null,
+  maxAgeMs = Number.POSITIVE_INFINITY,
+): { payload: any; ageMs: number; isFresh: boolean } | null {
+  if (!cached?.value) return null;
+  const expiresAt = cached.expires_at ? Date.parse(cached.expires_at) : NaN;
+  const fetchedAt = Date.parse(String((cached.value as { fetchedAt?: string })?.fetchedAt ?? ""));
+  const referenceTs = Number.isFinite(fetchedAt)
+    ? fetchedAt
+    : Number.isFinite(expiresAt)
+      ? expiresAt - CACHE_TTL_MS
+      : Date.now();
+  const ageMs = Math.max(0, Date.now() - referenceTs);
+  if (ageMs > maxAgeMs) return null;
+  return {
+    payload: cached.value,
+    ageMs,
+    isFresh: Number.isFinite(expiresAt) && expiresAt > Date.now(),
+  };
 }
 
 // ── ATM IV history recording ──────────────────────────────────────────
@@ -147,13 +169,12 @@ Deno.serve(async (req) => {
     // ── Cache lookup (60s memoization) ───────────────────────────────────
     const cacheKey = `options_chain_v1:${underlying}:${limit}:${expirationGte ?? ""}:${expirationLte ?? ""}`;
     const cached = await kvGet(cacheKey);
-    if (cached?.value) {
-      const exp = cached.expires_at ? Date.parse(cached.expires_at) : 0;
-      if (exp > Date.now()) {
+    const cachedEntry = readCachedPayload(cached);
+    if (cachedEntry?.isFresh) {
         // Even on cache hit, opportunistically record today's ATM IV.
         // recordAtmIv is itself dedupe'd per UTC day, so this is cheap.
         try {
-          const cachedContracts: OptionContract[] = (cached.value as any)?.contracts ?? [];
+          const cachedContracts: OptionContract[] = (cachedEntry.payload as any)?.contracts ?? [];
           const callsWithGreeks = cachedContracts.filter(
             (c) => c.type === "call" && c.iv != null && Number.isFinite(c.iv) && c.delta != null && Number.isFinite(c.delta),
           );
@@ -170,10 +191,9 @@ Deno.serve(async (req) => {
           console.warn("[iv_history] cache-path record skipped", e);
         }
         return new Response(
-          JSON.stringify({ ...cached.value, cached: true }),
+          JSON.stringify({ ...cachedEntry.payload, cached: true }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
-      }
     }
 
     const params = new URLSearchParams({ limit: String(limit) });
@@ -202,6 +222,16 @@ Deno.serve(async (req) => {
     if (!r || !r.ok) {
       const text = lastText || (r ? await r.text().catch(() => "") : "");
       const status = r?.status ?? 502;
+      const staleFallback = readCachedPayload(cached, STALE_CACHE_MAX_AGE_MS);
+      if (staleFallback) {
+        console.warn(
+          `[massive options] ${underlying} HTTP ${status} after retries — serving stale cache age=${Math.round(staleFallback.ageMs / 1000)}s`,
+        );
+        return new Response(
+          JSON.stringify({ ...staleFallback.payload, cached: true, stale: true, staleAgeMs: staleFallback.ageMs }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       console.warn(`[massive options] ${underlying} HTTP ${status} after retries: ${text}`);
       return new Response(
         JSON.stringify({ error: `Massive HTTP ${status}`, detail: text, underlying }),
