@@ -1,19 +1,17 @@
-// Local device-scoped portfolio. Owner key is a UUID stored in localStorage —
-// no login, but each browser only sees its own positions because no one else
-// knows the key. Suitable for personal tracking, not multi-user accounts.
+// Account-scoped portfolio. Owner key is the authenticated user's id —
+// rows are gated by RLS so each account only sees its own positions.
+// Pre-auth code paths fall through to an empty key; ProtectedRoute keeps
+// every page that uses these hooks behind a sign-in wall.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-
-const OWNER_KEY_STORAGE = "nova.portfolio.owner";
+import { getOwnerKeySync } from "@/lib/ownerKey";
 
 export function getOwnerKey(): string {
-  let k = localStorage.getItem(OWNER_KEY_STORAGE);
-  if (!k) {
-    k = crypto.randomUUID();
-    localStorage.setItem(OWNER_KEY_STORAGE, k);
-  }
-  return k;
+  // Returns auth.uid() when a session exists in localStorage, else "".
+  // The "" path can only happen on a transient first paint before the
+  // session loads — queries gracefully return [] until the key flips.
+  return getOwnerKeySync() ?? "";
 }
 
 export interface PortfolioPosition {
