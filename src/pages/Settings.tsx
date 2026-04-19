@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight, Bell, Copy } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight, Bell, Copy, Power, PowerOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
 import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
@@ -19,17 +19,19 @@ import {
   type RiskProfile,
   type BrokerPreset,
 } from "@/lib/settings";
-import { useApiHealth, useRequestRate60s, type SourceHealth } from "@/lib/apiHealth";
+import { useApiHealth, useRequestRate60s, useDisabledFunctionsTick, type SourceHealth } from "@/lib/apiHealth";
 import { resetCounts } from "@/lib/requestRate";
+import { areAnyDisabled, setManyDisabled } from "@/lib/disabledFunctions";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { KvCacheAdminCard } from "@/components/KvCacheAdminCard";
 
 const PORTFOLIO_PRESETS = [5_000, 10_000, 25_000, 50_000, 100_000];
 const RISK_PRESETS = [1, 2, 3, 5, 10];
 
-function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
+function StatusDot({ status }: { status: SourceHealth["status"] }) {
   if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-bullish" />;
   if (status === "degraded") return <AlertTriangle className="h-4 w-4 text-warning" />;
+  if (status === "off") return <PowerOff className="h-4 w-4 text-muted-foreground" />;
   return <XCircle className="h-4 w-4 text-bearish" />;
 }
 
@@ -40,14 +42,17 @@ function StatusDot({ status }: { status: "ok" | "degraded" | "down" }) {
  */
 function HealthRow({ h }: { h: SourceHealth }) {
   const rate = useRequestRate60s(h.functions);
+  // Re-render this row when its disabled flag flips so the button + status update.
+  useDisabledFunctionsTick();
+  const off = areAnyDisabled(h.functions);
   // Massive is throttled server-side to 75/s/instance. Yellow at 50, red at 70.
   const rateTone =
     rate >= 70 ? "text-bearish" :
     rate >= 50 ? "text-warning" :
     "text-muted-foreground";
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30">
-      <StatusDot status={h.status} />
+    <div className={`flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30 ${off ? "opacity-70" : ""}`}>
+      <StatusDot status={off ? "off" : h.status} />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">{h.name}</div>
         <div className="text-[11px] text-muted-foreground truncate">{h.description} · {h.detail}</div>
@@ -63,14 +68,30 @@ function HealthRow({ h }: { h: SourceHealth }) {
       </button>
       <div className="text-right shrink-0">
         <div className="font-mono text-xs">
-          {h.latencyMs == null ? "—" : `${h.latencyMs}ms`}
+          {off || h.latencyMs == null ? "—" : `${h.latencyMs}ms`}
         </div>
         <div className={`text-[10px] uppercase tracking-wider ${
-          h.status === "ok" ? "text-bullish" : h.status === "degraded" ? "text-warning" : "text-bearish"
+          off ? "text-muted-foreground" :
+          h.status === "ok" ? "text-bullish" :
+          h.status === "degraded" ? "text-warning" : "text-bearish"
         }`}>
-          {h.status}
+          {off ? "off" : h.status}
         </div>
       </div>
+      <Button
+        size="sm"
+        variant={off ? "outline" : "ghost"}
+        className="shrink-0 h-8 px-2"
+        onClick={() => {
+          const next = !off;
+          setManyDisabled(h.functions, next);
+          toast.success(`${h.name.split(" (")[0]} ${next ? "disabled" : "enabled"}`);
+        }}
+        title={off ? "Re-enable this API" : "Disable this API — no requests will be sent"}
+      >
+        {off ? <Power className="h-3.5 w-3.5" /> : <PowerOff className="h-3.5 w-3.5" />}
+        <span className="ml-1 text-[11px]">{off ? "On" : "Off"}</span>
+      </Button>
     </div>
   );
 }
