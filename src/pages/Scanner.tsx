@@ -529,18 +529,15 @@ export default function Scanner() {
                           <td className="px-3 py-3">
                             <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-1">
-                                <Hint label="NOVA — verdict engine reconciling technicals, Greeks & risk">
-                                  <span className="text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded border w-fit bg-primary/10 text-primary border-primary/40 cursor-help">
-                                    NOVA
-                                  </span>
+                                <Hint label="Verdict engine reconciling technicals, Greeks & risk">
+                                  <span className={cn(
+                                    "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit cursor-help",
+                                    verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
+                                    verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
+                                    (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
+                                    verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
+                                  )}>{blocked ? "BLOCKED" : verdict === "GO" ? "BUY" : verdict}</span>
                                 </Hint>
-                                <span className={cn(
-                                  "text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit",
-                                  verdict === "GO" && "bg-bullish/15 text-bullish border-bullish/40",
-                                  verdict === "WAIT" && "bg-warning/15 text-warning border-warning/40",
-                                  (verdict === "NO" || verdict === "EXIT") && "bg-bearish/15 text-bearish border-bearish/40",
-                                  verdict === "NEUTRAL" && "bg-muted/30 text-muted-foreground border-border",
-                                )}>{blocked ? "BLOCKED" : verdict}</span>
                               </div>
                               {r.crl.riskBadge && (
                                 <span className={cn(
