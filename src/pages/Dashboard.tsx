@@ -46,6 +46,7 @@ function moneynessOf(optionType: "call" | "put", strike: number, spot: number | 
 }
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
+const SECTIONS_STORAGE_KEY = "nova_dashboard_sections_order";
 
 type RiskBucket = "safe" | "mild" | "aggressive" | "lottery";
 
