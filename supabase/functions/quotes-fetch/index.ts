@@ -18,6 +18,10 @@ interface SourceQuote {
   change: number;
   changePct: number;
   volume: number;
+  /** Epoch ms of the *quote*, not the fetch. Falls back to fetch time when
+   *  the upstream provider doesn't expose a timestamp. Used by `verify()` to
+   *  enforce the "freshest timestamp wins" rule. */
+  ts: number;
   // Extended hours (only Yahoo populates these today)
   preMarketPrice?: number | null;
   preMarketChangePct?: number | null;
@@ -132,7 +136,9 @@ async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
       if (cached?.q) finnhubCache.set(symbol, { q: cached.q, at: Date.now() });
       return cached?.q ?? null;
     }
-    const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0 };
+    // Finnhub `t` is epoch *seconds* of the last trade.
+    const ts = Number(d.t) > 0 ? Number(d.t) * 1000 : Date.now();
+    const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0, ts };
     finnhubCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
@@ -167,6 +173,8 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
         change: Number(q["09. change"] ?? 0),
         changePct: Number(String(q["10. change percent"] ?? "0%").replace("%", "")),
         volume: Number(q["06. volume"] ?? 0),
+        // Alpha returns only the trading-day date; treat as end-of-day.
+        ts: Date.parse(String(q["07. latest trading day"] ?? "")) || Date.now(),
       };
       alphaCache.set(symbol, { q: out, at: Date.now() });
       return out;
@@ -207,7 +215,9 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
     const change = isFinite(open) ? close - open : 0;
     const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
     const volume = Number(row?.v ?? 0);
-    const q: SourceQuote = { source: "massive", price: close, change, changePct, volume };
+    // Massive `/prev` returns yesterday's bar; `t` is epoch ms when present.
+    const ts = Number(row?.t) > 0 ? Number(row.t) : Date.now();
+    const q: SourceQuote = { source: "massive", price: close, change, changePct, volume, ts };
     massiveCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
@@ -342,19 +352,28 @@ async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuo
       regularMarketVolume?: number;
       preMarketPrice?: number;
       preMarketChangePercent?: number;
+      preMarketTime?: number;
       postMarketPrice?: number;
       postMarketChangePercent?: number;
+      postMarketTime?: number;
+      regularMarketTime?: number;
       marketState?: string;
     }> = d?.quoteResponse?.result ?? [];
     for (const row of rows) {
       const price = Number(row.regularMarketPrice);
       if (!isFinite(price) || price <= 0) continue;
+      // Yahoo timestamps are epoch *seconds*; pick the freshest of pre/regular/post.
+      const tsCandidates = [row.regularMarketTime, row.preMarketTime, row.postMarketTime]
+        .map((t) => (Number(t) > 0 ? Number(t) * 1000 : 0))
+        .filter((t) => t > 0);
+      const ts = tsCandidates.length ? Math.max(...tsCandidates) : Date.now();
       out.set(row.symbol.toUpperCase(), {
         source: "yahoo",
         price,
         change: Number(row.regularMarketChange ?? 0),
         changePct: Number(row.regularMarketChangePercent ?? 0),
         volume: Number(row.regularMarketVolume ?? 0),
+        ts,
         preMarketPrice: isFinite(Number(row.preMarketPrice)) ? Number(row.preMarketPrice) : null,
         preMarketChangePct: isFinite(Number(row.preMarketChangePercent)) ? Number(row.preMarketChangePercent) : null,
         postMarketPrice: isFinite(Number(row.postMarketPrice)) ? Number(row.postMarketPrice) : null,
@@ -397,7 +416,10 @@ async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
       if (!isFinite(close) || close <= 0) continue;
       const change = isFinite(open) ? close - open : 0;
       const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
-      const q: SourceQuote = { source: "stooq", price: close, change, changePct, volume: isFinite(volume) ? volume : 0 };
+      // Stooq CSV columns: symbol,date,time,open,high,low,close,volume — combine date+time as ET.
+      const dt = Date.parse(`${cols[1]}T${cols[2] || "00:00:00"}-05:00`);
+      const ts = isFinite(dt) ? dt : Date.now();
+      const q: SourceQuote = { source: "stooq", price: close, change, changePct, volume: isFinite(volume) ? volume : 0, ts };
       stooqCache.set(symbol, { q, at: Date.now() });
       return q;
     }
@@ -430,7 +452,10 @@ async function fetchCnbc(symbol: string): Promise<SourceQuote | null> {
     const change = Number(String(row?.change ?? "0").replace(/[+,]/g, ""));
     const changePct = Number(String(row?.change_pct ?? "0").replace(/[+%,]/g, ""));
     const volume = Number(String(row?.volume ?? "0").replace(/,/g, ""));
-    const q: SourceQuote = { source: "cnbc", price, change: isFinite(change) ? change : 0, changePct: isFinite(changePct) ? changePct : 0, volume: isFinite(volume) ? volume : 0 };
+    // CNBC `last_time` is an epoch-seconds string when present.
+    const lt = Number(row?.last_time);
+    const ts = isFinite(lt) && lt > 0 ? lt * 1000 : Date.now();
+    const q: SourceQuote = { source: "cnbc", price, change: isFinite(change) ? change : 0, changePct: isFinite(changePct) ? changePct : 0, volume: isFinite(volume) ? volume : 0, ts };
     cnbcCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
@@ -460,7 +485,10 @@ async function fetchGoogle(symbol: string): Promise<SourceQuote | null> {
       const prev = prevMatch ? Number(prevMatch[1]) : NaN;
       const change = isFinite(prev) ? price - prev : 0;
       const changePct = isFinite(prev) && prev ? ((price - prev) / prev) * 100 : 0;
-      const q: SourceQuote = { source: "google", price, change, changePct, volume: 0 };
+      // Google embeds `data-last-normal-market-timestamp="<epoch-seconds>"`.
+      const tm = html.match(/data-last-normal-market-timestamp="(\d+)"/);
+      const ts = tm ? Number(tm[1]) * 1000 : Date.now();
+      const q: SourceQuote = { source: "google", price, change, changePct, volume: 0, ts };
       googleCache.set(symbol, { q, at: Date.now() });
       return q;
     } catch (e) {
@@ -558,16 +586,29 @@ function verify(
     return {
       symbol, price: src.price, change: src.change, changePct: src.changePct, volume: src.volume,
       sources, consensusSource: src.source, status: "verified",
-      diffPct: null, updatedAt: now, ...extendedFields,
+      diffPct: null, updatedAt: new Date(src.ts || Date.now()).toISOString(), ...extendedFields,
     };
   }
+  // ── FRESHEST-WINS RULE ────────────────────────────────────────────────
+  // The user-facing price MUST come from the source whose quote timestamp
+  // is the most recent. Older-timestamped sources (e.g. EOD providers like
+  // Alpha Vantage / Stooq, or Massive's `/prev` bar) are kept ONLY for
+  // cross-reference — never to override a fresher intraday tick.
+  // Window: drop any source >5 min behind the freshest during regular hours,
+  // 30 min off-hours (pre/post/closed have thinner liquidity & jitter).
+  const freshestTs = Math.max(...live.map((s) => s.ts || 0));
+  const windowMs = session === "regular" ? 5 * 60_000 : 30 * 60_000;
+  const fresh = live.filter((s) => freshestTs - (s.ts || 0) <= windowMs);
+  const eligible = fresh.length > 0 ? fresh : live;
+
   const prices = live.map((s) => s.price);
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const diff = ((maxP - minP) / minP) * 100;
   // Prefer real-time intraday: Yahoo > Finnhub > Massive > CNBC > Google > Stooq > Alpha.
+  // BUT only among the freshest-window sources.
   const order: SourceName[] = ["yahoo", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
-  const chosen = order.map((n) => live.find((s) => s.source === n)).find(Boolean) ?? live[0];
+  const chosen = order.map((n) => eligible.find((s) => s.source === n)).find(Boolean) ?? eligible[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
   return {
     symbol,
@@ -579,7 +620,8 @@ function verify(
     consensusSource: chosen.source,
     status,
     diffPct: +diff.toFixed(4),
-    updatedAt: now,
+    // Surface the *quote* time of the chosen source, not server-receive time.
+    updatedAt: new Date(chosen.ts || Date.now()).toISOString(),
     ...extendedFields,
   };
 }
