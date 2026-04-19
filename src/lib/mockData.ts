@@ -160,13 +160,6 @@ export function getMockQuotes(): Quote[] {
   });
 }
 
-const STRATS: OptionPick["strategy"][] = ["covered-call", "csp", "long-call", "long-put", "wheel", "leaps"];
-const REASONS = [
-  "Premium-selling candidate: IV elevated vs realized vol.",
-  "Bullish trend: above 20/50 EMA, MACD positive.",
-  "Sympathy setup: sector leader broke out today.",
-  "Caution: earnings within 2 sessions — IV crush risk.",
-  "Wheel-friendly: blue chip, deep liquidity, stable theta.",
 // Buy-premium-only strategy palette. Long calls + long puts dominate; LEAPS
 // surface as a smaller share for long-thesis trades. Short premium structures
 // (covered call / CSP / wheel) are intentionally OFF.
