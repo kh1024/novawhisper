@@ -314,7 +314,7 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
   const isCall = p.option_type.includes("call");
   const isPut = p.option_type.includes("put");
   const tone = p.direction === "long" && isCall ? "text-bullish" : p.direction === "long" && isPut ? "text-bearish" : "text-foreground";
-  const strikeLabel = p.strike_short ? `${p.strike}/${p.strike_short}` : String(p.strike);
+  const strikeLabel = String(p.strike);
   const dte = Math.max(0, Math.round((new Date(p.expiry + "T16:00:00Z").getTime() - Date.now()) / 86_400_000));
 
   // Per-card simulated spot override (paper trades only). Manual chips set a
