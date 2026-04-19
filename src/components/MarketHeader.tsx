@@ -6,6 +6,7 @@ import { useLiveQuotes, currentSessionET, type Session } from "@/lib/liveData";
 import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { Hint } from "@/components/Hint";
+import { UserMenu } from "@/components/UserMenu";
 
 const SESSION_PILL: Record<Session, { label: string; cls: string; live: boolean; tip: string }> = {
   pre:     { label: "Pre-Market",  cls: "pill border-primary/40 bg-primary/10 text-primary", live: true,  tip: "US pre-market session (04:00–09:30 ET). Lower liquidity; refresh throttled to 2 min." },
@@ -120,6 +121,7 @@ export function MarketHeader() {
             <span className="text-xs hidden sm:inline">Refresh</span>
           </Button>
         </Hint>
+        <UserMenu />
       </div>
     </header>
   );
