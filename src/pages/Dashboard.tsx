@@ -453,6 +453,19 @@ export default function Dashboard() {
               </div>
             );})}
           </div>
+          {blockedCount > 0 && (
+            <div className="mt-3 flex items-center justify-between rounded-md border border-border/60 bg-surface/30 px-3 py-2 text-[11px] text-muted-foreground">
+              <span>
+                <span className="font-mono font-semibold text-foreground">{blockedCount}</span> pick{blockedCount === 1 ? "" : "s"} hidden — blocked by safety gates (stale data, wide spread, IV trap, exhaustion, etc.)
+              </span>
+              <button
+                onClick={() => setShowBlocked((v) => !v)}
+                className="text-[11px] font-semibold tracking-wide text-primary hover:underline underline-offset-2"
+              >
+                {showBlocked ? "Hide blocked" : "Show blocked"}
+              </button>
+            </div>
+          )}
         </Card>
 
         {/* Right column — drag to reorder */}
