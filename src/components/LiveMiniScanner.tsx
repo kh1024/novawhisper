@@ -3,16 +3,18 @@
 // the top 5 by Final Rank. Falls back to a skeleton while loading.
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { Download, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
 import { computeSetups } from "@/lib/setupScore";
 import { rankSetup } from "@/lib/finalRank";
 
 export function LiveMiniScanner() {
-  const { quotes, loading } = useLiveQuotes(undefined, { refetchMs: 60_000 });
+  const query = useLiveQuotes(undefined, { refetchMs: 60_000 });
+  const quotes = query.data ?? [];
+  const loading = query.isLoading;
 
   const rows = useMemo(() => {
-    if (!quotes?.length) return [];
+    if (!quotes.length) return [];
     const setups = computeSetups(quotes);
     return setups
       .map((s) => ({ s, rank: rankSetup(s) }))
