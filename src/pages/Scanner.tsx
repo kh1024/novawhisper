@@ -47,6 +47,7 @@ import {
   computeVerdict, isMarketOpen, isWeekend,
   type VerdictResult, type Verdict,
 } from "@/lib/verdictModel";
+import { MobileScannerList } from "@/components/scanner/MobileScannerList";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
