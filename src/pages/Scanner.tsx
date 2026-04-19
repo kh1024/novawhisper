@@ -431,7 +431,7 @@ export default function Scanner() {
                       { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
                       { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
                       { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
-                      { k: "Readiness" }, { k: "" },
+                      { k: "Rank", tip: "Final Rank 0–100 = Setup×.40 + Readiness×.30 + Options×.30 − Penalties. ELITE ≥90, GO NOW ≥80, GOOD ≥70, WATCHLIST ≥60." }, { k: "" },
                     ].map((h) => (
                       <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap">
                         {h.tip ? (
@@ -527,9 +527,20 @@ export default function Scanner() {
                             </div>
                           </td>
                           <td className="px-3 py-3">
-                            <span className={cn("text-[10px] px-2 py-1 rounded border font-semibold tracking-wider", ready.cls)}>
-                              {ready.label}
-                            </span>
+                            {(() => {
+                              const rk = rankMap.get(r.symbol)?.rank;
+                              if (!rk) return <span className="text-muted-foreground text-xs">—</span>;
+                              return (
+                                <Hint label={`Setup ${rk.setupScore} · Readiness ${rk.readinessScore} · Options ${rk.optionsScore}${rk.penalties.length ? " · Penalties: " + rk.penalties.map((p) => p.code).join(", ") : ""}`}>
+                                  <div className="flex flex-col gap-1 cursor-help">
+                                    <span className={cn("text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border w-fit", labelClasses(rk.label))}>
+                                      {rk.label}
+                                    </span>
+                                    <span className={cn("mono text-sm font-semibold", scoreColor(rk.finalRank))}>{rk.finalRank}</span>
+                                  </div>
+                                </Hint>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-1.5">
