@@ -71,8 +71,8 @@ function computeReadinessScore(row: SetupRow): RankResult["readinessBreakdown"] 
   // Market regime alignment (0–20).
   const bullStock = row.bias === "bullish";
   const bearStock = row.bias === "bearish";
-  const bullMkt = row.regime === "bullish-trend" || row.regime === "bullish-pullback";
-  const bearMkt = row.regime === "bearish-trend" || row.regime === "risk-off";
+  const bullMkt = row.regime === "bull" || row.regime === "meltup";
+  const bearMkt = row.regime === "bear" || row.regime === "panic";
   let regime = 10;
   if ((bullStock && bullMkt) || (bearStock && bearMkt)) regime = 20;
   else if ((bullStock && bearMkt) || (bearStock && bullMkt)) regime = 3;
