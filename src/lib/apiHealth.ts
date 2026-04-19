@@ -63,14 +63,12 @@ export function useApiHealth() {
       // Massive powers both quotes-fetch and options-fetch under the hood.
       // We ping options-fetch as the Massive health proxy (it's the heaviest
       // Massive call) and reuse the quotes-fetch ping for the consensus row.
-      const [quotes, options, news, publicCom, publicOpts, polyQ, polyO, sdQ, sdN] = await Promise.all([
+      const [quotes, options, news, publicCom, publicOpts, sdQ, sdN] = await Promise.all([
         ping("quotes-fetch", { symbols: ["SPY"] }),
         ping("options-fetch", { underlying: "SPY", limit: 5 }),
         ping("news-fetch",   { category: "general", limit: 3 }),
         ping("public-quotes-fetch", { symbols: ["SPY"] }),
         ping("public-options-fetch", { underlying: "SPY", limit: 5 }),
-        ping("polygon-quotes-fetch", { symbols: ["SPY"] }),
-        ping("polygon-options-fetch", { underlying: "SPY", limit: 5 }),
         ping("stockdata-quotes-fetch", { symbols: ["SPY"] }),
         ping("stockdata-news-fetch", { limit: 3 }),
       ]);
