@@ -35,6 +35,7 @@ import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
+import { VERDICT_HINT, BIAS_HINT } from "@/lib/glossary";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -502,9 +503,11 @@ export default function Scanner() {
                           </td>
                           <td className="px-3 py-3 mono">{r.relVolume.toFixed(2)}×</td>
                           <td className="px-3 py-3">
-                            <span className={`pill ${bcls} capitalize gap-1`}>
-                              <BIcon className="h-3 w-3" />{r.bias}
-                            </span>
+                            <Hint label={BIAS_HINT[r.bias] ?? "Directional read for this ticker."}>
+                              <span className={`pill ${bcls} capitalize gap-1 cursor-help`}>
+                                <BIcon className="h-3 w-3" />{r.bias}
+                              </span>
+                            </Hint>
                           </td>
                           <td className="px-3 py-3 mono"><EstNum n={r.ivRank} est className={ivrColor(r.ivRank)} /></td>
                           <td className="px-3 py-3 mono"><EstNum n={r.rsi} est className={rsiColor(r.rsi)} /></td>
