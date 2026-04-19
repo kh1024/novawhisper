@@ -20,6 +20,7 @@ import { toast } from "@/hooks/use-toast";
 import { Hint } from "@/components/Hint";
 import { evaluateGuards, CAPITAL_STOP_PCT } from "@/lib/novaGuards";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
+import { labelFromVerdict, unifiedClasses, UNIFIED_HINTS } from "@/lib/unifiedLabel";
 
 function statusIcon(s: Verdict["status"]) {
   if (s === "winning") return <Trophy className="h-3.5 w-3.5" />;
@@ -403,6 +404,16 @@ function PositionCard({ p, verdict, spot, settings, autoSim = false, onSimChange
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-mono text-lg font-semibold leading-none">{p.symbol}</span>
             <TickerPrice symbol={p.symbol} price={spot ?? null} showChange />
+            {(() => {
+              const action = labelFromVerdict(verdict);
+              return (
+                <Hint label={UNIFIED_HINTS[action]}>
+                  <span className={cn("text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded border cursor-help", unifiedClasses(action))}>
+                    {action}
+                  </span>
+                </Hint>
+              );
+            })()}
             <Badge variant="outline" className="text-[10px] capitalize">{p.status}</Badge>
             {p.is_paper && (
               <Badge variant="outline" className="text-[10px] border-warning/40 bg-warning/10 text-warning gap-1">
