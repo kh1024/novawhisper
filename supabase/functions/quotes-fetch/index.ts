@@ -3,6 +3,7 @@
 // rarely show "No data" even when the keyed providers get rate-limited.
 // Status: verified (2+ sources within 0.25%) · close (<1%) · mismatch (≥1%) · stale (only 1 src) · unavailable.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
+import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
 
 const ALPHA_KEY = Deno.env.get("ALPHA_VANTAGE_API_KEY");
 const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
@@ -191,6 +192,7 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
   if (cached && Date.now() - cached.at < MASSIVE_TTL_MS) return cached.q;
   try {
     const url = `https://api.massive.com/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true`;
+    await acquireMassiveToken(); // throttle to 75 req/s/instance
     const r = await fetch(url, {
       headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
     });

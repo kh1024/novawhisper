@@ -1,6 +1,7 @@
 // Live options chain from Massive: GET /v3/snapshot/options/{underlyingAsset}
 // Returns normalized option contracts with Greeks, IV, OI, volume, bid/ask.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
+import { acquireMassiveToken } from "../_shared/massiveThrottle.ts";
 
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
