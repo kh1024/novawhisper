@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, FileText, Youtube, TrendingUp, Newspaper, RefreshCw, Loader2, AlertTriangle } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useEffect, useMemo, useState } from "react";
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
+import { ComposedChart, Area, Line, ReferenceLine, ReferenceDot, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { useLiveQuotes, useOptionsChain, statusMeta, type OptionContract } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { supabase } from "@/integrations/supabase/client";
