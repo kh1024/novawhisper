@@ -1,9 +1,10 @@
-// Free fundamentals via Yahoo's v7/quote endpoint (no crumb required, no key).
-// quoteSummary v10 now returns 401 without a session cookie/crumb, but the
-// /v7/finance/quote endpoint exposes most of the same fields and is reliable
-// from server contexts. Cached 6h since fundamentals don't change intraday.
+// Free fundamentals via Finnhub (we already have FINNHUB_API_KEY).
+// Yahoo's quote endpoints now require a crumb cookie from datacenter IPs,
+// so we use Finnhub's /stock/profile2 + /stock/metric for stable, keyed access.
+// Cached 6h since fundamentals don't change intraday.
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
+const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
 const TTL_MS = 6 * 60 * 60_000;
 const cache = new Map<string, { data: any; at: number }>();
 
@@ -19,77 +20,98 @@ function s(x: any): string | null {
 }
 
 async function fetchFundamentals(symbol: string) {
+  if (!FINNHUB_KEY) throw new Error("FINNHUB_API_KEY not configured");
   const cached = cache.get(symbol);
   if (cached && Date.now() - cached.at < TTL_MS) return cached.data;
 
-  // v7/quote returns ~80 fields per symbol — covers everything we need
-  // except long business summary (which we leave out — link to website instead).
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}&fields=symbol,longName,shortName,fullExchangeName,marketCap,sharesOutstanding,floatShares,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,bookValue,dividendYield,trailingAnnualDividendYield,dividendRate,trailingAnnualDividendRate,payoutRatio,beta,fiftyTwoWeekHigh,fiftyTwoWeekLow,averageDailyVolume3Month,averageDailyVolume10Day,fiftyDayAverage,twoHundredDayAverage,profitMargins,returnOnEquity,revenueGrowth,earningsGrowth,debtToEquity,quickRatio,currentRatio,totalCash,totalDebt,targetMeanPrice,targetHighPrice,targetLowPrice,recommendationKey,recommendationMean,numberOfAnalystOpinions`;
-  const r = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; NovaTerminal/1.0)",
-      Accept: "application/json",
-      "Accept-Language": "en-US,en;q=0.9",
-    },
-  });
-  if (!r.ok) throw new Error(`Yahoo v7/quote HTTP ${r.status}`);
-  const d = await r.json();
-  const row = d?.quoteResponse?.result?.[0];
-  if (!row) throw new Error("No fundamentals returned");
+  const sym = encodeURIComponent(symbol);
+  const [profileRes, metricRes, recRes] = await Promise.all([
+    fetch(`https://finnhub.io/api/v1/stock/profile2?symbol=${sym}&token=${FINNHUB_KEY}`),
+    fetch(`https://finnhub.io/api/v1/stock/metric?symbol=${sym}&metric=all&token=${FINNHUB_KEY}`),
+    fetch(`https://finnhub.io/api/v1/stock/recommendation?symbol=${sym}&token=${FINNHUB_KEY}`),
+  ]);
+  if (!profileRes.ok) throw new Error(`Finnhub profile HTTP ${profileRes.status}`);
+  if (!metricRes.ok) throw new Error(`Finnhub metric HTTP ${metricRes.status}`);
 
+  const profile = await profileRes.json();
+  const metricBody = await metricRes.json();
+  const m = metricBody?.metric ?? {};
+  const recArr = recRes.ok ? await recRes.json() : [];
+  const rec = Array.isArray(recArr) && recArr.length > 0 ? recArr[0] : null;
+
+  // Recommendation: derive a key from buy/hold/sell counts
+  let recommendationKey: string | null = null;
+  let analystCount: number | null = null;
+  if (rec) {
+    analystCount = (rec.strongBuy ?? 0) + (rec.buy ?? 0) + (rec.hold ?? 0) + (rec.sell ?? 0) + (rec.strongSell ?? 0);
+    const buys = (rec.strongBuy ?? 0) + (rec.buy ?? 0);
+    const sells = (rec.sell ?? 0) + (rec.strongSell ?? 0);
+    const holds = rec.hold ?? 0;
+    if (buys > holds && buys > sells) recommendationKey = (rec.strongBuy ?? 0) > (rec.buy ?? 0) ? "strong_buy" : "buy";
+    else if (sells > holds && sells > buys) recommendationKey = "sell";
+    else if (analystCount > 0) recommendationKey = "hold";
+  }
+
+  // Finnhub marketCap is in millions USD; normalize.
+  const marketCap = n(profile.marketCapitalization);
   const out = {
     symbol,
-    name: s(row.longName) ?? s(row.shortName),
-    exchange: s(row.fullExchangeName),
-    sector: null as string | null,    // not in v7/quote — exposed via separate scraper if needed
-    industry: null as string | null,
-    country: null as string | null,
+    name: s(profile.name),
+    exchange: s(profile.exchange),
+    sector: s(profile.finnhubIndustry),
+    industry: s(profile.finnhubIndustry),
+    country: s(profile.country),
     employees: null as number | null,
-    website: null as string | null,
+    website: s(profile.weburl),
     summary: null as string | null,
 
-    marketCap: n(row.marketCap),
-    sharesOutstanding: n(row.sharesOutstanding),
-    floatShares: n(row.floatShares),
+    marketCap: marketCap != null ? marketCap * 1_000_000 : null,
+    sharesOutstanding: n(profile.shareOutstanding) != null ? (n(profile.shareOutstanding) as number) * 1_000_000 : null,
+    floatShares: n(m["sharesOutstanding"]) != null ? (n(m["sharesOutstanding"]) as number) * 1_000_000 : null,
 
-    peTrailing: n(row.trailingPE),
-    peForward: n(row.forwardPE),
-    pegRatio: null,
-    priceToBook: n(row.priceToBook),
-    priceToSales: n(row.priceToSalesTrailing12Months),
+    peTrailing: n(m["peTTM"]) ?? n(m["peNormalizedAnnual"]),
+    peForward: n(m["peExclExtraTTM"]),
+    pegRatio: n(m["pegRatio"]),
+    priceToBook: n(m["pbAnnual"]) ?? n(m["pbQuarterly"]),
+    priceToSales: n(m["psTTM"]),
 
-    epsTrailing: n(row.epsTrailingTwelveMonths),
-    epsForward: n(row.epsForward),
+    epsTrailing: n(m["epsTTM"]) ?? n(m["epsAnnual"]),
+    epsForward: n(m["epsInclExtraItemsAnnual"]),
 
-    // Yahoo v7 returns dividendYield as a percent (e.g. 0.45 = 0.45%, NOT 45%).
-    // Normalize to a fraction so client formatter (which multiplies × 100) works.
-    dividendYield: n(row.dividendYield) != null ? (n(row.dividendYield) as number) / 100 : null,
-    dividendRate: n(row.dividendRate) ?? n(row.trailingAnnualDividendRate),
-    payoutRatio: n(row.payoutRatio),
+    // Finnhub returns dividendYield as percent (e.g. 0.45 = 0.45%) — normalize to fraction.
+    dividendYield: n(m["currentDividendYieldTTM"]) != null
+      ? (n(m["currentDividendYieldTTM"]) as number) / 100
+      : null,
+    dividendRate: n(m["dividendPerShareTTM"]),
+    payoutRatio: n(m["payoutRatioTTM"]) != null
+      ? (n(m["payoutRatioTTM"]) as number) / 100
+      : null,
 
-    beta: n(row.beta),
-    week52High: n(row.fiftyTwoWeekHigh),
-    week52Low: n(row.fiftyTwoWeekLow),
-    avgVolume: n(row.averageDailyVolume3Month) ?? n(row.averageDailyVolume10Day),
+    beta: n(m["beta"]),
+    week52High: n(m["52WeekHigh"]),
+    week52Low: n(m["52WeekLow"]),
+    avgVolume: n(m["10DayAverageTradingVolume"]) != null
+      ? (n(m["10DayAverageTradingVolume"]) as number) * 1_000_000
+      : null,
 
-    profitMargins: n(row.profitMargins),
-    operatingMargins: null,
-    returnOnEquity: n(row.returnOnEquity),
-    revenueGrowth: n(row.revenueGrowth),
-    earningsGrowth: n(row.earningsGrowth),
-    debtToEquity: n(row.debtToEquity),
-    currentRatio: n(row.currentRatio),
-    totalCash: n(row.totalCash),
-    totalDebt: n(row.totalDebt),
+    profitMargins: n(m["netProfitMarginTTM"]) != null ? (n(m["netProfitMarginTTM"]) as number) / 100 : null,
+    operatingMargins: n(m["operatingMarginTTM"]) != null ? (n(m["operatingMarginTTM"]) as number) / 100 : null,
+    returnOnEquity: n(m["roeTTM"]) != null ? (n(m["roeTTM"]) as number) / 100 : null,
+    revenueGrowth: n(m["revenueGrowthTTMYoy"]) != null ? (n(m["revenueGrowthTTMYoy"]) as number) / 100 : null,
+    earningsGrowth: n(m["epsGrowthTTMYoy"]) != null ? (n(m["epsGrowthTTMYoy"]) as number) / 100 : null,
+    debtToEquity: n(m["totalDebt/totalEquityAnnual"]) ?? n(m["totalDebt/totalEquityQuarterly"]),
+    currentRatio: n(m["currentRatioAnnual"]) ?? n(m["currentRatioQuarterly"]),
+    totalCash: n(m["cashPerSharePerShareAnnual"]),
+    totalDebt: null as number | null,
 
-    targetMeanPrice: n(row.targetMeanPrice),
-    targetHighPrice: n(row.targetHighPrice),
-    targetLowPrice: n(row.targetLowPrice),
-    recommendationKey: s(row.recommendationKey),
-    numberOfAnalystOpinions: n(row.numberOfAnalystOpinions),
+    targetMeanPrice: null as number | null,
+    targetHighPrice: null as number | null,
+    targetLowPrice: null as number | null,
+    recommendationKey,
+    numberOfAnalystOpinions: analystCount,
 
     fetchedAt: new Date().toISOString(),
-    source: "yahoo-finance",
+    source: "finnhub",
   };
 
   cache.set(symbol, { data: out, at: Date.now() });
