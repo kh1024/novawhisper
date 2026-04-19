@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Check, Minus, Filter, BarChart3, Download, Zap, Shield, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { LiveMiniScanner } from "@/components/LiveMiniScanner";
 
 const FILTER_CHIPS = ["theta", "delta", "IV", "DTE", "volume", "open interest", "pullback %", "ROI"];
 
@@ -138,9 +139,9 @@ export default function Landing() {
               </div>
             </div>
 
-            {/* Mock scanner panel */}
+            {/* Live mini-scanner — same data pipeline as /scanner */}
             <div className="lg:col-span-6">
-              <MockScanner />
+              <LiveMiniScanner />
             </div>
           </div>
         </section>
@@ -333,73 +334,3 @@ function WorkflowStep({ icon: Icon, label }: { icon: any; label: string }) {
   );
 }
 
-function MockScanner() {
-  const rows = [
-    { sym: "NVDA",  bias: "Bull", theta: -0.42, delta: 0.58, iv: "34%",  roi: "+18%", rank: "ELITE",   tone: "bullish" as const },
-    { sym: "AMD",   bias: "Bull", theta: -0.31, delta: 0.55, iv: "41%",  roi: "+14%", rank: "GO NOW",  tone: "bullish" as const },
-    { sym: "META",  bias: "Bull", theta: -0.28, delta: 0.62, iv: "28%",  roi: "+11%", rank: "GOOD",    tone: "bullish" as const },
-    { sym: "TSLA",  bias: "Bear", theta: -0.55, delta: 0.48, iv: "62%",  roi: "+9%",  rank: "WAIT",    tone: "bearish" as const },
-    { sym: "SMCI",  bias: "—",    theta: -0.12, delta: 0.22, iv: "88%",  roi: "—",    rank: "PASS",    tone: "neutral" as const },
-  ];
-  return (
-    <div className="glass-card-elevated rounded-xl overflow-hidden shadow-elevated">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border/60 bg-surface/60">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="h-2.5 w-2.5 rounded-full bg-bearish/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-bullish/70" />
-          <span className="ml-3 mono text-muted-foreground">scan · theta-pullback · 2026-04-19</span>
-        </div>
-        <span className="pill pill-live"><span className="live-dot" /> live</span>
-      </div>
-      <div className="p-3 border-b border-border/60 bg-surface/30 flex flex-wrap gap-1.5">
-        {["theta < -0.20", "delta 0.45–0.70", "IV < 50%", "DTE 14–45", "OI > 500", "pullback 3–7%"].map((f) => (
-          <span key={f} className="mono text-[10px] px-2 py-0.5 rounded border border-primary/30 bg-primary/10 text-primary">
-            {f}
-          </span>
-        ))}
-      </div>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border/60">
-            <th className="text-left p-3">Sym</th>
-            <th className="text-left p-3">Bias</th>
-            <th className="text-right p-3">Theta</th>
-            <th className="text-right p-3">Δ</th>
-            <th className="text-right p-3">IV</th>
-            <th className="text-right p-3">ROI</th>
-            <th className="text-right p-3 pr-4">Rank</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.sym} className="border-b border-border/40 last:border-0 hover:bg-surface/40 transition-colors">
-              <td className="p-3 font-semibold mono">{r.sym}</td>
-              <td className="p-3">
-                <span className={`pill ${r.tone === "bullish" ? "pill-bullish" : r.tone === "bearish" ? "pill-bearish" : "pill-neutral"}`}>
-                  {r.bias}
-                </span>
-              </td>
-              <td className="p-3 text-right mono text-bearish">{r.theta.toFixed(2)}</td>
-              <td className="p-3 text-right mono">{r.delta.toFixed(2)}</td>
-              <td className="p-3 text-right mono">{r.iv}</td>
-              <td className="p-3 text-right mono text-bullish">{r.roi}</td>
-              <td className="p-3 pr-4 text-right">
-                <span className={`pill ${
-                  r.rank === "ELITE" || r.rank === "GO NOW" ? "pill-bullish" :
-                  r.rank === "PASS" ? "pill-bearish" : "pill-neutral"
-                }`}>
-                  {r.rank}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="px-4 py-2.5 border-t border-border/60 bg-surface/40 flex items-center justify-between text-[11px] text-muted-foreground">
-        <span className="mono">5 of 1,284 contracts match</span>
-        <span className="inline-flex items-center gap-1.5"><Download className="h-3 w-3" /> export.csv</span>
-      </div>
-    </div>
-  );
-}
