@@ -3,6 +3,43 @@
 import { corsHeaders } from "https://esm.sh/@supabase/supabase-js@2.95.0/cors";
 
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const CACHE_TTL_MS = 60_000; // 60s memoization for options snapshots
+
+async function kvGet(key: string): Promise<{ value: any; expires_at: string | null } | null> {
+  if (!SUPABASE_URL || !SERVICE_ROLE) return null;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/kv_cache?key=eq.${encodeURIComponent(key)}&select=value,expires_at`,
+      { headers: { apikey: SERVICE_ROLE, Authorization: `Bearer ${SERVICE_ROLE}` } },
+    );
+    if (!r.ok) { await r.text().catch(() => ""); return null; }
+    const rows = await r.json();
+    return rows?.[0] ?? null;
+  } catch { return null; }
+}
+
+async function kvSet(key: string, value: unknown, ttlMs: number): Promise<void> {
+  if (!SUPABASE_URL || !SERVICE_ROLE) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/kv_cache?on_conflict=key`, {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE,
+        Authorization: `Bearer ${SERVICE_ROLE}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      },
+      body: JSON.stringify({
+        key,
+        value,
+        expires_at: new Date(Date.now() + ttlMs).toISOString(),
+      }),
+    });
+    await r.text().catch(() => "");
+  } catch { /* best effort */ }
+}
 
 interface OptionContract {
   ticker: string;             // e.g. "O:AAPL250117C00200000"
@@ -64,6 +101,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── Cache lookup (60s memoization) ───────────────────────────────────
+    const cacheKey = `options_chain_v1:${underlying}:${limit}:${expirationGte ?? ""}:${expirationLte ?? ""}`;
+    const cached = await kvGet(cacheKey);
+    if (cached?.value) {
+      const exp = cached.expires_at ? Date.parse(cached.expires_at) : 0;
+      if (exp > Date.now()) {
+        return new Response(
+          JSON.stringify({ ...cached.value, cached: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    }
+
     const params = new URLSearchParams({ limit: String(limit) });
     if (expirationGte) params.set("expiration_date.gte", expirationGte);
     if (expirationLte) params.set("expiration_date.lte", expirationLte);
@@ -115,14 +165,17 @@ Deno.serve(async (req) => {
       };
     });
 
+    const payload = {
+      underlying,
+      count: contracts.length,
+      contracts,
+      fetchedAt: new Date().toISOString(),
+      source: "massive",
+    };
+    // Best-effort write-through to KV so subsequent loads (within 60s) skip Polygon.
+    kvSet(cacheKey, payload, CACHE_TTL_MS);
     return new Response(
-      JSON.stringify({
-        underlying,
-        count: contracts.length,
-        contracts,
-        fetchedAt: new Date().toISOString(),
-        source: "massive",
-      }),
+      JSON.stringify(payload),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (e) {
