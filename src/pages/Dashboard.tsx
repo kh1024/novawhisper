@@ -101,6 +101,7 @@ export default function Dashboard() {
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
+  const [showBlocked, setShowBlocked] = useState(false);
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
