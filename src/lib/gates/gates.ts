@@ -1,6 +1,6 @@
 // Pure gate implementations — no React, no I/O, easy to unit test.
 import type { SignalInput, GateResult } from "./types";
-import { AFFORDABILITY_CAP_PCT, SPREAD_SWEET_SPOT } from "./types";
+import { AFFORDABILITY_CAP_PCT, AFFORDABILITY_WARN_PCT, MAX_RISK_PCT, SPREAD_SWEET_SPOT } from "./types";
 
 export function gate1_DataIntegrity(i: SignalInput): GateResult {
   const staleness_s = (Date.now() - i.quoteTimestamp.getTime()) / 1000;
