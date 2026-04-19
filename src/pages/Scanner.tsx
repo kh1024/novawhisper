@@ -463,11 +463,13 @@ export default function Scanner() {
                                 const c = deriveContractFromRow(r);
                                 const isCall = c.optionType === "call";
                                 return (
-                                  <Hint label={`Save ${r.symbol} $${c.strike} ${isCall ? "CALL" : "PUT"} · exp ${c.expiry}`}>
+                                  <Hint label={`BUY ${r.symbol} $${c.strike} ${isCall ? "CALL" : "PUT"} · exp ${c.expiry}`}>
                                     <span
                                       className={cn(
-                                        "mono text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap cursor-help",
-                                        isCall ? "text-bullish border-bullish/40 bg-bullish/5" : "text-bearish border-bearish/40 bg-bearish/5",
+                                        "mono text-sm font-bold px-2.5 py-1 rounded-md border-2 whitespace-nowrap cursor-help shadow-sm",
+                                        isCall
+                                          ? "text-bullish border-bullish/60 bg-bullish/10"
+                                          : "text-bearish border-bearish/60 bg-bearish/10",
                                       )}
                                     >
                                       ${c.strike}{isCall ? "C" : "P"}
