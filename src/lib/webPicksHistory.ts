@@ -24,6 +24,14 @@ export interface HistoryPick {
   outcome: string | null;
   evaluated_at: string | null;
   created_at: string;
+  // New rich-signal columns (added 2026-04). Optional for back-compat with
+  // historical rows that pre-date the schema bump.
+  bias: "bullish" | "bearish" | "neutral" | null;
+  expected_return: string | null;
+  probability: string | null;
+  risk_level: "low" | "medium" | "high" | null;
+  grade: "A" | "B" | "C" | null;
+  grade_rationale: string | null;
 }
 
 export interface HistoryRun {
