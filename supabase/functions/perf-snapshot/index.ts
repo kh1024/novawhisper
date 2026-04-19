@@ -22,7 +22,8 @@ interface SnapshotRow {
   atrPct?: number;
 }
 
-const VALID_LABELS = new Set(["BUY", "WATCHLIST", "WAIT", "DON'T BUY"]);
+// Accept both new spec labels and legacy ones (older clients still in the wild).
+const VALID_LABELS = new Set(["BUY NOW", "WATCHLIST", "WAIT", "AVOID", "EXIT", "BUY", "DON'T BUY"]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
