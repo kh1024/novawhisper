@@ -2,15 +2,16 @@
 // Event-risk cards (Geopolitics, Political Posts, Fed/Rates, Earnings) are
 // derived live from the news feed and are clickable — they open a dialog
 // listing every matched headline with a direct link to the source article.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { motion, type Variants } from "framer-motion";
-import { Activity, ShieldCheck, TrendingUp, Info, Globe2, Megaphone, Landmark, BarChart3, ExternalLink, Newspaper } from "lucide-react";
+import { Activity, ShieldCheck, TrendingUp, Info, Globe2, Megaphone, Landmark, BarChart3, ExternalLink, Newspaper, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { MARKET_REGIME } from "@/lib/mockData";
 import { useEventRiskSignals, type EventRiskSignal, type EventRiskMatch } from "@/lib/sentimentSignals";
+import { supabase } from "@/integrations/supabase/client";
 
 const fade: Variants = {
   hidden: { opacity: 0, y: 8 },
@@ -108,26 +109,73 @@ function timeAgo(iso: string): string {
 
 function HeadlinesDialog({ event, onOpenChange }: { event: EventRiskSignal | null; onOpenChange: (o: boolean) => void }) {
   const open = !!event;
-  const matches: EventRiskMatch[] = event?.matches ?? [];
+  const seedMatches: EventRiskMatch[] = event?.matches ?? [];
+  const [webItems, setWebItems] = useState<EventRiskMatch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!event) { setWebItems([]); setError(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setWebItems([]);
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("event-sources", {
+          body: { category: event.key, limit: 14 },
+        });
+        if (cancelled) return;
+        if (error) throw error;
+        const items = (data?.items ?? []) as EventRiskMatch[];
+        setWebItems(items);
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [event]);
+
+  // Merge seed (Finnhub matched) + fresh web results, dedup by url.
+  const seenUrls = new Set<string>();
+  const merged: EventRiskMatch[] = [];
+  for (const m of [...seedMatches, ...webItems]) {
+    if (!m?.url || seenUrls.has(m.url)) continue;
+    seenUrls.add(m.url);
+    merged.push(m);
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Newspaper className="h-4 w-4 text-primary" />
-            {event?.label} — {matches.length} {matches.length === 1 ? "headline" : "headlines"}
+            {event?.label} — {merged.length} {merged.length === 1 ? "source" : "sources"}
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
           </DialogTitle>
           <DialogDescription>
-            Tap any story to open the original source in a new tab.
+            Live articles &amp; posts pulled from across the web for this signal. Tap any item to open the original source.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 overflow-y-auto pr-1 -mr-1">
-          {matches.length === 0 && (
+          {error && (
+            <div className="text-xs text-bearish py-2">Couldn't fetch fresh sources: {error}</div>
+          )}
+          {!loading && merged.length === 0 && !error && (
             <div className="text-sm text-muted-foreground py-8 text-center">
-              No matching stories in the current feed.
+              No matching stories right now.
             </div>
           )}
-          {matches.map((m) => (
+          {loading && merged.length === 0 && (
+            <div className="text-sm text-muted-foreground py-8 text-center flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Searching the web…
+            </div>
+          )}
+          {merged.map((m) => (
             <a
               key={m.id}
               href={m.url}
@@ -156,7 +204,7 @@ function HeadlinesDialog({ event, onOpenChange }: { event: EventRiskSignal | nul
                   <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{m.summary}</div>
                 )}
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-1.5">
-                  <span className="font-medium uppercase tracking-wide text-primary/80">{m.source}</span>
+                  <span className="font-medium uppercase tracking-wide text-primary/80 truncate max-w-[180px]">{m.source}</span>
                   <span>·</span>
                   <span>{timeAgo(m.publishedAt)}</span>
                   <ExternalLink className="h-3 w-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
