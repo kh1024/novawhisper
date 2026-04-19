@@ -231,6 +231,35 @@ export default function Scanner() {
 
   const [novaSpec] = useNovaFilter();
 
+  // ── UNIFIED LABEL SYSTEM (declared early so the filter below can use it) ──
+  // ONE label per row, used by the filter, top cards, AND the row badge.
+  // Source of truth: Final Rank's ActionLabel with explicit overrides:
+  //   1. Guard block on a BUY NOW → BLOCKED
+  //   2. CRL says EXIT + owned    → EXIT
+  //   3. Pick expiry STALE        → AVOID
+  type RowLabel = ActionLabel | "BLOCKED";
+  const labelFor = (r: SetupRow): RowLabel => {
+    const rk = rankMap.get(r.symbol)?.rank;
+    if (!rk) return "WAIT";
+    const exp = expiryStatus.get(`scanner:${r.symbol}`);
+    const baseVerdict = exp?.effectiveVerdict ?? r.crl?.verdict;
+    const guard = evaluateGuards({
+      symbol: r.symbol,
+      livePrice: r.price,
+      pickPrice: r.price,
+      optionType: r.bias === "bearish" ? "put" : "call",
+      direction: "long",
+      strike: r.price,
+      sma200: sma.map.get(r.symbol)?.sma200 ?? null,
+      riskBucket: r.crl?.riskBadge?.toLowerCase() ?? null,
+    });
+    if (guard.shouldBlockSignal && rk.label === "BUY NOW") return "BLOCKED";
+    if (baseVerdict === "EXIT" && ownedSymbols.has(r.symbol.toUpperCase())) return "EXIT";
+    if (exp?.isStale) return "AVOID";
+    return rk.label;
+  };
+
+
   const filtered = useMemo(() => {
     return sortedRows.filter((r) => {
       const exp = expiryStatus.get(`scanner:${r.symbol}`);
