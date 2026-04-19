@@ -709,6 +709,18 @@ function BucketColumn({ title, tone, icon, blurb, picks, expiryStatus, guardFor 
               <Badge variant="outline" className="text-[10px]">{p.strategy}</Badge>
             </div>
             <p className="mt-1.5 text-xs text-foreground/90">{p.thesis}</p>
+            <div className="mt-1.5">
+              <PickMetaChips
+                meta={{
+                  bias: p.bias,
+                  expectedReturn: p.expectedReturn,
+                  probability: p.probability,
+                  riskLevel: p.riskLevel,
+                  grade: p.grade,
+                  gradeRationale: p.gradeRationale,
+                }}
+              />
+            </div>
             <OptionContract
               symbol={p.symbol}
               optionType={p.optionType}
