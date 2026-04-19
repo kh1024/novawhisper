@@ -129,6 +129,61 @@ interface PoliticalPost {
   platform: "reddit" | "truthsocial" | "x" | "other";
 }
 
+interface EventSourceItem {
+  id: string;
+  headline: string;
+  summary: string;
+  source: string;
+  url: string;
+  image?: string;
+  publishedAt: string;
+}
+
+/** Topic-specific articles (Firecrawl Search) — Reuters/AP/BBC/r/worldnews etc. */
+function useEventSourceItems(category: "geopolitics" | "fed" | "earnings") {
+  return useQuery({
+    queryKey: ["event-sources", category],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("event-sources", {
+        body: { category, limit: 16 },
+      });
+      if (error) throw error;
+      return (data?.items ?? []) as EventSourceItem[];
+    },
+    staleTime: 5 * 60_000,
+    refetchInterval: 10 * 60_000,
+    retry: 1,
+  });
+}
+
+/** Convert topical articles into the same shape `scoreFeed` produces. */
+function tallyTopical(items: EventSourceItem[], terms: string[]): ReturnType<typeof scoreFeed> {
+  const matches: EventRiskMatch[] = items.map((it) => ({
+    id: it.id,
+    headline: it.headline,
+    summary: it.summary,
+    source: it.source,
+    url: it.url,
+    image: it.image,
+    publishedAt: it.publishedAt,
+  }));
+  let pos = 0, neg = 0;
+  for (const it of items) {
+    const text = `${it.headline} ${it.summary}`.toLowerCase();
+    if (POSITIVE_HINTS.some((h) => text.includes(h))) pos += 1;
+    if (NEGATIVE_HINTS.some((h) => text.includes(h))) neg += 1;
+  }
+  // If terms is non-empty, also count headlines containing the terms as a sanity floor.
+  void terms;
+  return {
+    hits: items.length,
+    pos,
+    neg,
+    topHeadline: items[0]?.headline,
+    matches,
+  };
+}
+
 function usePoliticalPosts() {
   return useQuery({
     queryKey: ["political-posts"],
@@ -174,16 +229,40 @@ function buildPoliticalSignal(posts: PoliticalPost[]): EventRiskSignal {
   };
 }
 
-/** Pull the general news feed + political social posts and derive Event-Risk signals. */
+/** Merge two `scoreFeed`-shaped tallies, deduping matches by URL. */
+function mergeTally(
+  a: ReturnType<typeof scoreFeed>,
+  b: ReturnType<typeof scoreFeed>,
+): ReturnType<typeof scoreFeed> {
+  const seen = new Set<string>();
+  const matches: EventRiskMatch[] = [];
+  for (const m of [...a.matches, ...b.matches]) {
+    if (seen.has(m.url)) continue;
+    seen.add(m.url);
+    matches.push(m);
+  }
+  return {
+    hits: matches.length,
+    pos: a.pos + b.pos,
+    neg: a.neg + b.neg,
+    topHeadline: a.topHeadline ?? b.topHeadline,
+    matches,
+  };
+}
+
+/** Pull the general news feed + topical articles + political social posts and derive Event-Risk signals. */
 export function useEventRiskSignals() {
   const { data: items = [], isLoading } = useNews({ category: "general", limit: 50 });
   const { data: politicalPosts = [], isLoading: politicalLoading } = usePoliticalPosts();
+  const { data: geoTopical = [], isLoading: geoLoading } = useEventSourceItems("geopolitics");
+  const { data: fedTopical = [], isLoading: fedLoading } = useEventSourceItems("fed");
+  const { data: earnTopical = [], isLoading: earnLoading } = useEventSourceItems("earnings");
 
   return useMemo(() => {
     const geopolitics = buildSignal(
       "geopolitics",
       "Geopolitics",
-      scoreFeed(items, GEOPOLITICS_TERMS),
+      mergeTally(scoreFeed(items, GEOPOLITICS_TERMS), tallyTopical(geoTopical, GEOPOLITICS_TERMS)),
       { hot: 3, warm: 1 },
       "No war/sanctions/tariff headlines",
       "geo headlines",
@@ -192,7 +271,7 @@ export function useEventRiskSignals() {
     const fed = buildSignal(
       "fed",
       "Fed / Rates",
-      scoreFeed(items, FED_RATES_TERMS),
+      mergeTally(scoreFeed(items, FED_RATES_TERMS), tallyTopical(fedTopical, FED_RATES_TERMS)),
       { hot: 3, warm: 1 },
       "No Fed/CPI/yields headlines",
       "rate headlines",
@@ -200,14 +279,18 @@ export function useEventRiskSignals() {
     const earnings = buildSignal(
       "earnings",
       "Earnings",
-      scoreFeed(items, EARNINGS_TERMS),
+      mergeTally(scoreFeed(items, EARNINGS_TERMS), tallyTopical(earnTopical, EARNINGS_TERMS)),
       { hot: 5, warm: 2 },
       "No major earnings prints today",
       "earnings headlines",
     );
 
-    return { geopolitics, political, fed, earnings, all: [geopolitics, political, fed, earnings], isLoading: isLoading || politicalLoading };
-  }, [items, politicalPosts, isLoading, politicalLoading]);
+    return {
+      geopolitics, political, fed, earnings,
+      all: [geopolitics, political, fed, earnings],
+      isLoading: isLoading || politicalLoading || geoLoading || fedLoading || earnLoading,
+    };
+  }, [items, politicalPosts, geoTopical, fedTopical, earnTopical, isLoading, politicalLoading, geoLoading, fedLoading, earnLoading]);
 }
 
 // Backwards-compat: keep the old hook name as a deprecated alias so any
