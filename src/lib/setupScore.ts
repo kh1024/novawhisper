@@ -6,9 +6,16 @@
 import { TICKER_UNIVERSE } from "./mockData";
 import type { VerifiedQuote } from "./liveData";
 import { runConflictResolution, type CrlVerdict, type RiskBadge } from "./conflictResolution";
+import {
+  detectTimeState, inferRegime, adjustForRegime, scoreToGrade,
+  type ConfidenceGrade, type MarketRegime,
+} from "./novaBrain";
 
 export type Bias = "bullish" | "bearish" | "neutral" | "reversal";
 export type Readiness = "NOW" | "WAIT" | "AVOID";
+
+// Re-export so callers can import grade types from one place.
+export type { ConfidenceGrade, MarketRegime };
 
 export interface ScoreBreakdown {
   liquidity: number;     // 0-100
