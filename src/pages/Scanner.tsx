@@ -430,8 +430,7 @@ export default function Scanner() {
                       { k: "ATR%", tip: "Estimated — green <2% (calm), red >4% (volatile)" },
                       { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
                       { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
-                      { k: "CRL", tip: "Conflict Resolution: GO / WAIT / NO / EXIT + Risk badge" },
-                      { k: "Rank", tip: "Final Rank 0–100 = Setup×.40 + Readiness×.30 + Options×.30 − Penalties. ELITE ≥90, GO NOW ≥80, GOOD ≥70, WATCHLIST ≥60." }, { k: "" },
+                      { k: "Action", tip: "Unified verdict — BUY NOW / WATCHLIST / WAIT / AVOID / EXIT / BLOCKED. Combines Setup × Readiness × Options × Penalties × Guards into one call. Number = Final Rank 0–100." }, { k: "" },
                     ].map((h) => (
                       <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap bg-card">
                         {h.tip ? (
