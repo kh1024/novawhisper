@@ -175,11 +175,12 @@ export default function Scanner() {
         ivRank: r.ivRank, atrPct: r.atrPct, rsi: r.rsi,
         optionsLiquidity: r.optionsLiquidity, earningsInDays: r.earningsInDays,
         setupScore: r.setupScore,
+        maxLossBudget,
       });
       m.set(r.symbol, { decision, rank: rankSetup(r, decision) });
     }
     return m;
-  }, [rows]);
+  }, [rows, maxLossBudget]);
 
   // Persist today's snapshot for the Performance dashboard (throttled to 1×/h).
   const snapshotInputs = useMemo(
