@@ -215,12 +215,8 @@ function computePenalties(row: SetupRow, decision: StrategyDecision): Penalty[] 
 
 // ── Action Label (Part 7) ───────────────────────────────────────────────────
 function labelFor(rank: number, decision: StrategyDecision): ActionLabel {
-  if (decision.action === "WAIT — no edge") return "PASS";
-  if (rank >= 90) return "ELITE";
-  if (rank >= 80) return "GO NOW";
-  if (rank >= 70) return "GOOD";
-  if (rank >= 60) return "WATCHLIST";
-  return "PASS";
+  if (decision.action === "WAIT — no edge") return "DON'T BUY";
+  return actionFromScore(rank);
 }
 
 // ── Public entry point ──────────────────────────────────────────────────────
