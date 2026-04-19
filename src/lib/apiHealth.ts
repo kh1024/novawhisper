@@ -1,6 +1,10 @@
 // Pings the edge functions to report data-source health on the Settings page.
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+// Importing this module installs the one-time invoke instrumentation that
+// powers the rolling 60s request counter shown next to each source.
+import { getCount60s, subscribe } from "@/lib/requestRate";
 
 export interface SourceHealth {
   name: string;
@@ -8,6 +12,24 @@ export interface SourceHealth {
   status: "ok" | "degraded" | "down";
   latencyMs: number | null;
   detail: string;
+  /** Edge-function names that contribute to this row's request count. */
+  functions: string[];
+}
+
+/**
+ * Live rolling-60s request count across one or more edge functions.
+ * Re-renders whenever any tracked invoke fires, plus a 1s safety tick so the
+ * number ages out even when the app goes quiet.
+ */
+export function useRequestRate60s(fns: string[]): number {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setTick((n) => n + 1);
+    const unsub = subscribe(bump);
+    const id = window.setInterval(bump, 1000);
+    return () => { unsub(); window.clearInterval(id); };
+  }, []);
+  return fns.reduce((sum, fn) => sum + getCount60s(fn), 0);
 }
 
 async function ping(fn: string, body: Record<string, unknown>): Promise<{ ms: number; ok: boolean; detail: string }> {
