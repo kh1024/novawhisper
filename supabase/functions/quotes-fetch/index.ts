@@ -352,19 +352,28 @@ async function fetchYahooBatch(symbols: string[]): Promise<Map<string, SourceQuo
       regularMarketVolume?: number;
       preMarketPrice?: number;
       preMarketChangePercent?: number;
+      preMarketTime?: number;
       postMarketPrice?: number;
       postMarketChangePercent?: number;
+      postMarketTime?: number;
+      regularMarketTime?: number;
       marketState?: string;
     }> = d?.quoteResponse?.result ?? [];
     for (const row of rows) {
       const price = Number(row.regularMarketPrice);
       if (!isFinite(price) || price <= 0) continue;
+      // Yahoo timestamps are epoch *seconds*; pick the freshest of pre/regular/post.
+      const tsCandidates = [row.regularMarketTime, row.preMarketTime, row.postMarketTime]
+        .map((t) => (Number(t) > 0 ? Number(t) * 1000 : 0))
+        .filter((t) => t > 0);
+      const ts = tsCandidates.length ? Math.max(...tsCandidates) : Date.now();
       out.set(row.symbol.toUpperCase(), {
         source: "yahoo",
         price,
         change: Number(row.regularMarketChange ?? 0),
         changePct: Number(row.regularMarketChangePercent ?? 0),
         volume: Number(row.regularMarketVolume ?? 0),
+        ts,
         preMarketPrice: isFinite(Number(row.preMarketPrice)) ? Number(row.preMarketPrice) : null,
         preMarketChangePct: isFinite(Number(row.preMarketChangePercent)) ? Number(row.preMarketChangePercent) : null,
         postMarketPrice: isFinite(Number(row.postMarketPrice)) ? Number(row.postMarketPrice) : null,
