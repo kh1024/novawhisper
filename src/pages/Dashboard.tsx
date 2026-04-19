@@ -102,6 +102,13 @@ export default function Dashboard() {
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
   const [showBlocked, setShowBlocked] = useState(false);
+  // Weekend Kill-Switch — only meaningful on Sat/Sun. Default ON so users
+  // don't see Friday-frozen "ghost" picks on a quiet Saturday morning.
+  const isWeekend = useMemo(() => {
+    const dow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" })).getDay();
+    return dow === 0 || dow === 6;
+  }, []);
+  const [hideWeekendGhosts, setHideWeekendGhosts] = useState(true);
 
   // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
   // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
@@ -186,10 +193,18 @@ export default function Dashboard() {
       strike: p.strike,
       sma200: sma.map.get(p.symbol)?.sma200 ?? null,
     });
-    return { p, guard, blocked: guard.shouldBlockSignal, optionType, live, pickPrice };
-  }), [picks, quoteMap, sma]);
+    // Weekend Ghost: live quote older than 4h on a Sat/Sun = stale Friday data.
+    const ageH = live?.updatedAt ? (Date.now() - new Date(live.updatedAt).getTime()) / 3_600_000 : Infinity;
+    const isGhost = isWeekend && ageH > 4;
+    return { p, guard, blocked: guard.shouldBlockSignal, optionType, live, pickPrice, isGhost };
+  }), [picks, quoteMap, sma, isWeekend]);
   const blockedCount = picksWithGuard.filter((x) => x.blocked).length;
-  const visiblePicks = showBlocked ? picksWithGuard : picksWithGuard.filter((x) => !x.blocked);
+  const ghostCount = picksWithGuard.filter((x) => x.isGhost).length;
+  const visiblePicks = picksWithGuard.filter((x) => {
+    if (!showBlocked && x.blocked) return false;
+    if (hideWeekendGhosts && x.isGhost) return false;
+    return true;
+  });
 
   return (
     <div className="p-4 sm:p-6 md:p-8 space-y-6 max-w-[1600px] mx-auto">
@@ -307,19 +322,34 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Top opportunities */}
               <Card className="glass-card p-5 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-primary" />
               <h2 className="text-sm font-semibold tracking-wide">Top Opportunities Today</h2>
             </div>
-            <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
-              <TabsList className="h-8 bg-surface/60">
-                <TabsTrigger value="safe" className="text-xs h-6">🟢 Conservative</TabsTrigger>
-                <TabsTrigger value="mild" className="text-xs h-6">🟡 Moderate</TabsTrigger>
-                <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
-                <TabsTrigger value="lottery" className="text-xs h-6">🎲 Lottery</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-3 flex-wrap">
+              {isWeekend && (
+                <Hint label="Markets are closed. When ON, picks whose live quote is more than 4 hours old are hidden — they're frozen at Friday's close and can't be priced reliably.">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={hideWeekendGhosts}
+                      onChange={(e) => setHideWeekendGhosts(e.target.checked)}
+                      className="h-3 w-3 accent-primary cursor-pointer"
+                    />
+                    Hide Weekend Ghosts
+                  </label>
+                </Hint>
+              )}
+              <Tabs value={riskTab} onValueChange={(v) => setRiskTab(v as RiskBucket)} className="w-auto">
+                <TabsList className="h-8 bg-surface/60">
+                  <TabsTrigger value="safe" className="text-xs h-6">🟢 Conservative</TabsTrigger>
+                  <TabsTrigger value="mild" className="text-xs h-6">🟡 Moderate</TabsTrigger>
+                  <TabsTrigger value="aggressive" className="text-xs h-6">🔴 Aggressive</TabsTrigger>
+                  <TabsTrigger value="lottery" className="text-xs h-6">🎲 Lottery</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
           {picks.length === 0 && (() => {
             const ts = detectTimeState();
@@ -463,6 +493,19 @@ export default function Dashboard() {
                 className="text-[11px] font-semibold tracking-wide text-primary hover:underline underline-offset-2"
               >
                 {showBlocked ? "Hide blocked" : "Show blocked"}
+              </button>
+            </div>
+          )}
+          {isWeekend && hideWeekendGhosts && ghostCount > 0 && (
+            <div className="mt-2 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+              <span>
+                <span className="font-mono font-semibold">{ghostCount}</span> weekend ghost{ghostCount === 1 ? "" : "s"} hidden — quotes older than 4h while markets are closed.
+              </span>
+              <button
+                onClick={() => setHideWeekendGhosts(false)}
+                className="text-[11px] font-semibold tracking-wide hover:underline underline-offset-2"
+              >
+                Show anyway
               </button>
             </div>
           )}

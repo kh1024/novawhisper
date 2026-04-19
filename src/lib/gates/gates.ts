@@ -187,6 +187,18 @@ export function gate7_SafetyExit(i: SignalInput): GateResult {
   };
 }
 
+// ── Helper: is the quote stale weekend data? ────────────────────────────────
+// We can't trust premium math when the underlying market has been closed for
+// hours and the chain is frozen at Friday's close. The threshold (4h) matches
+// the dashboard "Weekend Ghost" filter so the UI and gates agree.
+function isStaleWeekendQuote(i: SignalInput): boolean {
+  const est = new Date(i.marketTime.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const dow = est.getDay();
+  if (dow !== 0 && dow !== 6) return false; // weekday — ORB / market handles freshness
+  const ageH = (Date.now() - i.quoteTimestamp.getTime()) / 3_600_000;
+  return ageH > 4;
+}
+
 // ── GATE 8: Affordability (Position Sizing — the 2% Rule) ───────────────────
 // Two thresholds, both relative to the user's total account:
 //   • MAX_RISK_PCT (2%)        — target per-trade dollar risk ($200 on $10k)
@@ -200,6 +212,17 @@ export function gate8_Affordability(i: SignalInput): GateResult {
   const contracts = Math.max(1, Math.floor(i.contracts ?? 1));
   const premium = Number(i.entryPremium);
   const account = Number(i.accountBalance);
+
+  // ── Stale-weekend override ─────────────────────────────────────────────────
+  // If the premium is being read from a frozen weekend chain we refuse to
+  // suggest a trade — the math is unreliable until the open re-prices it.
+  if (isStaleWeekendQuote(i) && Number.isFinite(premium) && premium > 0) {
+    return {
+      gate: "AFFORDABILITY", passed: false, status: "WAIT",
+      label: "🟡 WAITING FOR MONDAY OPEN",
+      reasoning: `Premium $${premium.toFixed(2)} was last quoted before the weekend close — the options chain is frozen and may not reflect Monday's open. Affordability check paused until live quotes resume. Re-validate after the bell.`,
+    };
+  }
 
   // Without a real premium or account we can't enforce the cap — pass quietly.
   if (!Number.isFinite(premium) || premium <= 0 || !Number.isFinite(account) || account <= 0) {
@@ -284,11 +307,26 @@ export function gate9_DateValidator(i: SignalInput): GateResult {
   if (!m) {
     return {
       gate: "DATE_VALIDATOR", passed: false, status: "BLOCKED",
-      label: "🔴 INVALID DATE",
-      reasoning: `Expiry "${raw}" is not a valid YYYY-MM-DD date. Pick has been blocked until a real expiration is supplied.`,
+      label: "🔴 INVALID DATA",
+      reasoning: `Expiry "${raw}" is not a valid YYYY-MM-DD date — the pick contains malformed data and has been hidden.`,
     };
   }
-  const expiry = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 16, 0, 0);
+  const yy = Number(m[1]);
+  const mm = Number(m[2]);
+  const dd = Number(m[3]);
+  const expiry = new Date(yy, mm - 1, dd, 16, 0, 0);
+  // Reject impossible calendar dates (e.g. Feb 30, "04-24/26" → 2024-04-26 round-trip mismatch).
+  const roundTripMatch =
+    expiry.getFullYear() === yy &&
+    expiry.getMonth() === mm - 1 &&
+    expiry.getDate() === dd;
+  if (!roundTripMatch || mm < 1 || mm > 12 || dd < 1 || dd > 31) {
+    return {
+      gate: "DATE_VALIDATOR", passed: false, status: "BLOCKED",
+      label: "🔴 INVALID DATA",
+      reasoning: `Expiry "${raw}" is not a real calendar date — the pick has been hidden until a valid expiration is supplied.`,
+    };
+  }
   const now = new Date();
   const dte = Math.round((expiry.getTime() - now.getTime()) / 86_400_000);
   if (dte < 0) {
@@ -298,14 +336,25 @@ export function gate9_DateValidator(i: SignalInput): GateResult {
       reasoning: `Expiry ${raw} has already passed (${Math.abs(dte)} day(s) ago). The system pivots to the nearest active Friday expiration automatically — refresh the pick to load it.`,
     };
   }
-  // Liquid expirations are Fridays (weeklies) or third-Friday monthlies.
+  // CBOE standard expirations are Fridays (weeklies) or third-Friday monthlies.
+  // Anything else is either a special-case index expiry (SPX/SPY/QQQ) or bad data.
   const dow = expiry.getDay(); // 5 = Friday
   if (dow !== 5) {
     const dayName = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow];
+    // For non-index symbols we treat non-Friday expiries as invalid data
+    // (the chains rarely exist and surfacing them creates zombie picks).
+    const isIndex = /^(SPX|SPY|QQQ|NDX|RUT|IWM|VIX)$/i.test(i.ticker);
+    if (!isIndex) {
+      return {
+        gate: "DATE_VALIDATOR", passed: false, status: "BLOCKED",
+        label: "🔴 INVALID DATA",
+        reasoning: `Expiry ${raw} falls on a ${dayName} — standard equity options expire Fridays. No matching CBOE contract for ${i.ticker}; pick hidden.`,
+      };
+    }
     return {
       gate: "DATE_VALIDATOR", passed: true, status: "FLAGGED",
       label: "🟡 NON-FRIDAY EXPIRY",
-      reasoning: `Expiry ${raw} falls on a ${dayName} — most US options expire Fridays. Only a handful of indices (SPX/SPY/QQQ) trade non-Friday weeklies with real liquidity. Verify the chain has open interest before entering.`,
+      reasoning: `Expiry ${raw} falls on a ${dayName} — only a handful of indices (${i.ticker}) trade non-Friday weeklies with real liquidity. Verify the chain has open interest before entering.`,
     };
   }
   // Third-Friday detection (between the 15th and 21st).
