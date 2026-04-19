@@ -136,7 +136,9 @@ async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
       if (cached?.q) finnhubCache.set(symbol, { q: cached.q, at: Date.now() });
       return cached?.q ?? null;
     }
-    const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0 };
+    // Finnhub `t` is epoch *seconds* of the last trade.
+    const ts = Number(d.t) > 0 ? Number(d.t) * 1000 : Date.now();
+    const q: SourceQuote = { source: "finnhub", price, change: Number(d.d ?? 0), changePct: Number(d.dp ?? 0), volume: 0, ts };
     finnhubCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
@@ -171,6 +173,8 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
         change: Number(q["09. change"] ?? 0),
         changePct: Number(String(q["10. change percent"] ?? "0%").replace("%", "")),
         volume: Number(q["06. volume"] ?? 0),
+        // Alpha returns only the trading-day date; treat as end-of-day.
+        ts: Date.parse(String(q["07. latest trading day"] ?? "")) || Date.now(),
       };
       alphaCache.set(symbol, { q: out, at: Date.now() });
       return out;
@@ -211,7 +215,9 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
     const change = isFinite(open) ? close - open : 0;
     const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
     const volume = Number(row?.v ?? 0);
-    const q: SourceQuote = { source: "massive", price: close, change, changePct, volume };
+    // Massive `/prev` returns yesterday's bar; `t` is epoch ms when present.
+    const ts = Number(row?.t) > 0 ? Number(row.t) : Date.now();
+    const q: SourceQuote = { source: "massive", price: close, change, changePct, volume, ts };
     massiveCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
@@ -401,7 +407,10 @@ async function fetchStooq(symbol: string): Promise<SourceQuote | null> {
       if (!isFinite(close) || close <= 0) continue;
       const change = isFinite(open) ? close - open : 0;
       const changePct = isFinite(open) && open ? ((close - open) / open) * 100 : 0;
-      const q: SourceQuote = { source: "stooq", price: close, change, changePct, volume: isFinite(volume) ? volume : 0 };
+      // Stooq CSV columns: symbol,date,time,open,high,low,close,volume — combine date+time as ET.
+      const dt = Date.parse(`${cols[1]}T${cols[2] || "00:00:00"}-05:00`);
+      const ts = isFinite(dt) ? dt : Date.now();
+      const q: SourceQuote = { source: "stooq", price: close, change, changePct, volume: isFinite(volume) ? volume : 0, ts };
       stooqCache.set(symbol, { q, at: Date.now() });
       return q;
     }
@@ -434,7 +443,10 @@ async function fetchCnbc(symbol: string): Promise<SourceQuote | null> {
     const change = Number(String(row?.change ?? "0").replace(/[+,]/g, ""));
     const changePct = Number(String(row?.change_pct ?? "0").replace(/[+%,]/g, ""));
     const volume = Number(String(row?.volume ?? "0").replace(/,/g, ""));
-    const q: SourceQuote = { source: "cnbc", price, change: isFinite(change) ? change : 0, changePct: isFinite(changePct) ? changePct : 0, volume: isFinite(volume) ? volume : 0 };
+    // CNBC `last_time` is an epoch-seconds string when present.
+    const lt = Number(row?.last_time);
+    const ts = isFinite(lt) && lt > 0 ? lt * 1000 : Date.now();
+    const q: SourceQuote = { source: "cnbc", price, change: isFinite(change) ? change : 0, changePct: isFinite(changePct) ? changePct : 0, volume: isFinite(volume) ? volume : 0, ts };
     cnbcCache.set(symbol, { q, at: Date.now() });
     return q;
   } catch (e) {
@@ -464,7 +476,10 @@ async function fetchGoogle(symbol: string): Promise<SourceQuote | null> {
       const prev = prevMatch ? Number(prevMatch[1]) : NaN;
       const change = isFinite(prev) ? price - prev : 0;
       const changePct = isFinite(prev) && prev ? ((price - prev) / prev) * 100 : 0;
-      const q: SourceQuote = { source: "google", price, change, changePct, volume: 0 };
+      // Google embeds `data-last-normal-market-timestamp="<epoch-seconds>"`.
+      const tm = html.match(/data-last-normal-market-timestamp="(\d+)"/);
+      const ts = tm ? Number(tm[1]) * 1000 : Date.now();
+      const q: SourceQuote = { source: "google", price, change, changePct, volume: 0, ts };
       googleCache.set(symbol, { q, at: Date.now() });
       return q;
     } catch (e) {
