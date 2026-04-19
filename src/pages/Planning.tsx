@@ -26,6 +26,18 @@ import { PickExpiryChips } from "@/components/PickExpiryChips";
 import { evaluateGuards, type GuardEval } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
+import { NovaFilterBar } from "@/components/NovaFilterBar";
+import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
+
+// Parse a premium-estimate string ("$2.50", "$1.20–$1.50", "≈$3") down to the
+// lowest dollar value so the budget gate (premium × 100 ≤ budget) is generous.
+function parsePremiumEstimate(s?: string | null): number | null {
+  if (!s) return null;
+  const nums = s.match(/\d+(?:\.\d+)?/g);
+  if (!nums || nums.length === 0) return null;
+  const v = Math.min(...nums.map(Number));
+  return Number.isFinite(v) ? v : null;
+}
 
 function biasIcon(b: string) {
   if (b === "bullish" || b === "bull") return <TrendingUp className="h-3.5 w-3.5" />;
