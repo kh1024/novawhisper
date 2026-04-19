@@ -496,6 +496,19 @@ export default function Dashboard() {
               </button>
             </div>
           )}
+          {isWeekend && hideWeekendGhosts && ghostCount > 0 && (
+            <div className="mt-2 flex items-center justify-between rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+              <span>
+                <span className="font-mono font-semibold">{ghostCount}</span> weekend ghost{ghostCount === 1 ? "" : "s"} hidden — quotes older than 4h while markets are closed.
+              </span>
+              <button
+                onClick={() => setHideWeekendGhosts(false)}
+                className="text-[11px] font-semibold tracking-wide hover:underline underline-offset-2"
+              >
+                Show anyway
+              </button>
+            </div>
+          )}
         </Card>
 
         {/* Right column — drag to reorder */}
