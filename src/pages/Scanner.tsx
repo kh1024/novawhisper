@@ -518,12 +518,19 @@ export default function Scanner() {
 
         {/* ──── Strategy Context Bar + bucketed picks (approved/budget/safety) ──── */}
         {(() => {
-          const cap = maxPerTradeDollars(strategyProfile);
+          const profileCap = maxPerTradeDollars(strategyProfile);
+          const cap = overrides.perTradeCapOverride > 0 ? overrides.perTradeCapOverride : profileCap;
           const approvedRows: SetupRow[] = [];
           const budgetBlocked: BlockedPickInfo[] = [];
           const safetyBlocked: BlockedPickInfo[] = [];
           let profileFilteredCount = 0;
+          let universeFilteredCount = 0;
           for (const r of filtered) {
+            // Conservative-Cheap universe override — restrict to sub-$50 names.
+            if (overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
+              universeFilteredCount++;
+              continue;
+            }
             const v = verdictByRow.get(r.symbol);
             const c = deriveContractFromRow(r);
             const expDate = new Date(c.expiry + "T00:00:00");
@@ -571,26 +578,39 @@ export default function Scanner() {
           }));
           const stable = scanCacheRef.current.reconcile(candidates, { maxDisplay: 12 });
 
+          const filterChipParts: string[] = [];
+          if (profileFilteredCount > 0) filterChipParts.push(`excluded ${profileFilteredCount} pick${profileFilteredCount === 1 ? "" : "s"} (structure not allowed)`);
+          if (universeFilteredCount > 0) filterChipParts.push(`excluded ${universeFilteredCount} non-cheap-universe ticker${universeFilteredCount === 1 ? "" : "s"}`);
+
           const pipelineCounts: PipelineCounts = {
             universe: rows.length,
             gatePassing: approvedRows.length + budgetBlocked.length,
             gateBlocked: safetyBlocked.length,
             budgetBlocked: budgetBlocked.length,
             shown: stable.length,
-            filterChip: profileFilteredCount > 0
-              ? `excluded ${profileFilteredCount} pick${profileFilteredCount === 1 ? "" : "s"} (structure not allowed)`
-              : null,
+            filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
           };
 
           const preMarketPicks = isPreMarketWindow() ? generatePreMarketPicks(rows) : [];
           const safetyDefaultOpen = preMarket.isPreMarket;
           const showLoosen = approvedRows.length === 0 && (safetyBlocked.length > 0 || budgetBlocked.length > 0);
 
+          // Spec section 2: Conservative profile + small cap + only budget blocks → mismatch.
+          const showBudgetMismatch =
+            approvedRows.length === 0 &&
+            budgetBlocked.length > 0 &&
+            safetyBlocked.length === 0 &&
+            strategyProfile.riskTolerance === "Conservative";
+
           return (
             <div className="space-y-3">
               <StrategyContextBar counts={pipelineCounts} onEdit={() => setStrategyDrawerOpen(true)} />
 
-              {showLoosen && (
+              {showBudgetMismatch && (
+                <BudgetMismatchCard cap={cap} budgetBlockedCount={budgetBlocked.length} />
+              )}
+
+              {showLoosen && !showBudgetMismatch && (
                 <LoosenToSeePicks
                   budgetBlockedCount={budgetBlocked.length}
                   orbBlockedCount={preMarket.isPreMarket ? safetyBlocked.length : 0}
@@ -651,9 +671,9 @@ export default function Scanner() {
                 <CollapsibleBlockedSection
                   title={`Budget blocked — over $${cap.toLocaleString()}/trade cap`}
                   count={budgetBlocked.length}
-                  subtitle="Raise cap or pick a cheaper strike"
+                  subtitle="Raise cap, scan cheaper tickers, or pick a smaller strike"
                   tone="budget"
-                  defaultOpen={false}
+                  defaultOpen={approvedRows.length === 0}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {budgetBlocked.map((info) => (
@@ -662,6 +682,7 @@ export default function Scanner() {
                         info={info}
                         onOpen={() => setOpenSymbol(info.row.symbol)}
                         onRaiseCap={() => setStrategyDrawerOpen(true)}
+                        onSuggestCheaper={() => setOpenSymbol(info.row.symbol)}
                       />
                     ))}
                   </div>
