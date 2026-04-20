@@ -252,7 +252,7 @@ function scorePut(opts: {
       chg: +chg.toFixed(2),
       expiry: String(c.expiration ?? ""),
       strike: Number(c.strike ?? 0),
-      last: Number(c.last ?? 0),
+      last: Number(c.last ?? 0) || (Number(c.bid ?? 0) > 0 && Number(c.ask ?? 0) > 0 ? +(((Number(c.bid) + Number(c.ask)) / 2)).toFixed(2) : 0),
       bid: Number(c.bid ?? 0),
       ask: Number(c.ask ?? 0),
       oi,
