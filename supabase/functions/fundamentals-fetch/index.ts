@@ -35,13 +35,36 @@ async function fetchFundamentals(symbol: string) {
     fetch(`https://finnhub.io/api/v1/stock/recommendation?symbol=${sym}&token=${FINNHUB_KEY}`),
     fetch(`https://finnhub.io/api/v1/calendar/earnings?from=${from}&to=${toDate}&symbol=${sym}&token=${FINNHUB_KEY}`),
   ]);
-  if (!profileRes.ok) throw new Error(`Finnhub profile HTTP ${profileRes.status}`);
-  if (!metricRes.ok) throw new Error(`Finnhub metric HTTP ${metricRes.status}`);
+  // ── 429 / 5xx soft-fail ──────────────────────────────────────────────
+  // If Finnhub is rate-limiting, return last-known cached data (even if
+  // expired) instead of 502'ing the whole UI. Only error out when we have
+  // nothing to fall back on.
+  if (!profileRes.ok || !metricRes.ok) {
+    console.warn(`[fundamentals] ${symbol} profile=${profileRes.status} metric=${metricRes.status}`);
+    if (cached) return { ...cached.data, stale: true, fetchedAt: new Date(cached.at).toISOString() };
+    return {
+      symbol, name: null, exchange: null, sector: null, industry: null,
+      country: null, employees: null, website: null, summary: null,
+      marketCap: null, sharesOutstanding: null, floatShares: null,
+      peTrailing: null, peForward: null, pegRatio: null, priceToBook: null, priceToSales: null,
+      epsTrailing: null, epsForward: null,
+      dividendYield: null, dividendRate: null, payoutRatio: null,
+      beta: null, week52High: null, week52Low: null, avgVolume: null,
+      profitMargins: null, operatingMargins: null, returnOnEquity: null,
+      revenueGrowth: null, earningsGrowth: null, debtToEquity: null,
+      currentRatio: null, totalCash: null, totalDebt: null,
+      targetMeanPrice: null, targetHighPrice: null, targetLowPrice: null,
+      recommendationKey: null, numberOfAnalystOpinions: null,
+      nextEarningsDate: null, earningsInDays: null,
+      fetchedAt: new Date().toISOString(), source: "finnhub",
+      unavailable: true, error: `Finnhub HTTP ${profileRes.status}/${metricRes.status}`,
+    };
+  }
 
-  const profile = await profileRes.json();
-  const metricBody = await metricRes.json();
+  const profile = await profileRes.json().catch(() => ({}));
+  const metricBody = await metricRes.json().catch(() => ({}));
   const m = metricBody?.metric ?? {};
-  const recArr = recRes.ok ? await recRes.json() : [];
+  const recArr = recRes.ok ? await recRes.json().catch(() => []) : [];
   const rec = Array.isArray(recArr) && recArr.length > 0 ? recArr[0] : null;
 
   // Next earnings date — Finnhub returns { earningsCalendar: [{ date, symbol, ... }] }
