@@ -25,6 +25,7 @@ function makeRow(sym: string, price: number, score: number, badge: "Safe" | "Mil
 const overrides = {
   showBudgetBlocked: false, bypassOrbLock: false, allowHighIv: false,
   treatAsModerate: false, perTradeCapOverride: 0, conservativeCheapOnly: false,
+  smallCapFriendly: false,
 };
 
 describe("Scanner ↔ Dashboard pick consistency", () => {
@@ -48,13 +49,16 @@ describe("Scanner ↔ Dashboard pick consistency", () => {
     expect(a.safetyBlocked.length).toBe(b.safetyBlocked.length);
   });
 
-  it("budget cap moves picks from approved → budgetBlocked deterministically", () => {
-    // Cap below AAPL ($200 * 100 = $20k cost) but above F ($12 * 100 = $1.2k).
-    const tight = bucketPicks({ rows, rankMap, verdictByRow, profile: DEFAULT_PROFILE, overrides, cap: 5000, bucketFilter: "All" });
-    const aaplApproved = tight.approved.find((p) => p.row.symbol === "AAPL");
-    const aaplBudget = tight.budgetBlocked.find((p) => p.row.symbol === "AAPL");
-    expect(aaplApproved).toBeUndefined();
-    expect(aaplBudget).toBeDefined();
+  it("strike ladder picks affordable rung instead of blocking ticker entirely", () => {
+    // With BS-lite pricing, AAPL @ $200 Deep-ITM (~$170 strike) prices around
+    // $30/share = $3,000/contract, ITM (~$184) around $20 = $2,000. A $1,500
+    // cap should still find at least the cheapest rung; a $200 cap blocks all.
+    const wide = bucketPicks({ rows, rankMap, verdictByRow, profile: DEFAULT_PROFILE, overrides, cap: 5000, bucketFilter: "All" });
+    expect(wide.approved.find((p) => p.row.symbol === "AAPL")).toBeDefined();
+
+    const tiny = bucketPicks({ rows, rankMap, verdictByRow, profile: DEFAULT_PROFILE, overrides, cap: 200, bucketFilter: "All" });
+    expect(tiny.approved.find((p) => p.row.symbol === "AAPL")).toBeUndefined();
+    expect(tiny.budgetBlocked.find((p) => p.row.symbol === "AAPL")).toBeDefined();
   });
 
   it("bucket filter narrows results identically each call", () => {

@@ -30,6 +30,12 @@ export interface ScannerOverrides {
    * a small cap can actually find affordable Deep-ITM calls.
    */
   conservativeCheapOnly: boolean;
+  /**
+   * Inject the Small-Cap-Friendly universe (SOFI, T, NIO, SNAP, AAL, NU,
+   * LCID, CCL, HOOD, NOK, …) into the scanner. Adds ~19 tickers under $25
+   * where a small per-trade cap can buy ITM contracts. Off by default.
+   */
+  smallCapFriendly: boolean;
 }
 
 const DEFAULTS: ScannerOverrides = {
@@ -39,6 +45,7 @@ const DEFAULTS: ScannerOverrides = {
   treatAsModerate: false,
   perTradeCapOverride: 0,
   conservativeCheapOnly: false,
+  smallCapFriendly: false,
 };
 
 let state: ScannerOverrides = { ...DEFAULTS };
@@ -86,4 +93,5 @@ export const OVERRIDE_LABELS: Record<keyof ScannerOverrides, string> = {
   treatAsModerate: "Profile reset",
   perTradeCapOverride: "Per-trade cap raised",
   conservativeCheapOnly: "Conservative-Cheap universe",
+  smallCapFriendly: "Small-Cap Friendly universe",
 };

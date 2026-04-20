@@ -3,7 +3,7 @@
 // override (cleared on refresh). Spec section 4.
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Lightbulb, ShieldOff, DollarSign, Zap, RotateCcw } from "lucide-react";
+import { Lightbulb, ShieldOff, DollarSign, Zap, RotateCcw, Sprout } from "lucide-react";
 import { useStrategyProfile, DEFAULT_PROFILE } from "@/lib/strategyProfile";
 import { useScannerOverrides } from "@/lib/scannerOverrides";
 
@@ -65,6 +65,18 @@ export function LoosenToSeePicks({
           >
             <Zap className="h-3.5 w-3.5" />
             {overrides.allowHighIv ? "Re-enable IV Guard" : `Include high-IV — unlocks ${ivBlockedCount}`}
+          </Button>
+        )}
+        {budgetBlockedCount > 0 && (
+          <Button
+            size="sm"
+            variant={overrides.smallCapFriendly ? "default" : "outline"}
+            className="h-8 gap-1.5 text-[12px]"
+            onClick={() => set("smallCapFriendly", !overrides.smallCapFriendly)}
+            title="Inject ~19 sub-$25 tickers (SOFI, T, NIO, SNAP, AAL, NU, LCID, CCL, HOOD…) so a small cap can find affordable ITM contracts."
+          >
+            <Sprout className="h-3.5 w-3.5" />
+            {overrides.smallCapFriendly ? "Hide Small-Cap universe" : "Add Small-Cap Friendly tickers"}
           </Button>
         )}
         {showResetButton && (

@@ -65,6 +65,9 @@ import { useScannerOverrides } from "@/lib/scannerOverrides";
 import { usePreMarketStatus } from "@/lib/preMarketPreview";
 import { isConservativeCheapTicker } from "@/lib/bucketing";
 import { BudgetMismatchCard } from "@/components/BudgetMismatchCard";
+import { buildStrikeLadder, pickBestRung } from "@/lib/strikeLadder";
+import { findCheapestAlternative } from "@/lib/useScannerPicks";
+import { Sparkles } from "lucide-react";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -559,16 +562,28 @@ export default function Scanner() {
               continue;
             }
             const v = verdictByRow.get(r.symbol);
+            const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
             const c = deriveContractFromRow(r);
             const expDate = new Date(c.expiry + "T00:00:00");
             const dte = isNaN(expDate.getTime()) ? 30 : Math.max(0, Math.round((expDate.getTime() - Date.now()) / 86400000));
-            if (!isStructureAllowed(strategyProfile, c.optionType, dte)) {
+            if (!isStructureAllowed(strategyProfile, optionType, dte)) {
               profileFilteredCount++;
               continue;
             }
-            const estCost = Math.round(r.price * 100);
-            const overBy = estCost - cap;
-            const isBudgetBlocked = !overrides.showBudgetBlocked && overBy > 0;
+
+            // ── Strike Ladder ──────────────────────────────────────────────
+            // Generate Deep ITM / ITM / ATM (+OTM lottery) and pick the
+            // highest-quality rung that fits the cap. Solves the "F $13C
+            // costs $1,280 → all blocked" bug.
+            const ladder = buildStrikeLadder({
+              spot: r.price, ivRank: r.ivRank, optionType, expiry: c.expiry, dte,
+              includeOTM: false,
+            });
+            const pick = pickBestRung(ladder, cap);
+            if (!pick) continue;
+            const chosenStrike = pick.candidate.strike;
+            const estCost = pick.candidate.contractCost;
+
             const verdict = v?.verdict;
             const isSafetyBlocked = verdict === "Avoid" || (v?.reason ?? "").toLowerCase().includes("block");
 
@@ -577,21 +592,32 @@ export default function Scanner() {
                 row: r, kind: "safety",
                 reason: v?.reason || "Safety gate failure",
                 detail: v?.reason || "One or more safety gates flagged this pick.",
-                contract: { optionType: c.optionType as "call" | "put", strike: c.strike, expiry: c.expiry },
+                contract: { optionType, strike: chosenStrike, expiry: c.expiry },
               });
               continue;
             }
-            if (isBudgetBlocked) {
+            if (!pick.fitsCap && !overrides.showBudgetBlocked) {
+              const cheapest = pick.cheapest;
+              const overBy = cheapest.contractCost - cap;
               budgetBlocked.push({
                 row: r, kind: "budget",
                 reason: `Over per-trade cap by $${overBy.toLocaleString()}`,
-                detail: `Per-trade cap is $${cap.toLocaleString()}. Estimated cost for 1 contract is $${estCost.toLocaleString()}.`,
-                overBudgetBy: overBy, cap, cost: estCost,
-                contract: { optionType: c.optionType as "call" | "put", strike: c.strike, expiry: c.expiry },
+                detail:
+                  `Cap $${cap.toLocaleString()}. Cheapest rung is ${cheapest.rung} ` +
+                  `${cheapest.optionType} $${cheapest.strike} @ ~$${cheapest.premium.toFixed(2)} ` +
+                  `= $${cheapest.contractCost.toLocaleString()}/contract.`,
+                overBudgetBy: overBy, cap, cost: cheapest.contractCost,
+                contract: { optionType, strike: cheapest.strike, expiry: c.expiry },
               });
               continue;
             }
+            // Mutate the row's working copy with the ladder-chosen strike so
+            // SetupCard renders the ITM strike (not the legacy ATM derive).
+            (r as SetupRow & { _chosenStrike?: number; _chosenPremium?: number; _chosenRung?: string })._chosenStrike = chosenStrike;
+            (r as SetupRow & { _chosenStrike?: number; _chosenPremium?: number; _chosenRung?: string })._chosenPremium = pick.candidate.premium;
+            (r as SetupRow & { _chosenStrike?: number; _chosenPremium?: number; _chosenRung?: string })._chosenRung = pick.candidate.rung;
             approvedRows.push(r);
+            void estCost;
           }
 
           const candidates = approvedRows.map((r) => ({
@@ -629,12 +655,61 @@ export default function Scanner() {
             safetyBlocked.length === 0 &&
             strategyProfile.riskTolerance === "Conservative";
 
+          // Diagnostic: cheapest budget-blocked alternative (sorted by cost asc).
+          const cheapestBlocked = budgetBlocked.length > 0
+            ? [...budgetBlocked].sort((a, b) => (a.cost ?? Infinity) - (b.cost ?? Infinity))[0]
+            : null;
+
           return (
             <div className="space-y-3">
               <StrategyContextBar counts={pipelineCounts} onEdit={() => setStrategyDrawerOpen(true)} />
 
+              {/* Pre-market estimate banner — every premium below is theoretical until 9:30 AM ET. */}
+              {preMarket.isPreMarket && approvedRows.length > 0 && (
+                <Card className="glass-card p-3 border-warning/40 bg-warning/5 flex items-start gap-2.5">
+                  <Sparkles className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                  <div className="text-[12px]">
+                    <div className="font-semibold text-warning">Pre-market estimate</div>
+                    <div className="text-muted-foreground mt-0.5">
+                      Options markets open at 9:30 AM ET. Premiums shown are theoretical — real fills may differ ±10–30%.
+                      Use <span className="font-semibold text-foreground">Queue for Open</span> to re-validate at 9:35 AM.
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               {showBudgetMismatch && (
                 <BudgetMismatchCard cap={cap} budgetBlockedCount={budgetBlocked.length} />
+              )}
+
+              {/* Diagnostic: 0 approved + budget-blocked exist → suggest cheapest alternative. */}
+              {approvedRows.length === 0 && cheapestBlocked && (
+                <Card className="glass-card p-3 border-primary/40 bg-primary/5 flex items-start gap-2.5">
+                  <Search className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <div className="text-[12px] flex-1">
+                    <div className="font-semibold text-foreground">
+                      🔎 Every gate-passing pick is over your ${cap.toLocaleString()} cap.
+                    </div>
+                    <div className="text-muted-foreground mt-0.5">
+                      Cheapest option:{" "}
+                      <span className="mono font-semibold text-foreground">
+                        {cheapestBlocked.row.symbol} ${cheapestBlocked.contract.strike}
+                        {cheapestBlocked.contract.optionType === "call" ? "C" : "P"}
+                      </span>{" "}
+                      at ~<span className="mono font-semibold text-foreground">
+                        ${cheapestBlocked.cost?.toLocaleString()}
+                      </span>{" "}
+                      total.{" "}
+                      <button
+                        type="button"
+                        className="underline decoration-dotted underline-offset-2 text-primary"
+                        onClick={() => setOpenSymbol(cheapestBlocked.row.symbol)}
+                      >
+                        Open to approve →
+                      </button>
+                    </div>
+                  </div>
+                </Card>
               )}
 
               {showLoosen && !showBudgetMismatch && (

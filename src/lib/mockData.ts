@@ -130,7 +130,43 @@ const universe: UniverseEntry[] = [
   { symbol: "SOXL", name: "Direxion Semis Bull 3x", sector: "ETF", base: 28 },
 ] as any;
 
-export const TICKER_UNIVERSE = universe;
+// ── Small-Cap Friendly universe ───────────────────────────────────────────
+// Sub-$25 underlyings with deep, penny-spread option chains. With a $500
+// per-trade cap, ITM and Deep-ITM calls on these names typically run
+// $80–$400 per contract — exactly what small-account users need.
+// Toggled on via the StrategyEditDrawer "Small-Cap Friendly" switch
+// (or via scannerOverrides.smallCapFriendly).
+const smallCapFriendly: UniverseEntry[] = [
+  { symbol: "SOFI", name: "SoFi Technologies", sector: "Financials", marketCap: 2.4e10, base: 22 },
+  { symbol: "T", name: "AT&T Inc.", sector: "Telecom", marketCap: 1.8e11, base: 24 },
+  { symbol: "NIO", name: "NIO Inc.", sector: "Auto", marketCap: 1.0e10, base: 6 },
+  { symbol: "SNAP", name: "Snap Inc.", sector: "Tech", marketCap: 2.1e10, base: 14 },
+  { symbol: "AAL", name: "American Airlines", sector: "Industrials", marketCap: 8.4e9, base: 14 },
+  { symbol: "NU", name: "Nu Holdings", sector: "Financials", marketCap: 6.5e10, base: 14 },
+  { symbol: "LCID", name: "Lucid Group", sector: "Auto", marketCap: 7.0e9, base: 3 },
+  { symbol: "CCL", name: "Carnival Corp.", sector: "Consumer", marketCap: 2.6e10, base: 22 },
+  { symbol: "HOOD", name: "Robinhood Markets", sector: "Financials", marketCap: 3.0e10, base: 33 },
+  { symbol: "NOK", name: "Nokia Corporation", sector: "Tech", marketCap: 2.5e10, base: 4.5 },
+  { symbol: "SIRI", name: "Sirius XM Holdings", sector: "Consumer", marketCap: 1.2e10, base: 23 },
+  { symbol: "GRAB", name: "Grab Holdings", sector: "Tech", marketCap: 2.0e10, base: 5 },
+  { symbol: "WBD", name: "Warner Bros. Discovery", sector: "Consumer", marketCap: 2.0e10, base: 8 },
+  { symbol: "PLUG", name: "Plug Power", sector: "Energy", marketCap: 2.5e9, base: 2.5 },
+  { symbol: "OPEN", name: "Opendoor Technologies", sector: "Tech", marketCap: 1.5e9, base: 2.2 },
+  { symbol: "KRE", name: "SPDR S&P Regional Banking", sector: "ETF", base: 58 },
+  { symbol: "XRT", name: "SPDR S&P Retail ETF", sector: "ETF", base: 78 },
+  { symbol: "EEM", name: "iShares MSCI Emerging Mkts", sector: "ETF", base: 44 },
+  { symbol: "FXI", name: "iShares China Large-Cap", sector: "ETF", base: 32 },
+];
+
+// Public set of small-cap-friendly symbols — used by scanner filters.
+export const SMALL_CAP_FRIENDLY_SYMBOLS = new Set<string>(
+  smallCapFriendly.map((u) => u.symbol),
+);
+
+// Merge into the main universe. Order matters only for default sort tiebreak.
+const fullUniverse: UniverseEntry[] = [...universe, ...smallCapFriendly];
+
+export const TICKER_UNIVERSE = fullUniverse;
 
 export function getMockQuotes(): Quote[] {
   return universe.map((u) => {
