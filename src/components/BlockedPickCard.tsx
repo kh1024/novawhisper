@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/Hint";
-import { ShieldAlert, DollarSign, ExternalLink, BellRing } from "lucide-react";
+import { ShieldAlert, DollarSign, ExternalLink, BellRing, Eye, Search } from "lucide-react";
+import { useState } from "react";
 import type { SetupRow } from "@/lib/setupScore";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function BlockedPickCard({ info, onOpen, onSuggestCheaper, onRaiseCap }: 
 }) {
   const { row, kind, reason, detail } = info;
   const isCall = info.contract.optionType === "call";
+  const [revealed, setRevealed] = useState(false);
 
   return (
     <Card className={cn(
@@ -80,9 +82,19 @@ export function BlockedPickCard({ info, onOpen, onSuggestCheaper, onRaiseCap }: 
       </div>
 
       {kind === "budget" && info.overBudgetBy != null && info.cap != null && info.cost != null && (
-        <div className="rounded-md border border-warning/40 bg-warning/5 px-2.5 py-1.5 text-[11px] text-warning">
-          Over budget by <span className="mono font-semibold">${info.overBudgetBy.toLocaleString()}</span> —
-          cap is <span className="mono">${info.cap.toLocaleString()}</span>, this costs <span className="mono">${info.cost.toLocaleString()}</span>.
+        <div className="rounded-md border border-warning/40 bg-warning/5 px-2.5 py-1.5 text-[11px] text-warning space-y-0.5">
+          <div>
+            Over budget by <span className="mono font-semibold">${info.overBudgetBy.toLocaleString()}</span>
+          </div>
+          <div className="text-warning/80">
+            Cap <span className="mono">${info.cap.toLocaleString()}</span> · This costs <span className="mono">${info.cost.toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+
+      {kind === "budget" && revealed && (
+        <div className="rounded-md border border-warning/60 bg-warning/10 px-2.5 py-1.5 text-[10px] font-semibold text-warning uppercase tracking-wider">
+          ⚠ Over Budget — Planning Only · Buy disabled
         </div>
       )}
 
@@ -107,7 +119,12 @@ export function BlockedPickCard({ info, onOpen, onSuggestCheaper, onRaiseCap }: 
           <>
             {onSuggestCheaper && (
               <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] gap-1" onClick={onSuggestCheaper}>
-                <DollarSign className="h-3 w-3" /> Suggest cheaper
+                <Search className="h-3 w-3" /> Show cheaper alternative
+              </Button>
+            )}
+            {!revealed && (
+              <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] gap-1 text-warning" onClick={() => setRevealed(true)}>
+                <Eye className="h-3 w-3" /> Still show me
               </Button>
             )}
             {onRaiseCap && (

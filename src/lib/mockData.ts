@@ -22,7 +22,7 @@ export type Quote = {
 export type OptionPick = {
   id: string;
   symbol: string;
-  // App is BUY-PREMIUM ONLY. No short premium / income strategies are emitted.
+  // App is BUY-PREMIUM ONLY. No premium-selling strategies are emitted.
   // - long-call / long-put: standard directional buys (14-90 DTE)
   // - leaps-call / leaps-put: long-dated thesis trades (>180 DTE)
   // Legacy values ("covered-call" | "csp" | "wheel" | "leaps") remain in the

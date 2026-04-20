@@ -18,6 +18,18 @@ export interface ScannerOverrides {
   allowHighIv: boolean;
   /** Treat profile as if reset to Moderate defaults for filtering. */
   treatAsModerate: boolean;
+  /**
+   * Temporary per-trade cap override (USD). When > 0 it REPLACES the
+   * profile-derived cap for this session. Lets the user "Raise cap to $2,500
+   * for today" with one click without rewriting their saved profile.
+   */
+  perTradeCapOverride: number;
+  /**
+   * Restrict the scanner universe to Conservative-Cheap sub-$50 tickers
+   * (SOFI, F, PLTR, RIVN, BAC, T, XLF, KRE…) so a Conservative profile with
+   * a small cap can actually find affordable Deep-ITM calls.
+   */
+  conservativeCheapOnly: boolean;
 }
 
 const DEFAULTS: ScannerOverrides = {
@@ -25,6 +37,8 @@ const DEFAULTS: ScannerOverrides = {
   bypassOrbLock: false,
   allowHighIv: false,
   treatAsModerate: false,
+  perTradeCapOverride: 0,
+  conservativeCheapOnly: false,
 };
 
 let state: ScannerOverrides = { ...DEFAULTS };
@@ -70,4 +84,6 @@ export const OVERRIDE_LABELS: Record<keyof ScannerOverrides, string> = {
   bypassOrbLock: "ORB Lock off",
   allowHighIv: "IV Guard off",
   treatAsModerate: "Profile reset",
+  perTradeCapOverride: "Per-trade cap raised",
+  conservativeCheapOnly: "Conservative-Cheap universe",
 };

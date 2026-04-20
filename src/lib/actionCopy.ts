@@ -78,14 +78,14 @@ export function emptyStateCopy(
         headline: closed ? "Conservative trades load at the open" : "Conservative setups are limited today",
         sub: closed
           ? "NOVA stages safe trades from overnight news. Live picks return when the market opens."
-          : "The tape isn't offering high-probability income trades right now. Try Moderate for a stronger menu.",
+          : "The tape isn't offering conservative long-option setups (Deep ITM calls, LEAPs, debit spreads) right now. Try Moderate for a stronger menu.",
       };
     case "mild":
       return {
         headline: closed ? "Moderate ideas load at the open" : "Moderate menu is thin right now",
         sub: closed
           ? "Swing setups are best graded on live tape. NOVA will refresh when the bell rings."
-          : "Most directional swings need a fresh trigger today. Conservative income trades may be cleaner.",
+          : "Most directional swings need a fresh trigger today. Conservative long setups (Deep ITM calls, LEAPs) may be cleaner.",
       };
     case "aggressive":
       return {
