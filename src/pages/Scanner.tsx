@@ -514,6 +514,183 @@ export default function Scanner() {
           ))}
         </div>
 
+        {/* ──── Strategy Context Bar + bucketed picks (approved/budget/safety) ──── */}
+        {(() => {
+          const cap = maxPerTradeDollars(strategyProfile);
+          const approvedRows: SetupRow[] = [];
+          const budgetBlocked: BlockedPickInfo[] = [];
+          const safetyBlocked: BlockedPickInfo[] = [];
+          let profileFilteredCount = 0;
+          for (const r of filtered) {
+            const v = verdictByRow.get(r.symbol);
+            const c = deriveContractFromRow(r);
+            const expDate = new Date(c.expiry + "T00:00:00");
+            const dte = isNaN(expDate.getTime()) ? 30 : Math.max(0, Math.round((expDate.getTime() - Date.now()) / 86400000));
+            if (!isStructureAllowed(strategyProfile, c.optionType, dte)) {
+              profileFilteredCount++;
+              continue;
+            }
+            const estCost = Math.round(r.price * 100);
+            const overBy = estCost - cap;
+            const isBudgetBlocked = !overrides.showBudgetBlocked && overBy > 0;
+            const verdict = v?.verdict;
+            const isSafetyBlocked = verdict === "Avoid" || (v?.reason ?? "").toLowerCase().includes("block");
+
+            if (isSafetyBlocked) {
+              safetyBlocked.push({
+                row: r, kind: "safety",
+                reason: v?.reason || "Safety gate failure",
+                detail: v?.reason || "One or more safety gates flagged this pick.",
+                contract: { optionType: c.optionType as "call" | "put", strike: c.strike, expiry: c.expiry },
+              });
+              continue;
+            }
+            if (isBudgetBlocked) {
+              budgetBlocked.push({
+                row: r, kind: "budget",
+                reason: `Over per-trade cap by $${overBy.toLocaleString()}`,
+                detail: `Per-trade cap is $${cap.toLocaleString()}. Estimated cost for 1 contract is $${estCost.toLocaleString()}.`,
+                overBudgetBy: overBy, cap, cost: estCost,
+                contract: { optionType: c.optionType as "call" | "put", strike: c.strike, expiry: c.expiry },
+              });
+              continue;
+            }
+            approvedRows.push(r);
+          }
+
+          const candidates = approvedRows.map((r) => ({
+            symbol: r.symbol,
+            optionType: (r.bias === "bearish" ? "put" : "call") as "call" | "put",
+            strike: deriveContractFromRow(r).strike,
+            expiry: deriveContractFromRow(r).expiry,
+            payload: r,
+            score: rankMap.get(r.symbol)?.rank.finalRank ?? r.setupScore,
+            passing: true,
+          }));
+          const stable = scanCacheRef.current.reconcile(candidates, { maxDisplay: 12 });
+
+          const pipelineCounts: PipelineCounts = {
+            universe: rows.length,
+            gatePassing: approvedRows.length + budgetBlocked.length,
+            gateBlocked: safetyBlocked.length,
+            budgetBlocked: budgetBlocked.length,
+            shown: stable.length,
+            filterChip: profileFilteredCount > 0
+              ? `excluded ${profileFilteredCount} pick${profileFilteredCount === 1 ? "" : "s"} (structure not allowed)`
+              : null,
+          };
+
+          const preMarketPicks = isPreMarketWindow() ? generatePreMarketPicks(rows) : [];
+          const safetyDefaultOpen = preMarket.isPreMarket;
+          const showLoosen = approvedRows.length === 0 && (safetyBlocked.length > 0 || budgetBlocked.length > 0);
+
+          return (
+            <div className="space-y-3">
+              <StrategyContextBar counts={pipelineCounts} onEdit={() => setStrategyDrawerOpen(true)} />
+
+              {showLoosen && (
+                <LoosenToSeePicks
+                  budgetBlockedCount={budgetBlocked.length}
+                  orbBlockedCount={preMarket.isPreMarket ? safetyBlocked.length : 0}
+                  ivBlockedCount={safetyBlocked.filter((b) => /iv/i.test(b.reason)).length}
+                />
+              )}
+
+              {preMarketPicks.length > 0 && (
+                <CollapsibleBlockedSection
+                  title="Pre-market opportunities"
+                  count={preMarketPicks.length}
+                  subtitle="LEAP · Deep-ITM · Gap plays — plan now, act at the open"
+                  tone="approved"
+                  defaultOpen
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {preMarketPicks.map((p) => (
+                      <PreMarketPickCard key={`${p.symbol}|${p.kind}`} pick={p} onOpen={() => setOpenSymbol(p.symbol)} />
+                    ))}
+                  </div>
+                </CollapsibleBlockedSection>
+              )}
+
+              <CollapsibleBlockedSection
+                title="Approved — passes profile + safety gates"
+                count={stable.length}
+                subtitle={stable.length > 0 ? "Sorted by Final Rank" : "0 picks pass right now"}
+                tone="approved"
+                defaultOpen
+              >
+                {stable.length === 0 ? (
+                  <div className="text-[12px] text-muted-foreground px-1 py-2">
+                    No approved picks. See blocked sections below or use the Loosen panel.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {stable.map((c) => {
+                      const r = c.payload;
+                      return (
+                        <div key={c.key} className="relative">
+                          <SetupCard
+                            row={r}
+                            rank={rankMap.get(r.symbol)?.rank ?? null}
+                            closes={sma.map.get(r.symbol)?.closes ?? null}
+                            onOpen={() => setOpenSymbol(r.symbol)}
+                          />
+                          <span className="absolute top-2 left-2 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border/60 bg-background/80 text-muted-foreground">
+                            On board {formatCacheAge(c.firstSeenAt)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CollapsibleBlockedSection>
+
+              {budgetBlocked.length > 0 && (
+                <CollapsibleBlockedSection
+                  title={`Budget blocked — over $${cap.toLocaleString()}/trade cap`}
+                  count={budgetBlocked.length}
+                  subtitle="Raise cap or pick a cheaper strike"
+                  tone="budget"
+                  defaultOpen={false}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {budgetBlocked.map((info) => (
+                      <BlockedPickCard
+                        key={`b:${info.row.symbol}:${info.contract.strike}:${info.contract.expiry}`}
+                        info={info}
+                        onOpen={() => setOpenSymbol(info.row.symbol)}
+                        onRaiseCap={() => setStrategyDrawerOpen(true)}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleBlockedSection>
+              )}
+
+              {safetyBlocked.length > 0 && (
+                <CollapsibleBlockedSection
+                  title="Safety blocked — gate failure"
+                  count={safetyBlocked.length}
+                  subtitle="Stale data · wide spread · IV trap · exhaustion"
+                  tone="safety"
+                  defaultOpen={safetyDefaultOpen}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {safetyBlocked.map((info) => (
+                      <BlockedPickCard
+                        key={`s:${info.row.symbol}:${info.contract.strike}:${info.contract.expiry}`}
+                        info={info}
+                        onOpen={() => setOpenSymbol(info.row.symbol)}
+                      />
+                    ))}
+                  </div>
+                </CollapsibleBlockedSection>
+              )}
+            </div>
+          );
+        })()}
+
+        <StrategyEditDrawer open={strategyDrawerOpen} onOpenChange={setStrategyDrawerOpen} />
+
         <WatchlistPanel onOpenSymbol={setOpenSymbol} />
 
         <ScannerToolbar
