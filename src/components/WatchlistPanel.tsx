@@ -197,7 +197,9 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                   </div>
                   <div className="flex items-center gap-1 flex-wrap justify-end">
                     <AddToPortfolioButton
-                      size="xs"
+                      size="sm"
+                      variant="default"
+                      className="h-7 px-2 text-[11px]"
                       spec={{
                         symbol: w.symbol,
                         optionType: (w.option_type === "put" ? "put" : "call"),
