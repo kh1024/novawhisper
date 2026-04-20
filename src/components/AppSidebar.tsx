@@ -43,7 +43,7 @@ const items = [
   { id: "portfolio", title: "Portfolio", url: "/portfolio", icon: Briefcase },
   { id: "alerts", title: "Alerts", url: "/alerts", icon: BellRing },
   { id: "performance", title: "Performance", url: "/performance", icon: LineChart },
-  { id: "picks", title: "Picks", url: "/picks", icon: Zap },
+  { id: "picks", title: "Online Picks", url: "/picks", icon: Zap },
   { id: "settings", title: "Settings", url: "/settings", icon: SettingsIcon },
 ];
 
