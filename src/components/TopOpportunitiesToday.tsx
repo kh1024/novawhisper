@@ -41,19 +41,14 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
     );
   };
 
-  // TradeStatus middleware filter — only TradeReady picks are surfaced.
-  // During pre-market every pick is WatchlistOnly, so we fall back to those
-  // so the widget isn't blank but flag it as "Watchlist preview".
-  const tradeReady = useMemo(
-    () => picks.approved.filter((p) => p.tradeStatus.tradeStatus === "TradeReady"),
-    [picks.approved],
-  );
-  const watchlistFallback = useMemo(
-    () => picks.approved.filter((p) => p.tradeStatus.tradeStatus === "WatchlistOnly"),
-    [picks.approved],
-  );
-  const display: ApprovedPick[] = tradeReady.length > 0 ? tradeReady : watchlistFallback;
-  const usingFallback = tradeReady.length === 0 && watchlistFallback.length > 0;
+  // Tier-based selector — never empty when CLEAN/NEAR-LIMIT/BEST-OF-WAIT
+  // candidates exist. Picks are already sorted by tier in useScannerPicks.
+  // Floor display at MIN_BUY_NOW_PER_BUCKET so users always see ≥3 ideas
+  // when the universe has them.
+  const minShown = Math.max(MIN_BUY_NOW_PER_BUCKET, maxResults);
+  const display: ApprovedPick[] = picks.approved.slice(0, minShown);
+  const hasOnlyRelaxed = display.length > 0 && display.every((p) => p.pickTier !== "CLEAN");
+  const inPreview = picks.counts.marketMode === "PREVIEW";
 
   const totalApproved = display.length;
   const totalBlocked = picks.budgetBlocked.length + picks.safetyBlocked.length;
