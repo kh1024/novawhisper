@@ -1,4 +1,4 @@
-import { LayoutDashboard, Radar, Layers, Briefcase, BellRing, Brain, Settings as SettingsIcon, GripVertical, RotateCcw, Globe, Activity, Compass, LineChart } from "lucide-react";
+import { LayoutDashboard, Radar, Layers, Briefcase, BellRing, Brain, Settings as SettingsIcon, GripVertical, RotateCcw, Globe, Activity, Compass, LineChart, Zap } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -43,6 +43,7 @@ const items = [
   { id: "portfolio", title: "Portfolio", url: "/portfolio", icon: Briefcase },
   { id: "alerts", title: "Alerts", url: "/alerts", icon: BellRing },
   { id: "performance", title: "Performance", url: "/performance", icon: LineChart },
+  { id: "picks", title: "Picks", url: "/picks", icon: Zap },
   { id: "settings", title: "Settings", url: "/settings", icon: SettingsIcon },
 ];
 
