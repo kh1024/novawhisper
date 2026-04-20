@@ -187,6 +187,32 @@ export default function Scanner() {
   const preMarket = usePreMarketStatus();
   const [strategyDrawerOpen, setStrategyDrawerOpen] = useState(false);
   const scanCacheRef = useRef(new ScanCache<SetupRow>());
+  const [activeBucket, setActiveBucket] = useActiveBucket();
+
+  // Deep-link from Dashboard's Top Opportunities — auto-scroll + flash highlight.
+  const [searchParams] = useSearchParams();
+  const highlightKey = useMemo(() => {
+    const symbol = searchParams.get("symbol");
+    const strike = searchParams.get("strike");
+    const expiry = searchParams.get("expiry");
+    if (!symbol || searchParams.get("highlight") !== "true") return null;
+    return { symbol: symbol.toUpperCase(), strike, expiry };
+  }, [searchParams]);
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!highlightKey) return;
+    const id = `pick-${highlightKey.symbol}`;
+    // Wait for next paint so the card exists before scrolling.
+    const t = setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setFlashKey(highlightKey.symbol);
+        setTimeout(() => setFlashKey(null), 2000);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [highlightKey]);
 
   const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
