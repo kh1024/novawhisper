@@ -428,6 +428,12 @@ export default function Strategy() {
                       <span className="text-xs text-muted-foreground">{profile.gateOverrides.rsiExhaustionEnabled ? "Enabled" : "Off"}</span>
                     </div>
                   </Field>
+                  <Field label="Pre-Market Preview Mode" hint="Show picks before 10:30 AM ET for planning. Buy buttons stay locked until ORB releases. Watchlist Save still works.">
+                    <div className="flex items-center gap-2">
+                      <Switch checked={profile.gateOverrides.preMarketPreviewEnabled !== false} onCheckedChange={(v) => setGate("preMarketPreviewEnabled", v)} />
+                      <span className="text-xs text-muted-foreground">{profile.gateOverrides.preMarketPreviewEnabled !== false ? "Enabled" : "Off (strict hide)"}</span>
+                    </div>
+                  </Field>
                   <Field label={`IVP max threshold · ${profile.gateOverrides.ivpMaxThreshold}`}
                     hint="Blocks new buys above this IVP. Raising above 80 means paying top-of-market — accepting IV crush risk.">
                     <Slider

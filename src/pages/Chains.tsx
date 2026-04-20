@@ -7,6 +7,7 @@ import { Loader2, Search, RefreshCw } from "lucide-react";
 import { useOptionsChain, useLiveQuotes, type OptionContract } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
 
 const POPULAR = ["SPY", "QQQ", "AAPL", "NVDA", "TSLA", "MSFT", "AMD", "META"];
 
