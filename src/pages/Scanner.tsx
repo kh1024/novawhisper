@@ -543,8 +543,17 @@ export default function Scanner() {
                     ] as { k: string; sk?: SortKey; tip?: string }[]).map((h) => {
                       const active = h.sk && sort.key === h.sk;
                       const SortIcon = !h.sk ? null : active ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                      // NOTE: TooltipTrigger renders a <button> by default. When the
+                      // header is sortable we already wrap it in a <button>, and nested
+                      // buttons silently break the outer onClick (sorting). Use asChild
+                      // with a <span> so only one interactive element exists.
                       const inner = h.tip ? (
-                        <Tooltip><TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">{h.k}</TooltipTrigger><TooltipContent>{h.tip}</TooltipContent></Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help underline decoration-dotted underline-offset-2">{h.k}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>{h.tip}</TooltipContent>
+                        </Tooltip>
                       ) : h.k;
                       return (
                         <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap bg-card">
