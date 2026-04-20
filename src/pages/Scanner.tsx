@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useActiveBucket, rowBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -56,8 +58,7 @@ import { CollapsibleBlockedSection } from "@/components/CollapsibleBlockedSectio
 import { BlockedPickCard, type BlockedPickInfo } from "@/components/BlockedPickCard";
 import { PreMarketPickCard } from "@/components/PreMarketPickCard";
 import { LoosenToSeePicks } from "@/components/LoosenToSeePicks";
-import { ScanCache, formatCacheAge, cacheKeyOf } from "@/lib/scanCache";
-import { useRef } from "react";
+import { ScanCache, formatCacheAge } from "@/lib/scanCache";
 import { generatePreMarketPicks, isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { useStrategyProfile, maxPerTradeDollars, isStructureAllowed } from "@/lib/strategyProfile";
 import { useScannerOverrides } from "@/lib/scannerOverrides";
@@ -186,6 +187,32 @@ export default function Scanner() {
   const preMarket = usePreMarketStatus();
   const [strategyDrawerOpen, setStrategyDrawerOpen] = useState(false);
   const scanCacheRef = useRef(new ScanCache<SetupRow>());
+  const [activeBucket, setActiveBucket] = useActiveBucket();
+
+  // Deep-link from Dashboard's Top Opportunities — auto-scroll + flash highlight.
+  const [searchParams] = useSearchParams();
+  const highlightKey = useMemo(() => {
+    const symbol = searchParams.get("symbol");
+    const strike = searchParams.get("strike");
+    const expiry = searchParams.get("expiry");
+    if (!symbol || searchParams.get("highlight") !== "true") return null;
+    return { symbol: symbol.toUpperCase(), strike, expiry };
+  }, [searchParams]);
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!highlightKey) return;
+    const id = `pick-${highlightKey.symbol}`;
+    // Wait for next paint so the card exists before scrolling.
+    const t = setTimeout(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        setFlashKey(highlightKey.symbol);
+        setTimeout(() => setFlashKey(null), 2000);
+      }
+    }, 600);
+    return () => clearTimeout(t);
+  }, [highlightKey]);
 
   const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
@@ -650,7 +677,14 @@ export default function Scanner() {
                     {stable.map((c) => {
                       const r = c.payload;
                       return (
-                        <div key={c.key} className="relative">
+                        <div
+                          key={c.key}
+                          id={`pick-${r.symbol}`}
+                          className={cn(
+                            "relative transition-all duration-500",
+                            flashKey === r.symbol && "ring-4 ring-primary/70 ring-offset-2 ring-offset-background rounded-lg",
+                          )}
+                        >
                           <SetupCard
                             row={r}
                             rank={rankMap.get(r.symbol)?.rank ?? null}
