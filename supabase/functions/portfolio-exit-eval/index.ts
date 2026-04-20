@@ -248,6 +248,7 @@ function isMarketHoursET(): boolean {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  console.log("[exit-eval] BUILD=v2-day-close-fallback-2026-04-20T15:22");
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
