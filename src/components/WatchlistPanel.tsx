@@ -190,29 +190,10 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                   )}
                 </div>
 
-                <div className="shrink-0 flex flex-col items-end gap-1.5">
+                <div className="shrink-0 flex flex-col items-end gap-1.5 min-w-[180px]">
                   <div className="flex items-center gap-1">
                     <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70">Live</span>
                     <VerdictBadge verdict={verdictResult.verdict} reason={verdictResult.reason} />
-                  </div>
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
-                    <AddToPortfolioButton
-                      size="sm"
-                      variant="default"
-                      className="h-7 px-2 text-[11px]"
-                      spec={{
-                        symbol: w.symbol,
-                        optionType: (w.option_type === "put" ? "put" : "call"),
-                        strike: Number(w.strike ?? live?.price ?? 0),
-                        expiry: w.expiry ?? new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
-                        spot: live?.price ?? (w.entry_price != null ? Number(w.entry_price) : null),
-                        ivRank: 50,
-                        bucket: w.tier ?? undefined,
-                        thesis: w.thesis,
-                        source: "watchlist",
-                        initialGates: { source: "watchlist", verdict: verdictResult.verdict },
-                      }}
-                    />
                     <Hint label="Open research">
                       <Button
                         size="sm"
@@ -233,6 +214,25 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     </Hint>
+                  </div>
+                  <div onClick={(e) => e.stopPropagation()} role="presentation">
+                    <AddToPortfolioButton
+                      size="sm"
+                      variant="default"
+                      className="h-7 px-3 text-[11px] w-full justify-center"
+                      spec={{
+                        symbol: w.symbol,
+                        optionType: (w.option_type === "put" ? "put" : "call"),
+                        strike: Number(w.strike ?? live?.price ?? 0),
+                        expiry: w.expiry ?? new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+                        spot: live?.price ?? (w.entry_price != null ? Number(w.entry_price) : null),
+                        ivRank: 50,
+                        bucket: w.tier ?? undefined,
+                        thesis: w.thesis,
+                        source: "watchlist",
+                        initialGates: { source: "watchlist", verdict: verdictResult.verdict },
+                      }}
+                    />
                   </div>
                 </div>
               </div>
