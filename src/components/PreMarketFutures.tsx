@@ -138,10 +138,10 @@ export function PreMarketFutures() {
   const allMissing = quotes.length > 0 && quotes.every((q) => q.price == null);
 
   return (
-    <Card className="glass-card p-5">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+    <Card className="glass-card p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold tracking-wide">Pre-Market Futures Coverage</h2>
+          <h2 className="text-xs font-semibold tracking-wide">Pre-Market Futures</h2>
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
