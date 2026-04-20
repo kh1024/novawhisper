@@ -5,7 +5,7 @@ import { AlertTriangle, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "
 import { Hint } from "@/components/Hint";
 import { UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta, currentSessionET } from "@/lib/liveData";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { NewsFeed } from "@/components/NewsFeed";
 import { SectorBreakdown } from "@/components/SectorBreakdown";
