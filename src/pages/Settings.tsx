@@ -25,6 +25,7 @@ import { areAnyDisabled, setManyDisabled } from "@/lib/disabledFunctions";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { KvCacheAdminCard } from "@/components/KvCacheAdminCard";
 import { HiddenSectionsCard } from "@/components/HiddenSectionsCard";
+import { DebugDataLayerDrawer } from "@/components/DebugDataLayerDrawer";
 
 const PORTFOLIO_PRESETS = [5_000, 10_000, 25_000, 50_000, 100_000];
 const RISK_PRESETS = [1, 2, 3, 5, 10];
