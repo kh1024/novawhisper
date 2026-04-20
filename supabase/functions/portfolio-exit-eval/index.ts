@@ -248,6 +248,7 @@ function isMarketHoursET(): boolean {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  console.log("[exit-eval] BUILD=v2-day-close-fallback-2026-04-20T15:22");
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -369,25 +370,45 @@ Deno.serve(async (req: Request) => {
     return `O:${sym}${yy}${m}${d}${cp}${k}`;
   }
   async function fetchMassiveContract(underlying: string, ticker: string): Promise<ChainEntry | null> {
-    if (!MASSIVE_KEY) return null;
+    if (!MASSIVE_KEY) {
+      console.warn(`[per-contract] ${ticker} skipped — MASSIVE_API_KEY not set`);
+      return null;
+    }
     try {
       const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(ticker)}`;
       const r = await fetch(url, {
         headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
       });
       if (!r.ok) {
-        console.warn(`[per-contract] ${ticker} HTTP ${r.status}`);
+        const txt = await r.text().catch(() => "");
+        console.warn(`[per-contract] ${ticker} HTTP ${r.status} body=${txt.slice(0, 200)}`);
         return null;
       }
       const d = await r.json();
       const result = d?.results ?? d?.result ?? null;
-      if (!result) return null;
+      if (!result) {
+        console.warn(`[per-contract] ${ticker} no results in payload`);
+        return null;
+      }
       const quote = result.last_quote ?? {};
       const trade = result.last_trade ?? {};
+      const day = result.day ?? {};
       const bid = Number(quote.bid ?? 0);
       const ask = Number(quote.ask ?? 0);
-      const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
-      return { bid, ask, mid, last: Number(trade.price ?? 0) };
+      // Prefer NBBO mid; fall back to last trade, then to day's close/vwap
+      // (off-hours: Massive often omits last_quote/last_trade but includes day.*).
+      let mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
+      let last = Number(trade.price ?? 0);
+      if (mid === 0 && last > 0) mid = last;
+      if (mid === 0) {
+        const dayClose = Number(day.close ?? 0);
+        const dayVwap = Number(day.vwap ?? 0);
+        if (dayClose > 0) { mid = dayClose; if (last === 0) last = dayClose; }
+        else if (dayVwap > 0) { mid = dayVwap; if (last === 0) last = dayVwap; }
+      }
+      console.log(`[per-contract] ${ticker} parsed bid=${bid} ask=${ask} mid=${mid} last=${last} dayClose=${day.close ?? "n/a"}`);
+      if (mid <= 0 && last <= 0) return null;
+      return { bid, ask, mid, last };
     } catch (e) {
       console.warn(`[per-contract] ${ticker} failed`, e);
       return null;
