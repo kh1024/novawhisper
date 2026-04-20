@@ -366,6 +366,22 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
             Entry ${p.entry_premium != null ? Number(p.entry_premium).toFixed(2) : "—"}
             {isOpen && currentMid != null && (<>
               {" · "}Now <span className="text-foreground font-mono">${currentMid.toFixed(2)}</span>
+              {p.last_quote_quality === "VALID" ? (
+                <span
+                  className="ml-1.5 text-[9px] px-1 py-0.5 rounded border border-bullish/40 text-bullish bg-bullish/5 uppercase tracking-wide"
+                  title="Live NBBO mid from Massive options feed"
+                >Live · Massive</span>
+              ) : quoteUnavailable ? (
+                <span
+                  className="ml-1.5 text-[9px] px-1 py-0.5 rounded border border-warning/40 text-warning bg-warning/5 uppercase tracking-wide"
+                  title="Quote unavailable from Massive — showing last valid price"
+                >Frozen</span>
+              ) : (
+                <span
+                  className="ml-1.5 text-[9px] px-1 py-0.5 rounded border border-muted-foreground/40 text-muted-foreground bg-muted/20 uppercase tracking-wide"
+                  title="Estimated via Black-Scholes — verify price in your broker."
+                >Est.</span>
+              )}
             </>)}
             {!isOpen && p.close_premium != null && (<>
               {" · "}Exit <span className="text-foreground font-mono">${Number(p.close_premium).toFixed(2)}</span>
