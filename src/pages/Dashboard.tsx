@@ -100,6 +100,7 @@ export default function Dashboard() {
   const { data: scout } = useOptionsScout();
   const allPicks = useMemo(() => getMockPicks(60), []);
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
+  const { hiddenSet, hide } = useHiddenSections();
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
@@ -214,7 +215,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between px-1 gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/60">
-            Drag the grip on the left of any section to reorder
+            Drag the grip to reorder · click ✕ to hide (restore from <Link to="/settings" className="underline underline-offset-2 hover:text-foreground">Settings</Link>)
           </span>
           <NovaModeBadge />
         </div>
@@ -232,10 +233,13 @@ export default function Dashboard() {
       <SortableList
         storageKey={SECTIONS_STORAGE_KEY}
         className="space-y-6"
-        renderItem={(item, handle) => (
+        hiddenIds={hiddenSet}
+        onHide={hide}
+        renderItem={(item, handle, hideButton) => (
           <div className="relative group">
-            <div className="absolute -left-2 top-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute -left-2 top-3 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
               {handle}
+              {hideButton}
             </div>
             {item.node}
           </div>
