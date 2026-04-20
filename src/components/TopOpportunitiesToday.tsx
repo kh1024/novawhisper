@@ -107,9 +107,14 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
       {/* Approved picks — top N as compact cards */}
       {totalApproved > 0 && (
         <div className="space-y-2">
-          {usingFallback && (
+          {inPreview && (
             <div className="text-[11px] text-warning bg-warning/5 border border-warning/30 rounded px-2 py-1.5">
-              👀 Watchlist preview — pre-market window. Real Trade-Ready picks unlock at 9:30 AM ET after intraday confirmation.
+              👀 Pre-market preview — markets open at 9:30 AM ET. Picks shown for planning; live tier badges activate at the open.
+            </div>
+          )}
+          {!inPreview && hasOnlyRelaxed && (
+            <div className="text-[11px] text-primary bg-primary/5 border border-primary/30 rounded px-2 py-1.5">
+              ⚠️ No <strong>Clean Pass</strong> setups right now — surfacing best <strong>Near-limit</strong> / <strong>Best-of-WAIT</strong> ideas so you can still see the top of the funnel. Reduce size on these.
             </div>
           )}
           {display.map((p) => {
