@@ -36,7 +36,7 @@ import { useScannerOverrides, type ScannerOverrides } from "@/lib/scannerOverrid
 import { useActiveBucket, rowBucket, type ActiveBucket } from "@/lib/scannerBucket";
 import { isConservativeCheapTicker } from "@/lib/bucketing";
 import { SMALL_CAP_FRIENDLY_SYMBOLS } from "@/lib/mockData";
-import { buildStrikeLadder, pickBestRung, type LadderCandidate, type Rung } from "@/lib/strikeLadder";
+import { buildStrikeLadder, pickBestRung, type Rung } from "@/lib/strikeLadder";
 import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
