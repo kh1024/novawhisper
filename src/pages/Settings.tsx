@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight, Bell, Copy, Power, PowerOff } from "lucide-react";
+import { Wallet, Check, Activity, Brain, Clock, Tag, Loader2, CheckCircle2, AlertTriangle, XCircle, Webhook, Send, Trash2, DollarSign, Clock3, Play, FlaskConical, Compass, ArrowRight, Bell, Copy, Power, PowerOff, Target } from "lucide-react";
 import { Link } from "react-router-dom";
 import { sendTestWebhook, readWebhookLog, clearWebhookLog } from "@/lib/webhook";
 import { useVerdictCronConfig, useSaveVerdictCronConfig, useVerdictCronLog, clearVerdictCronLog, runVerdictCronNow } from "@/lib/verdictCron";
