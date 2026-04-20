@@ -49,6 +49,7 @@ import {
   type VerdictResult, type Verdict,
 } from "@/lib/verdictModel";
 import { MobileScannerList } from "@/components/scanner/MobileScannerList";
+import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -439,6 +440,7 @@ export default function Scanner() {
   return (
     <TooltipProvider delayDuration={150}>
       <div className="p-3 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-4 sm:space-y-6">
+        <PreMarketPreviewBanner />
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="min-w-0">

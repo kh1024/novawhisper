@@ -5,10 +5,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX, LayoutList } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX, LayoutList, Eye } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
+import { usePreMarketStatus } from "@/lib/preMarketPreview";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
@@ -28,6 +29,12 @@ export interface NovaCard {
   } | null;
   better_structure?: string | null;
   full_analysis_md?: string;
+  /**
+   * Optional Pre-Market Preview Mode flag — when true, the card renders a
+   * "PREVIEW — Unlocks at 10:30 AM ET" banner and dims itself slightly.
+   * Set by the caller from ValidationResult.previewMode.
+   */
+  preview_mode?: boolean;
 }
 
 const ACTION_STYLES: Record<NovaCard["action"], { bg: string; text: string; ring: string; emoji: string }> = {
@@ -58,6 +65,8 @@ export function NovaVerdictCard({
   const [sparkMode, setSparkMode] = useState<"price" | "rsi">("price");
   const style = ACTION_STYLES[card.action];
   const c = card.best_contract;
+  const preMarket = usePreMarketStatus();
+  const isPreview = card.preview_mode === true && preMarket.isPreMarket && preMarket.enabled;
 
   // Last 20 closes for the sparkline (price mode) and a 14-step RSI walk (rsi mode).
   const priceTail = closes && closes.length >= 2 ? closes.slice(-20) : null;
@@ -71,7 +80,15 @@ export function NovaVerdictCard({
   const sparkValues = sparkMode === "rsi" ? rsiSeries : priceTail;
 
   return (
-    <Card className={`glass-card p-5 ring-1 ${style.ring}`}>
+    <Card className={`glass-card p-5 ring-1 ${style.ring} ${isPreview ? "opacity-[0.92]" : ""}`}>
+      {isPreview && (
+        <div className="-mx-5 -mt-5 mb-4 px-4 py-2 rounded-t-lg border-b border-warning/40 bg-warning/15 flex items-center gap-2 text-[12px] text-warning">
+          <Eye className="h-3.5 w-3.5 shrink-0" />
+          <span className="font-semibold">PREVIEW</span>
+          <span className="text-warning/85">— Unlocks at 10:30 AM ET</span>
+          <span className="ml-auto font-mono font-semibold">{preMarket.countdown}</span>
+        </div>
+      )}
       {/* Hero: action label */}
       <div className={`rounded-lg ${style.bg} p-4 text-center`}>
         <div className={`text-4xl font-bold tracking-tight ${style.text} flex items-center justify-center gap-2`}>

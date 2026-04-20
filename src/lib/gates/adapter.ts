@@ -129,6 +129,40 @@ export function validatePick(opts: PickGateOpts): ValidationResult {
     ask: atmContract?.ask,
   };
 
-  return validateSignal(input);
+  const result = validateSignal(input);
+
+  /**
+   * Preview Mode rationale:
+   *
+   * The 10:30 AM ORB Lock exists to protect users from false breakouts
+   * driven by overnight gap fills, MOO order flow, and algo stop-hunts.
+   * Those risks are real for EXECUTION — but the scanner's analytical
+   * work (gate checks, setup scoring, IVP calculation) is still valuable
+   * pre-market as a planning tool.
+   *
+   * Preview Mode separates analysis (safe to show anytime) from execution
+   * (dangerous before 10:30 AM). Users can scroll, research, and queue
+   * picks for watchlist-triggered alerts, but cannot commit capital
+   * until the opening range has settled.
+   *
+   * This mirrors how professional desks work: analysts publish pre-market
+   * notes, traders execute only after the open has stabilized.
+   *
+   * IMPORTANT: this logic lives in the adapter (post-processing), not in
+   * gates.ts — Gate 5's WAIT verdict is preserved as-is. We only re-label
+   * the *interpretation* of that result for the UI layer.
+   */
+  if (result.finalStatus === "WAIT") {
+    const blockingGates = result.gateResults.filter(
+      (g) => (g.status === "WAIT" || g.status === "BLOCKED") && g.label !== "⚪ SKIPPED",
+    );
+    const onlyOrb = blockingGates.length === 1 && blockingGates[0]?.gate === "ORB_LOCK";
+    if (onlyOrb) {
+      result.previewMode = true;
+      result.previewReason = "ORB Lock — Preview Only Until 10:30 AM ET";
+    }
+  }
+
+  return result;
 }
 

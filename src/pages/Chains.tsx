@@ -7,6 +7,7 @@ import { Loader2, Search, RefreshCw } from "lucide-react";
 import { useOptionsChain, useLiveQuotes, type OptionContract } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
+import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
 
 const POPULAR = ["SPY", "QQQ", "AAPL", "NVDA", "TSLA", "MSFT", "AMD", "META"];
 
@@ -58,6 +59,7 @@ export default function Chains() {
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
+      <PreMarketPreviewBanner />
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Option Chains</h1>

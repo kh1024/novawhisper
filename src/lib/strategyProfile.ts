@@ -35,6 +35,14 @@ export interface GateOverrides {
   hardStopLossPct: number;     // Gate 7 (default 30)
   rsiExhaustionEnabled: boolean;
   trendGateEnabled: boolean;
+  /**
+   * Pre-Market Preview Mode. When true (default), picks blocked ONLY by
+   * Gate 5 (ORB Lock) stay visible in Scanner / Chains as research-only
+   * cards with a 10:30 AM ET unlock countdown. Watchlist queue still works;
+   * portfolio Save is locked. When false the original strict hide behavior
+   * applies.
+   */
+  preMarketPreviewEnabled: boolean;
 }
 
 export interface StrategyProfile {
@@ -93,6 +101,7 @@ export const DEFAULT_PROFILE: StrategyProfile = {
     hardStopLossPct: 30,
     rsiExhaustionEnabled: true,
     trendGateEnabled: true,
+    preMarketPreviewEnabled: true,
   },
   tickerUniverse: "All",
   customTickers: [],
@@ -136,6 +145,7 @@ export const PRESETS: StrategyPreset[] = [
         hardStopLossPct: 25,
         rsiExhaustionEnabled: true,
         trendGateEnabled: true,
+        preMarketPreviewEnabled: true,
       },
       minOptionsLiquidity: 75,
       excludeEarningsWithinDays: 14,
@@ -205,6 +215,7 @@ export const PRESETS: StrategyPreset[] = [
         hardStopLossPct: 40,
         rsiExhaustionEnabled: false,
         trendGateEnabled: false,
+        preMarketPreviewEnabled: true,
       },
       minDTE: 0,
       maxDTE: 14,
