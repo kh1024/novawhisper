@@ -403,20 +403,41 @@ Deno.serve(async (req: Request) => {
     const isCall = p.option_type.toLowerCase().includes("call");
     const dte = dteFromExpiry(p.expiry);
     const key = `${p.symbol}|${isCall ? "call" : "put"}|${Number(p.strike)}|${p.expiry}`;
-    const chainEntry = realChain.get(key);
-    const fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
+    let chainEntry = realChain.get(key);
+    let fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
+    let entrySource = chainSource.get(p.symbol) ?? "none";
+
+    // Per-contract Massive fallback: if the chain didn't include this contract,
+    // OR it returned bid=ask=0 (off-hours, illiquid), call Massive for just this
+    // option ticker. Always returns the exact contract.
+    const contractIsZero = chainEntry &&
+      (chainEntry.bid ?? 0) === 0 && (chainEntry.ask ?? 0) === 0;
+    if (!chainEntry || contractIsZero) {
+      const ticker = p.option_symbol ?? osiTicker(p.symbol, p.expiry, isCall, Number(p.strike));
+      const direct = await fetchMassiveContract(p.symbol, ticker);
+      if (direct && (direct.bid! > 0 || direct.ask! > 0 || (direct.last ?? 0) > 0)) {
+        chainEntry = direct;
+        fetchedAt = Date.now();
+        entrySource = "massive-contract";
+        console.log(`[per-contract] ${ticker} bid=${direct.bid} ask=${direct.ask} mid=${direct.mid}`);
+      } else if (!chainEntry) {
+        // still nothing at all
+        chainEntry = undefined;
+      }
+    }
 
     let classified: ClassifiedQuote;
-    const symSource = chainSource.get(p.symbol) ?? "none";
     if (chainEntry) {
       const bid = chainEntry.bid ?? null;
       const ask = chainEntry.ask ?? null;
-      const mark = chainEntry.mid ?? (bid != null && ask != null ? (bid + ask) / 2 : null);
+      const mark = chainEntry.mid && chainEntry.mid > 0
+        ? chainEntry.mid
+        : (bid != null && ask != null && bid > 0 && ask > 0 ? (bid + ask) / 2 : null);
       classified = classifyQuote({
         bid, ask, mark, last: chainEntry.last ?? null,
         updatedAt: fetchedAt,
         underlyingPrice: spot,
-        source: symSource,
+        source: entrySource,
       });
     } else {
       // No real quote at all — synthesize via BS-lite and tag as theoretical.
