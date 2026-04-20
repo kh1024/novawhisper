@@ -677,7 +677,14 @@ export default function Scanner() {
                     {stable.map((c) => {
                       const r = c.payload;
                       return (
-                        <div key={c.key} className="relative">
+                        <div
+                          key={c.key}
+                          id={`pick-${r.symbol}`}
+                          className={cn(
+                            "relative transition-all duration-500",
+                            flashKey === r.symbol && "ring-4 ring-primary/70 ring-offset-2 ring-offset-background rounded-lg",
+                          )}
+                        >
                           <SetupCard
                             row={r}
                             rank={rankMap.get(r.symbol)?.rank ?? null}
