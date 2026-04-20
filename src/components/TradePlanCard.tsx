@@ -16,6 +16,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Clock, Ban, Target, DollarSign, Calendar, AlertTriangle, ShoppingCart, Wallet } from "lucide-react";
 import { useCapitalSettings } from "@/lib/budget";
+import { useSettings } from "@/lib/settings";
+import { classifyAffordability } from "@/lib/affordability";
+import { AffordabilityBadge } from "@/components/AffordabilityBadge";
 import { isMarketOpen, isWeekend } from "@/lib/verdictModel";
 import type { NovaCard } from "@/components/NovaVerdictCard";
 
@@ -54,19 +57,26 @@ const ACTION_META = {
 
 export function TradePlanCard({ card, symbol, spot, brokerHref }: Props) {
   const { portfolio, riskPct, budget } = useCapitalSettings();
+  const [settings] = useSettings();
   const session = sessionInfo();
   const c = card.best_contract ?? null;
   const meta = ACTION_META[card.action];
   const Icon = meta.Icon;
 
-  // Budget math — uses the per-trade cap from Settings (portfolio × risk%).
-  const cost = c?.cost_per_contract_usd ?? null;
+  // Central affordability rule — same module Dashboard + Scanner use.
+  const aff = classifyAffordability(budget, {
+    perShareCost: c?.mid ?? null,
+    contracts: 1,
+    settings,
+    stale: card.data_quality === "FAIL",
+  });
+  const cost = aff.totalCost;
+  const overBudget = aff.tier === "blocked";
+  
   const affordableQty = cost && cost > 0 ? Math.floor(budget / cost) : 0;
-  // Nova may have already capped size; use the smaller of the two.
   const novaCap = c?.max_size_contracts ?? null;
   const finalQty = novaCap != null ? Math.min(novaCap, affordableQty) : affordableQty;
   const totalSpend = finalQty * (cost ?? 0);
-  const overBudget = cost != null && cost > budget;
 
   // "Where" — invalidation level vs current spot.
   const stopDistPct =

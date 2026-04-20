@@ -35,6 +35,9 @@ import { smartActionLabel, smartActionTooltip, emptyStateCopy } from "@/lib/acti
 import { detectTimeState } from "@/lib/novaBrain";
 import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
 import { useBudget } from "@/lib/budget";
+import { useSettings } from "@/lib/settings";
+import { partitionByAffordability, type AffordabilityResult } from "@/lib/affordability";
+import { AffordabilityBadge } from "@/components/AffordabilityBadge";
 import type { OptionPick } from "@/lib/mockData";
 
 /**
@@ -105,7 +108,9 @@ export default function Dashboard() {
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
+  const [settings] = useSettings();
   const [showBlocked, setShowBlocked] = useState(false);
+  const [showBudgetBlocked, setShowBudgetBlocked] = useState(false);
   // Weekend Kill-Switch — only meaningful on Sat/Sun. Default ON so users
   // don't see Friday-frozen "ghost" picks on a quiet Saturday morning.
   const isWeekend = useMemo(() => {
@@ -114,11 +119,9 @@ export default function Dashboard() {
   }, []);
   const [hideWeekendGhosts, setHideWeekendGhosts] = useState(true);
 
-  // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
-  // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
-  // the user's max-per-trade budget. If we can't verify the premium, we do not
-  // show the pick in Top Opportunities.
-  const picks = useMemo(() => {
+  // Step 1 — gather the candidate pool (NOVA scout if available, mock otherwise)
+  // and apply the user's Nova-filter spec. We do NOT touch budget here.
+  const filtered = useMemo(() => {
     const bucketMap: Record<RiskBucket, ScoutPick[]> = {
       safe: scout?.conservative ?? [],
       mild: scout?.moderate ?? [],
@@ -129,7 +132,6 @@ export default function Dashboard() {
       p.strategy === "long-call" || p.strategy === "long-put" ||
       p.strategy === "leaps-call" || p.strategy === "leaps-put"
     );
-
     let pool: OptionPick[];
     if (novaActive) {
       const allScout = (["safe", "mild", "aggressive", "lottery"] as RiskBucket[])
@@ -141,8 +143,7 @@ export default function Dashboard() {
         ? liveBucket
         : singleLegMock.filter((p) => p.riskBucket === riskTab);
     }
-
-    const filtered = pool.filter((p) => pickMatchesFilter({
+    return pool.filter((p) => pickMatchesFilter({
       symbol: p.symbol,
       strategy: p.strategy,
       riskBucket: p.riskBucket,
@@ -155,21 +156,41 @@ export default function Dashboard() {
       annualized: p.annualized,
       earningsInDays: p.earningsInDays ?? null,
     }, novaSpec));
+  }, [allPicks, riskTab, novaSpec, novaActive, scout]);
 
-    // Capital-fit: prefer contracts that fit the per-trade cap. If none in the
-    // bucket fit (common at high prices or with a tiny budget), fall back to
-    // the cheapest available — sorted by cost — so the bucket is never empty.
-    // Each over-budget row still shows the alt-ticker chip + "over budget" note.
-    const fits = filtered.filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget);
-    const overBudget = filtered
-      .filter((p) => !(Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget))
-      .sort((a, b) => (a.premium ?? Infinity) - (b.premium ?? Infinity));
-    return (fits.length > 0 ? fits : overBudget).slice(0, novaActive ? 12 : 6);
-  }, [allPicks, riskTab, novaSpec, novaActive, scout, budget]);
+  // Step 2 — HARD AFFORDABILITY FILTER (spec: budget is a hard rule).
+  // Splits the pool into recommendable (Comfortable/Affordable, never blocked)
+  // and blocked (over budget — surfaced separately, never ranked as top picks).
+  // Re-runs whenever `budget` changes so flipping it in Settings refreshes
+  // the recommendation list immediately.
+  const partition = useMemo(
+    () => partitionByAffordability(filtered, budget, (p) => ({
+      perShareCost: p.premium,
+      contracts: 1,
+      settings,
+    })),
+    [filtered, budget, settings],
+  );
 
-  // True only when EVERY pick the user sees is over their per-trade cap.
-  const allOverBudget = picks.length > 0
-    && picks.every((p) => !Number.isFinite(p.premium) || p.premium <= 0 || p.premium * 100 > budget);
+  // Map pick.id → AffordabilityResult so child rows can render the badge.
+  const affBy = useMemo(() => {
+    const m = new Map<string, AffordabilityResult>();
+    for (const r of partition.recommendable) m.set(r.item.id, r.aff);
+    for (const r of partition.blocked)        m.set(r.item.id, r.aff);
+    for (const r of partition.unavailable)    m.set(r.item.id, r.aff);
+    return m;
+  }, [partition]);
+
+  // Top picks the user actually sees — affordability-filtered FIRST, then
+  // capped. Blocked items live in their own collapsible drawer below.
+  const picks = useMemo(
+    () => partition.recommendable.map((r) => r.item).slice(0, novaActive ? 12 : 6),
+    [partition, novaActive],
+  );
+  const blockedPicks = partition.blocked;
+  // True when there's nothing affordable to recommend AT ALL.
+  const noAffordableTrades = partition.recommendable.length === 0 && filtered.length > 0;
+
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
@@ -377,9 +398,12 @@ export default function Dashboard() {
               </div>
             );
           })()}
-          {allOverBudget && (
-            <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[11px] leading-snug">
-              No {riskTab} contracts fit your <span className="font-mono">${budget.toLocaleString()}</span> per-trade cap right now — showing the cheapest options below. Each row suggests a budget-friendly alt ticker. Adjust capital/risk in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
+          {noAffordableTrades && (
+            <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2.5 text-[11px] leading-snug">
+              <div className="font-semibold">No valid trades within your <span className="font-mono">${budget.toLocaleString()}</span> budget today.</div>
+              <div className="text-warning/85 mt-0.5">
+                Every {riskTab} pick we found exceeds your per-trade cap. See "Blocked by Budget" below for the closest near-misses, or raise your budget in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
+              </div>
             </div>
           )}
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
@@ -412,6 +436,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{p.symbol}</span>
                     <TickerPrice symbol={p.symbol} showChange showFreshness />
+                    {affBy.get(p.id) && <AffordabilityBadge result={affBy.get(p.id)!} />}
                     <BudgetAltSuggestion
                       symbol={p.symbol}
                       contractCost={(p.premium ?? 0) * 100}
@@ -516,6 +541,45 @@ export default function Dashboard() {
               >
                 {showBlocked ? "Hide blocked" : "Show blocked"}
               </button>
+            </div>
+          )}
+          {/* Blocked-by-Budget drawer — picks Nova surfaced but the user's
+              Settings budget vetoes. Listed cheapest-first so the closest
+              over-budget contract is one click away. */}
+          {blockedPicks.length > 0 && (
+            <div className="mt-2 rounded-md border border-bearish/30 bg-bearish/5 text-bearish/90 px-3 py-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span>
+                  <span className="font-mono font-semibold">{blockedPicks.length}</span> blocked by budget
+                  <span className="text-bearish/70"> — over your ${budget.toLocaleString()}/trade cap</span>
+                </span>
+                <button
+                  onClick={() => setShowBudgetBlocked((v) => !v)}
+                  className="text-[11px] font-semibold tracking-wide hover:underline underline-offset-2"
+                >
+                  {showBudgetBlocked ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showBudgetBlocked && (
+                <div className="mt-2 space-y-1.5">
+                  {blockedPicks.slice(0, 8).map(({ item: p, aff }) => (
+                    <div
+                      key={`bb-${p.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setOpenSymbol(p.symbol)}
+                      onKeyDown={(e) => { if (e.key === "Enter") setOpenSymbol(p.symbol); }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded border border-bearish/20 bg-background/40 hover:bg-bearish/10 transition-colors cursor-pointer text-[11px]"
+                    >
+                      <span className="font-mono font-semibold text-foreground w-12">{p.symbol}</span>
+                      <span className="text-muted-foreground flex-1 truncate capitalize">
+                        {p.strategy.replace("-", " ")} ${p.strike} · {p.dte}d
+                      </span>
+                      <AffordabilityBadge result={aff} variant="detailed" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {isWeekend && hideWeekendGhosts && ghostCount > 0 && (
