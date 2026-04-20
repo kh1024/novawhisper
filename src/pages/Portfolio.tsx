@@ -384,8 +384,11 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
               </span>
             )}
             {p.risk_bucket && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
-                {p.risk_bucket}
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded border border-muted-foreground/30 text-muted-foreground bg-muted/20 uppercase tracking-wide"
+                title={`Scanner tier at entry: ${p.risk_bucket}. This is historical context, NOT a live signal — see the recommendation chip on the right for the current call.`}
+              >
+                Entry tier: {p.risk_bucket}
               </span>
             )}
           </div>
