@@ -25,6 +25,7 @@ function makeRow(sym: string, price: number, score: number, badge: "Safe" | "Mil
 const overrides = {
   showBudgetBlocked: false, bypassOrbLock: false, allowHighIv: false,
   treatAsModerate: false, perTradeCapOverride: 0, conservativeCheapOnly: false,
+  smallCapFriendly: false,
 };
 
 describe("Scanner ↔ Dashboard pick consistency", () => {
