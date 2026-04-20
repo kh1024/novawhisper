@@ -179,6 +179,11 @@ export default function Scanner() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [maxLossBudget] = useBudget();
+  const { profile: strategyProfile } = useStrategyProfile();
+  const { overrides } = useScannerOverrides();
+  const preMarket = usePreMarketStatus();
+  const [strategyDrawerOpen, setStrategyDrawerOpen] = useState(false);
+  const scanCacheRef = useRef(new ScanCache<SetupRow>());
 
   const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
