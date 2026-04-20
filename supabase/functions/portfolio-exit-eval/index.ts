@@ -463,6 +463,14 @@ Deno.serve(async (req: Request) => {
         : null,
     );
 
+    // PnL trace — visible in Edge Function logs + the Debug drawer.
+    console.log(
+      `[pnl] ${p.symbol} ${p.option_symbol ?? `${p.strike}${isCall ? "C" : "P"}`} ` +
+      `entry=${p.entry_premium} now=${usedMark.toFixed(4)} ` +
+      `profitPct=${dec.profitPct.toFixed(2)}% rec=${dec.recommendation} ` +
+      `quality=${classified.quality} src=${classified.source}`,
+    );
+
     if (dec.recommendation === "SELL_AT_LOSS" || dec.recommendation === "TIME_EXIT") stops++;
     if (dec.recommendation === "TAKE_PROFIT" || dec.recommendation === "TRIM_PARTIAL") profits++;
 
