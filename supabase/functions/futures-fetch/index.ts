@@ -1,76 +1,83 @@
-// Pre-market index futures (Dow / S&P 500 / Nasdaq) via Yahoo Finance public quote API.
-// No key required. Cached 30s in-memory per isolate.
+// Pre-market index futures (Dow / S&P 500 / Nasdaq) via CNBC's open quote API.
+// CNBC continuous-future symbols: @DJ.1 (Dow), @SP.1 (S&P), @ND.1 (Nasdaq).
+// No API key required. Cached 30s in-memory per isolate.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 interface FuturesQuote {
-  symbol: string;        // e.g. "ES=F"
-  label: string;         // friendly: "S&P 500 Futures"
+  symbol: string;        // friendly: "ES=F"
+  cnbcSymbol: string;    // upstream: "@SP.1"
+  label: string;
   price: number | null;
+  prevClose: number | null;
   change: number | null;
   changePct: number | null;
   marketState: string | null;
+  lastTime: string | null;
   updatedAt: string;
 }
 
-const SYMBOLS: { symbol: string; label: string }[] = [
-  { symbol: "YM=F", label: "Dow Futures" },
-  { symbol: "ES=F", label: "S&P 500 Futures" },
-  { symbol: "NQ=F", label: "Nasdaq Futures" },
+const SYMBOLS: { symbol: string; cnbc: string; label: string }[] = [
+  { symbol: "YM=F", cnbc: "@DJ.1", label: "Dow Futures" },
+  { symbol: "ES=F", cnbc: "@SP.1", label: "S&P 500 Futures" },
+  { symbol: "NQ=F", cnbc: "@ND.1", label: "Nasdaq Futures" },
 ];
 
 const TTL_MS = 30_000;
-const cache = new Map<string, { q: FuturesQuote; at: number }>();
+let cached: { quotes: FuturesQuote[]; at: number } | null = null;
 
-async function fetchYahoo(symbol: string, label: string): Promise<FuturesQuote> {
-  const cached = cache.get(symbol);
-  if (cached && Date.now() - cached.at < TTL_MS) return cached.q;
+function num(s: unknown): number | null {
+  if (s == null) return null;
+  const n = Number(String(s).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+function pctNum(s: unknown): number | null {
+  if (s == null) return null;
+  const n = Number(String(s).replace(/[%,]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
 
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+async function fetchAll(): Promise<FuturesQuote[]> {
+  if (cached && Date.now() - cached.at < TTL_MS) return cached.quotes;
+  const symbolsParam = SYMBOLS.map((s) => s.cnbc).join("|");
+  const url = `https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=${encodeURIComponent(symbolsParam)}&requestMethod=quick&output=json`;
+  let rows: any[] = [];
   try {
     const r = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; NovaWhisper/1.0)",
-        Accept: "application/json",
-      },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NovaWhisper/1.0)", Accept: "application/json" },
     });
-    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`CNBC HTTP ${r.status}`);
     const j = await r.json();
-    const row = j?.quoteResponse?.result?.[0];
-    if (!row) throw new Error("no row");
-    const price = Number(row.regularMarketPrice ?? row.postMarketPrice ?? row.preMarketPrice);
-    const prev = Number(row.regularMarketPreviousClose ?? row.previousClose ?? price);
-    const change = Number.isFinite(row.regularMarketChange) ? Number(row.regularMarketChange) : price - prev;
-    const changePct = Number.isFinite(row.regularMarketChangePercent)
-      ? Number(row.regularMarketChangePercent)
-      : prev ? ((price - prev) / prev) * 100 : 0;
-    const q: FuturesQuote = {
-      symbol,
-      label,
-      price: Number.isFinite(price) ? price : null,
-      change: Number.isFinite(change) ? change : null,
-      changePct: Number.isFinite(changePct) ? changePct : null,
-      marketState: row.marketState ?? null,
-      updatedAt: new Date().toISOString(),
-    };
-    cache.set(symbol, { q, at: Date.now() });
-    return q;
-  } catch (e) {
-    return {
-      symbol, label,
-      price: null, change: null, changePct: null,
-      marketState: null,
-      updatedAt: new Date().toISOString(),
-    };
+    rows = j?.FormattedQuoteResult?.FormattedQuote ?? [];
+  } catch (_) {
+    rows = [];
   }
+  const byCnbc = new Map(rows.map((r: any) => [String(r.symbol), r]));
+  const quotes: FuturesQuote[] = SYMBOLS.map(({ symbol, cnbc, label }) => {
+    const row = byCnbc.get(cnbc);
+    return {
+      symbol,
+      cnbcSymbol: cnbc,
+      label,
+      price: num(row?.last),
+      prevClose: num(row?.previous_day_closing),
+      change: num(row?.change),
+      changePct: pctNum(row?.change_pct),
+      marketState: row?.curmktstatus ?? null,
+      lastTime: row?.last_timedate ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  cached = { quotes, at: Date.now() };
+  return quotes;
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const quotes = await Promise.all(SYMBOLS.map((s) => fetchYahoo(s.symbol, s.label)));
+    const quotes = await fetchAll();
     return new Response(JSON.stringify({ quotes, fetchedAt: new Date().toISOString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
