@@ -281,8 +281,6 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       dte: Math.max(1, dte),
       optionType: isCall ? "call" : "put",
     }).perShare;
-  }
-  const quoteUnavailable = isOpen && p.last_quote_quality != null && p.last_quote_quality !== "VALID";
 
   const initialGates = (p.initial_gates ?? {}) as Record<string, string>;
 
