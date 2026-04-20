@@ -287,7 +287,11 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const initialGates = (p.initial_gates ?? {}) as Record<string, string>;
 
   const [closeOpen, setCloseOpen] = useState(false);
-  const [closePrice, setClosePrice] = useState(currentMid != null ? currentMid.toFixed(2) : "");
+  const [closePrice, setClosePrice] = useState(
+    p.close_premium != null ? Number(p.close_premium).toFixed(2)
+      : currentMid != null ? currentMid.toFixed(2)
+      : "",
+  );
   const [editOpen, setEditOpen] = useState(false);
   const [hardStop, setHardStop] = useState(String(p.hard_stop_pct));
   const [t1, setT1] = useState(String(p.target_1_pct));
@@ -295,20 +299,32 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const [maxHold, setMaxHold] = useState(p.max_hold_days != null ? String(p.max_hold_days) : "");
   const [notes, setNotes] = useState(p.notes ?? "");
 
+  const isClosed = p.status !== "open";
+
   const submitClose = async () => {
     const cp = Number(closePrice);
     if (!Number.isFinite(cp) || cp < 0) {
       toast({ title: "Enter a valid exit price", variant: "destructive" });
       return;
     }
-    await close.mutateAsync({
-      id: p.id,
-      closePremium: cp,
-      status: "closed",
-      contracts: p.contracts,
-      entryPremium: p.entry_premium,
-      direction: p.direction,
-    });
+    if (isClosed) {
+      await updateExitPrice.mutateAsync({
+        id: p.id,
+        closePremium: cp,
+        contracts: p.contracts,
+        entryPremium: p.entry_premium,
+        direction: p.direction,
+      });
+    } else {
+      await close.mutateAsync({
+        id: p.id,
+        closePremium: cp,
+        status: "closed",
+        contracts: p.contracts,
+        entryPremium: p.entry_premium,
+        direction: p.direction,
+      });
+    }
     setCloseOpen(false);
   };
 
@@ -437,7 +453,14 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       )}
 
       {p.status !== "open" && (
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            size="sm" variant="ghost"
+            className="h-7 text-[11px] gap-1"
+            onClick={() => setCloseOpen(true)}
+          >
+            <Pencil className="h-3 w-3" /> Edit exit price
+          </Button>
           <Button
             size="sm" variant="ghost"
             className="h-7 text-[11px] text-bearish hover:bg-bearish/10"
