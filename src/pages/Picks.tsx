@@ -8,9 +8,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { useLiveQuotes } from "@/lib/liveData";
 import {
   Zap, RefreshCw, TrendingUp, TrendingDown, Sparkles, AlertTriangle,
-  Target, Activity, Droplets, Flame, Calendar, ArrowUpRight, ArrowDownRight,
+  Target, Activity, Droplets, Flame, Calendar, ArrowUpRight, ArrowDownRight, Radio,
 } from "lucide-react";
 
 interface Pick {
@@ -79,11 +80,14 @@ function reasonChips(reasons: string): string[] {
   return reasons.split("|").map((s) => s.trim()).filter(Boolean);
 }
 
-function PickRow({ pick, kind, onSelect, selected }: {
+function PickRow({ pick, kind, onSelect, selected, live }: {
   pick: Pick; kind: "call" | "put"; onSelect: () => void; selected: boolean;
+  live?: { price: number; chg: number } | null;
 }) {
   const ivPct = pick.iv * 100;
-  const chgPositive = pick.chg >= 0;
+  const displayPrice = live?.price ?? pick.price;
+  const displayChg = live?.chg ?? pick.chg;
+  const chgPositive = displayChg >= 0;
   const ChgIcon = chgPositive ? ArrowUpRight : ArrowDownRight;
   const tintRow = pick.grade === "A"
     ? (kind === "call" ? "bg-bullish/[0.04]" : "bg-bearish/[0.04]")
@@ -106,10 +110,17 @@ function PickRow({ pick, kind, onSelect, selected }: {
         {pick.ticker}
       </TableCell>
       <TableCell className="font-mono font-semibold text-primary py-3">{pick.score}</TableCell>
-      <TableCell className="font-mono py-3">{fmt$(pick.price)}</TableCell>
-      <TableCell className={cn("font-mono py-3 inline-flex items-center gap-0.5", chgPositive ? "text-bullish" : "text-bearish")}>
-        <ChgIcon className="h-3 w-3" />
-        {Math.abs(pick.chg).toFixed(1)}%
+      <TableCell className="font-mono py-3">
+        <span className="inline-flex items-center gap-1">
+          {fmt$(displayPrice)}
+          {live && <Radio className="h-2.5 w-2.5 text-bullish animate-pulse" />}
+        </span>
+      </TableCell>
+      <TableCell className={cn("font-mono py-3", chgPositive ? "text-bullish" : "text-bearish")}>
+        <span className="inline-flex items-center gap-0.5">
+          <ChgIcon className="h-3 w-3" />
+          {Math.abs(displayChg).toFixed(1)}%
+        </span>
       </TableCell>
       <TableCell className="font-mono text-muted-foreground py-3">{pick.expiry}</TableCell>
       <TableCell className="font-mono py-3">${pick.strike}</TableCell>
@@ -124,8 +135,9 @@ function PickRow({ pick, kind, onSelect, selected }: {
   );
 }
 
-function PicksTable({ rows, kind, selectedIdx, onSelect }: {
+function PicksTable({ rows, kind, selectedIdx, onSelect, liveMap }: {
   rows: Pick[]; kind: "call" | "put"; selectedIdx: number | null; onSelect: (i: number) => void;
+  liveMap: Map<string, { price: number; chg: number }>;
 }) {
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -154,6 +166,7 @@ function PicksTable({ rows, kind, selectedIdx, onSelect }: {
                 kind={kind}
                 selected={selectedIdx === i}
                 onSelect={() => onSelect(i)}
+                live={liveMap.get(p.ticker) ?? null}
               />
             ))}
           </TableBody>
@@ -272,12 +285,13 @@ function SummaryCard({ label, icon: Icon, children }: {
 }
 
 function Section({
-  side, rows, gradeFilter, onGradeFilter,
+  side, rows, gradeFilter, onGradeFilter, liveMap,
 }: {
   side: "call" | "put";
   rows: Pick[];
   gradeFilter: GradeFilter;
   onGradeFilter: (g: GradeFilter) => void;
+  liveMap: Map<string, { price: number; chg: number }>;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(rows.length ? 0 : null);
   const filtered = useMemo(
@@ -316,7 +330,7 @@ function Section({
               No picks match the {gradeFilter} filter.
             </Card>
           ) : (
-            <PicksTable rows={filtered} kind={side} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
+            <PicksTable rows={filtered} kind={side} selectedIdx={selectedIdx} onSelect={setSelectedIdx} liveMap={liveMap} />
           )}
         </div>
         <div>
@@ -376,6 +390,25 @@ export default function Picks() {
     };
   }, [data]);
 
+  // Refresh underlying spot prices live for every visible ticker so the
+  // Price / 1D% columns don't go stale between daily picks runs.
+  const tickers = useMemo(() => {
+    if (!data) return [] as string[];
+    return Array.from(new Set([...data.calls, ...data.puts].map((p) => p.ticker)));
+  }, [data]);
+  const { data: liveQuotes } = useLiveQuotes(tickers, { refetchMs: 30_000 });
+  const liveMap = useMemo(() => {
+    const m = new Map<string, { price: number; chg: number }>();
+    if (Array.isArray(liveQuotes)) {
+      for (const q of liveQuotes) {
+        if (q?.symbol && Number.isFinite(q.price) && q.price > 0) {
+          m.set(q.symbol, { price: q.price, chg: Number(q.changePct ?? 0) });
+        }
+      }
+    }
+    return m;
+  }, [liveQuotes]);
+
   const targetSession = nextSessionLabel(data?.generatedAt);
   const generatedLabel = data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : null;
 
@@ -398,6 +431,12 @@ export default function Picks() {
               <Calendar className="h-3 w-3" />
               Picks for <span className="font-medium text-foreground">{targetSession}</span>
               {data?.cached && <Badge variant="outline" className="text-[10px] ml-1">Cached</Badge>}
+              {liveMap.size > 0 && (
+                <Badge variant="outline" className="text-[10px] ml-1 border-bullish/40 text-bullish gap-1">
+                  <Radio className="h-2.5 w-2.5 animate-pulse" />
+                  Live spot · {liveMap.size}
+                </Badge>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -474,11 +513,11 @@ export default function Picks() {
                 <Activity className="h-3.5 w-3.5" /> Both
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="calls"><Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} /></TabsContent>
-            <TabsContent value="puts"><Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} /></TabsContent>
+            <TabsContent value="calls"><Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} liveMap={liveMap} /></TabsContent>
+            <TabsContent value="puts"><Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} liveMap={liveMap} /></TabsContent>
             <TabsContent value="both" className="space-y-6">
-              <Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} />
-              <Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} />
+              <Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} liveMap={liveMap} />
+              <Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} liveMap={liveMap} />
             </TabsContent>
           </Tabs>
         ) : (
