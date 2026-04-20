@@ -80,11 +80,14 @@ function reasonChips(reasons: string): string[] {
   return reasons.split("|").map((s) => s.trim()).filter(Boolean);
 }
 
-function PickRow({ pick, kind, onSelect, selected }: {
+function PickRow({ pick, kind, onSelect, selected, live }: {
   pick: Pick; kind: "call" | "put"; onSelect: () => void; selected: boolean;
+  live?: { price: number; chg: number } | null;
 }) {
   const ivPct = pick.iv * 100;
-  const chgPositive = pick.chg >= 0;
+  const displayPrice = live?.price ?? pick.price;
+  const displayChg = live?.chg ?? pick.chg;
+  const chgPositive = displayChg >= 0;
   const ChgIcon = chgPositive ? ArrowUpRight : ArrowDownRight;
   const tintRow = pick.grade === "A"
     ? (kind === "call" ? "bg-bullish/[0.04]" : "bg-bearish/[0.04]")
@@ -107,10 +110,17 @@ function PickRow({ pick, kind, onSelect, selected }: {
         {pick.ticker}
       </TableCell>
       <TableCell className="font-mono font-semibold text-primary py-3">{pick.score}</TableCell>
-      <TableCell className="font-mono py-3">{fmt$(pick.price)}</TableCell>
-      <TableCell className={cn("font-mono py-3 inline-flex items-center gap-0.5", chgPositive ? "text-bullish" : "text-bearish")}>
-        <ChgIcon className="h-3 w-3" />
-        {Math.abs(pick.chg).toFixed(1)}%
+      <TableCell className="font-mono py-3">
+        <span className="inline-flex items-center gap-1">
+          {fmt$(displayPrice)}
+          {live && <Radio className="h-2.5 w-2.5 text-bullish animate-pulse" />}
+        </span>
+      </TableCell>
+      <TableCell className={cn("font-mono py-3", chgPositive ? "text-bullish" : "text-bearish")}>
+        <span className="inline-flex items-center gap-0.5">
+          <ChgIcon className="h-3 w-3" />
+          {Math.abs(displayChg).toFixed(1)}%
+        </span>
       </TableCell>
       <TableCell className="font-mono text-muted-foreground py-3">{pick.expiry}</TableCell>
       <TableCell className="font-mono py-3">${pick.strike}</TableCell>
