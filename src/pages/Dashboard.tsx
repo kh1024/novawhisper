@@ -35,6 +35,9 @@ import { smartActionLabel, smartActionTooltip, emptyStateCopy } from "@/lib/acti
 import { detectTimeState } from "@/lib/novaBrain";
 import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
 import { useBudget } from "@/lib/budget";
+import { useSettings } from "@/lib/settings";
+import { partitionByAffordability, type AffordabilityResult } from "@/lib/affordability";
+import { AffordabilityBadge } from "@/components/AffordabilityBadge";
 import type { OptionPick } from "@/lib/mockData";
 
 /**
