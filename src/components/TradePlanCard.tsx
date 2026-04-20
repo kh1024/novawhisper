@@ -62,14 +62,20 @@ export function TradePlanCard({ card, symbol, spot, brokerHref }: Props) {
   const meta = ACTION_META[card.action];
   const Icon = meta.Icon;
 
-  // Budget math — uses the per-trade cap from Settings (portfolio × risk%).
-  const cost = c?.cost_per_contract_usd ?? null;
+  // Central affordability rule — same module Dashboard + Scanner use.
+  const aff = classifyAffordability(budget, {
+    perShareCost: c?.mid ?? null,
+    contracts: 1,
+    settings,
+    stale: card.data_quality === "FAIL",
+  });
+  const cost = aff.totalCost;
+  const overBudget = aff.tier === "blocked";
+  const recommendable = aff.recommendable;
   const affordableQty = cost && cost > 0 ? Math.floor(budget / cost) : 0;
-  // Nova may have already capped size; use the smaller of the two.
   const novaCap = c?.max_size_contracts ?? null;
   const finalQty = novaCap != null ? Math.min(novaCap, affordableQty) : affordableQty;
   const totalSpend = finalQty * (cost ?? 0);
-  const overBudget = cost != null && cost > budget;
 
   // "Where" — invalidation level vs current spot.
   const stopDistPct =
