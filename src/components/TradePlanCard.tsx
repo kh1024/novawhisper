@@ -57,6 +57,7 @@ const ACTION_META = {
 
 export function TradePlanCard({ card, symbol, spot, brokerHref }: Props) {
   const { portfolio, riskPct, budget } = useCapitalSettings();
+  const [settings] = useSettings();
   const session = sessionInfo();
   const c = card.best_contract ?? null;
   const meta = ACTION_META[card.action];
@@ -71,7 +72,7 @@ export function TradePlanCard({ card, symbol, spot, brokerHref }: Props) {
   });
   const cost = aff.totalCost;
   const overBudget = aff.tier === "blocked";
-  const recommendable = aff.recommendable;
+  
   const affordableQty = cost && cost > 0 ? Math.floor(budget / cost) : 0;
   const novaCap = c?.max_size_contracts ?? null;
   const finalQty = novaCap != null ? Math.min(novaCap, affordableQty) : affordableQty;
