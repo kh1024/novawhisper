@@ -13,6 +13,7 @@ import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
 import { TRADE_STATUS_CLASSES, TRADE_STATUS_LABEL } from "@/lib/tradeStatus";
 import { Hint } from "@/components/Hint";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { cn } from "@/lib/utils";
 
 const BUCKET_TABS: ActiveBucket[] = ["All", "Conservative", "Moderate", "Aggressive", "Lottery"];
@@ -115,56 +116,75 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
           {display.map((p) => {
             const isCall = p.contract.optionType === "call";
             return (
-              <button
+              <div
                 key={p.key}
-                onClick={() => open(p)}
-                className="w-full flex items-center gap-3 p-3 rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all text-left"
+                className="w-full rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all"
               >
-                <div className={cn(
-                  "h-10 w-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold",
-                  isCall ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish",
-                )}>
-                  {p.row.symbol.slice(0, 4)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-sm">{p.row.symbol}</span>
-                    <span className="mono text-[11px] text-muted-foreground">${p.row.price.toFixed(2)}</span>
-                    <Badge variant="outline" className="h-5 text-[10px]">
-                      ${p.contract.strike}{isCall ? "C" : "P"}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground">exp {p.contract.expiry}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
-                      {bucketEmoji(p.bucket)} {p.bucket}
-                    </span>
-                    <Hint label={p.tradeStatus.reason} asChild={false}>
-                      <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
-                        TRADE_STATUS_CLASSES[p.tradeStatus.tradeStatus],
-                      )}>
-                        {TRADE_STATUS_LABEL[p.tradeStatus.tradeStatus]}
+                <button
+                  onClick={() => open(p)}
+                  className="w-full flex items-center gap-3 p-3 text-left"
+                >
+                  <div className={cn(
+                    "h-10 w-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold",
+                    isCall ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish",
+                  )}>
+                    {p.row.symbol.slice(0, 4)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-sm">{p.row.symbol}</span>
+                      <span className="mono text-[11px] text-muted-foreground">${p.row.price.toFixed(2)}</span>
+                      <Badge variant="outline" className="h-5 text-[10px]">
+                        ${p.contract.strike}{isCall ? "C" : "P"}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground">exp {p.contract.expiry}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
+                        {bucketEmoji(p.bucket)} {p.bucket}
                       </span>
-                    </Hint>
+                      <Hint label={p.tradeStatus.reason} asChild={false}>
+                        <span className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
+                          TRADE_STATUS_CLASSES[p.tradeStatus.tradeStatus],
+                        )}>
+                          {TRADE_STATUS_LABEL[p.tradeStatus.tradeStatus]}
+                        </span>
+                      </Hint>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[9px] text-muted-foreground">
+                      <span>Dir: <span className="text-foreground">{p.tradeStatus.direction}</span></span>
+                      <span>·</span>
+                      <span>Vol: <span className="text-foreground">{p.tradeStatus.volume}</span></span>
+                      <span>·</span>
+                      <span>Gap: <span className="text-foreground">{p.tradeStatus.gap}</span></span>
+                      <span>·</span>
+                      <span>Liq: <span className="text-foreground">{p.tradeStatus.liquidity}</span></span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+                      {p.verdict?.reason ?? p.row.crl?.reason ?? `Setup ${p.row.setupScore} · ${p.row.bias}`}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[9px] text-muted-foreground">
-                    <span>Dir: <span className="text-foreground">{p.tradeStatus.direction}</span></span>
-                    <span>·</span>
-                    <span>Vol: <span className="text-foreground">{p.tradeStatus.volume}</span></span>
-                    <span>·</span>
-                    <span>Gap: <span className="text-foreground">{p.tradeStatus.gap}</span></span>
-                    <span>·</span>
-                    <span>Liq: <span className="text-foreground">{p.tradeStatus.liquidity}</span></span>
+                  <div className="text-right shrink-0">
+                    <div className="mono text-lg font-semibold text-bullish">{p.rank?.finalRank ?? p.row.setupScore}</div>
+                    <div className="text-[10px] text-muted-foreground">est ${p.estCost.toLocaleString()}</div>
                   </div>
-                  <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-                    {p.verdict?.reason ?? p.row.crl?.reason ?? `Setup ${p.row.setupScore} · ${p.row.bias}`}
+                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </button>
+                {p.tradeStatus.tradeStatus === "TradeReady" && (
+                  <div className="flex items-center gap-2 px-3 pb-3">
+                    <Button
+                      size="sm"
+                      className="h-7 text-[11px]"
+                      onClick={(e) => { e.stopPropagation(); open(p); }}
+                    >
+                      BUY NOW →
+                    </Button>
+                    <AddToPortfolioButton pick={p} />
+                    <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
+                      We'll alert you when to take profits or cut the loss.
+                    </span>
                   </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="mono text-lg font-semibold text-bullish">{p.rank?.finalRank ?? p.row.setupScore}</div>
-                  <div className="text-[10px] text-muted-foreground">est ${p.estCost.toLocaleString()}</div>
-                </div>
-                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              </button>
+                )}
+              </div>
             );
           })}
         </div>
