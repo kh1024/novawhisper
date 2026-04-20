@@ -297,24 +297,59 @@ Deno.serve(async (req: Request) => {
     console.warn("quotes-fetch failed", e);
   }
 
-  // Real chains for ALL symbols (not just DTE≤7) — we need bid/ask to validate.
-  type ChainEntry = { mid?: number; bid?: number; ask?: number; last?: number; updatedAt?: string };
+  // Real chains for ALL symbols — primary source is Massive (via options-fetch).
+  // We need bid/ask to validate, and the Massive snapshot returns NBBO.
+  type ChainEntry = { mid?: number; bid?: number; ask?: number; last?: number };
   const realChain = new Map<string, ChainEntry>(); // SYMBOL|TYPE|STRIKE|EXPIRY
   const chainFetchedAt = new Map<string, number>();
+  const chainSource = new Map<string, string>(); // symbol -> "massive" | "public" | "none"
   for (const sym of symbols) {
+    let gotMassive = false;
     try {
-      const { data } = await supabase.functions.invoke("public-options-fetch", { body: { symbol: sym } });
+      // options-fetch is Massive-backed (NBBO mid via last_quote.bid/ask).
+      const { data } = await supabase.functions.invoke("options-fetch", {
+        body: { underlying: sym, limit: 250 },
+      });
+      const isStale = data?.stale === true;
+      const isDegraded = data?.degraded === true;
       const fetchedAt = data?.fetchedAt ? Date.parse(data.fetchedAt) : Date.now();
-      chainFetchedAt.set(sym, fetchedAt);
       const contracts = (data?.contracts ?? []) as Array<{
-        type: string; strike: number; expiry: string; mid?: number; bid?: number; ask?: number; last?: number;
+        type: string; strike: number; expiration: string; mid?: number; bid?: number; ask?: number; last?: number;
       }>;
-      for (const c of contracts) {
-        const key = `${sym}|${(c.type ?? "").toLowerCase()}|${Number(c.strike)}|${c.expiry}`;
-        realChain.set(key, { mid: c.mid, bid: c.bid, ask: c.ask, last: c.last });
+      if (!isDegraded && contracts.length > 0) {
+        chainFetchedAt.set(sym, fetchedAt);
+        chainSource.set(sym, isStale ? "massive-stale" : "massive");
+        for (const c of contracts) {
+          const key = `${sym}|${(c.type ?? "").toLowerCase()}|${Number(c.strike)}|${c.expiration}`;
+          realChain.set(key, { mid: c.mid, bid: c.bid, ask: c.ask, last: c.last });
+        }
+        gotMassive = true;
+      } else {
+        console.warn(`[exit-eval] options-fetch for ${sym}: degraded=${isDegraded} count=${contracts.length}`);
       }
     } catch (e) {
-      console.warn(`public-options-fetch failed for ${sym}`, e);
+      console.warn(`options-fetch (Massive) failed for ${sym}`, e);
+    }
+    // Fallback to public-options-fetch only if Massive returned nothing.
+    if (!gotMassive) {
+      try {
+        const { data } = await supabase.functions.invoke("public-options-fetch", { body: { symbol: sym } });
+        const fetchedAt = data?.fetchedAt ? Date.parse(data.fetchedAt) : Date.now();
+        chainFetchedAt.set(sym, fetchedAt);
+        chainSource.set(sym, "public");
+        const contracts = (data?.contracts ?? []) as Array<{
+          type: string; strike: number; expiry: string; mid?: number; bid?: number; ask?: number; last?: number;
+        }>;
+        for (const c of contracts) {
+          const key = `${sym}|${(c.type ?? "").toLowerCase()}|${Number(c.strike)}|${c.expiry}`;
+          if (!realChain.has(key)) {
+            realChain.set(key, { mid: c.mid, bid: c.bid, ask: c.ask, last: c.last });
+          }
+        }
+      } catch (e) {
+        console.warn(`public-options-fetch fallback failed for ${sym}`, e);
+        chainSource.set(sym, "none");
+      }
     }
   }
 
