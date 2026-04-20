@@ -12,6 +12,7 @@ import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { NewsFeed } from "@/components/NewsFeed";
 import { SectorBreakdown } from "@/components/SectorBreakdown";
 import { MarketHeroCards } from "@/components/MarketHeroCards";
+import { PreMarketFutures } from "@/components/PreMarketFutures";
 import { PlaybookCard } from "@/components/PlaybookCard";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
@@ -239,6 +240,7 @@ export default function Dashboard() {
           </div>
         )}
         items={[
+          { id: "futures", node: <PreMarketFutures /> },
           { id: "nova-status", node: <NovaStatusStrip /> },
           { id: "nova-filter", node: <NovaFilterBar /> },
           { id: "hero", node: <MarketHeroCards /> },
