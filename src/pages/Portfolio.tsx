@@ -268,20 +268,29 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
     ? ((Number(p.close_premium) - Number(p.entry_premium)) / Number(p.entry_premium)) * 100
     : null;
   const profitPct = isOpen
-    ? (dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null))
+    ? (quoteUnavailable
+        ? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null)
+        : (dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null)))
     : realizedPct;
 
-  // Prefer the validated mark written by the exit engine. Only fall back to a
-  // client estimate when we truly have no persisted current_price yet.
+  // Trust ONLY the validated mark written by the exit engine.
+  //   • last_quote_quality === "VALID" → use current_price (real Massive mid)
+  //   • quote unavailable → use the frozen last_valid_mark (no client BS-lite preview)
+  //   • no engine output yet → leave null (display "—")
   let currentMid: number | null = null;
-  if (isOpen && p.current_price != null) {
-    currentMid = Number(p.current_price);
-  } else if (isOpen && spot != null && p.entry_premium != null) {
-    currentMid = estimatePremium({
-      spot, strike: Number(p.strike), iv: ivRankToIv(50),
-      dte: Math.max(1, dte),
-      optionType: isCall ? "call" : "put",
-    }).perShare;
+  let currentMidSource: "live" | "frozen" | "none" = "none";
+  if (isOpen) {
+    if (p.last_quote_quality === "VALID" && p.current_price != null) {
+      currentMid = Number(p.current_price);
+      currentMidSource = "live";
+    } else if (p.last_valid_mark != null) {
+      currentMid = Number(p.last_valid_mark);
+      currentMidSource = "frozen";
+    } else if (p.last_quote_quality == null && p.current_price != null) {
+      // No engine evaluation yet — fall back to whatever was last persisted.
+      currentMid = Number(p.current_price);
+      currentMidSource = "frozen";
+    }
   }
 
   const initialGates = (p.initial_gates ?? {}) as Record<string, string>;
