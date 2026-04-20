@@ -313,6 +313,105 @@ export default function Settings() {
         </div>
       </Card>
 
+      {/* ───────────── Default exit guidance (stops & targets) ───────────── */}
+      <Card className="glass-card p-6 space-y-5">
+        <div>
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" /> Default stop-loss & profit targets
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+            Applied to every new position you save. You can still override these per-trade in the
+            Add-to-Portfolio dialog or by clicking <span className="font-semibold">Edit Targets</span> on
+            an open position.
+          </p>
+        </div>
+
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Hard stop %</label>
+            <div className="relative">
+              <input
+                type="number"
+                step={1}
+                value={settings.exitDefaults.hardStopPct}
+                onChange={(e) => updateSettings({
+                  exitDefaults: { ...settings.exitDefaults, hardStopPct: Number(e.target.value) || -30 },
+                })}
+                onBlur={flashSaved}
+                className="w-full h-9 pl-2 pr-6 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">Negative number — e.g. <span className="font-mono">-30</span> = exit at −30%.</div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Target 1 (trim) %</label>
+            <div className="relative">
+              <input
+                type="number"
+                step={5}
+                value={settings.exitDefaults.target1Pct}
+                onChange={(e) => updateSettings({
+                  exitDefaults: { ...settings.exitDefaults, target1Pct: Number(e.target.value) || 50 },
+                })}
+                onBlur={flashSaved}
+                className="w-full h-9 pl-2 pr-6 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">Trim partial, move stop to breakeven.</div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Target 2 (runner) %</label>
+            <div className="relative">
+              <input
+                type="number"
+                step={10}
+                value={settings.exitDefaults.target2Pct}
+                onChange={(e) => updateSettings({
+                  exitDefaults: { ...settings.exitDefaults, target2Pct: Number(e.target.value) || 100 },
+                })}
+                onBlur={flashSaved}
+                className="w-full h-9 pl-2 pr-6 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+            </div>
+            <div className="text-[10px] text-muted-foreground">Take full profit on the runner.</div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider text-muted-foreground">Max hold (days)</label>
+            <input
+              type="number"
+              step={1}
+              placeholder="auto"
+              value={settings.exitDefaults.maxHoldDays ?? ""}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                updateSettings({
+                  exitDefaults: {
+                    ...settings.exitDefaults,
+                    maxHoldDays: v === "" ? null : Number(v) || null,
+                  },
+                });
+              }}
+              onBlur={flashSaved}
+              className="w-full h-9 px-2 text-sm font-mono bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <div className="text-[10px] text-muted-foreground">Blank = derive from DTE.</div>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-muted-foreground border-t border-border/40 pt-3 flex flex-wrap gap-x-4 gap-y-1">
+          <span>Stop: <span className="font-mono text-bearish">{settings.exitDefaults.hardStopPct}%</span></span>
+          <span>T1: <span className="font-mono text-bullish">+{settings.exitDefaults.target1Pct}%</span></span>
+          <span>T2: <span className="font-mono text-bullish">+{settings.exitDefaults.target2Pct}%</span></span>
+          <span>Max hold: <span className="font-mono text-foreground">{settings.exitDefaults.maxHoldDays ?? "auto"}{settings.exitDefaults.maxHoldDays != null ? "d" : ""}</span></span>
+        </div>
+      </Card>
+
       {/* ───────────── Data sources & API health ───────────── */}
       <Card className="glass-card p-6 space-y-4">
         <div className="flex items-start justify-between gap-3 flex-wrap">
