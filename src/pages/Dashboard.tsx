@@ -398,9 +398,12 @@ export default function Dashboard() {
               </div>
             );
           })()}
-          {allOverBudget && (
-            <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-[11px] leading-snug">
-              No {riskTab} contracts fit your <span className="font-mono">${budget.toLocaleString()}</span> per-trade cap right now — showing the cheapest options below. Each row suggests a budget-friendly alt ticker. Adjust capital/risk in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
+          {noAffordableTrades && (
+            <div className="mb-3 rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2.5 text-[11px] leading-snug">
+              <div className="font-semibold">No valid trades within your <span className="font-mono">${budget.toLocaleString()}</span> budget today.</div>
+              <div className="text-warning/85 mt-0.5">
+                Every {riskTab} pick we found exceeds your per-trade cap. See "Blocked by Budget" below for the closest near-misses, or raise your budget in <Link to="/settings" className="underline underline-offset-2">Settings</Link>.
+              </div>
             </div>
           )}
           {/* Reserve vertical space so async pick rendering doesn't shift content below (CLS fix). */}
