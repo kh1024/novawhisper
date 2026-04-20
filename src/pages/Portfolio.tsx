@@ -475,17 +475,22 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Close {p.symbol} ${p.strike}{isCall ? "C" : "P"}</DialogTitle>
+            <DialogTitle>{isClosed ? "Edit exit price" : "Close"} {p.symbol} ${p.strike}{isCall ? "C" : "P"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Exit price (per contract)</Label>
             <Input type="number" min={0} step="0.01" value={closePrice}
               onChange={(e) => setClosePrice(e.target.value)} className="h-8 text-xs" />
+            {isClosed && (
+              <p className="text-[10px] text-muted-foreground">
+                Realized P&L will be recomputed as (exit − entry) × 100 × {p.contracts}.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setCloseOpen(false)}>Cancel</Button>
-            <Button size="sm" onClick={submitClose} disabled={close.isPending}>
-              {close.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Close position"}
+            <Button size="sm" onClick={submitClose} disabled={close.isPending || updateExitPrice.isPending}>
+              {(close.isPending || updateExitPrice.isPending) ? <Loader2 className="h-3 w-3 animate-spin" /> : (isClosed ? "Save" : "Close position")}
             </Button>
           </DialogFooter>
         </DialogContent>
