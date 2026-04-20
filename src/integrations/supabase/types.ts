@@ -256,6 +256,24 @@ export type Database = {
         }
         Relationships: []
       }
+      strategy_profiles: {
+        Row: {
+          owner_key: string
+          profile: Json
+          updated_at: string
+        }
+        Insert: {
+          owner_key: string
+          profile: Json
+          updated_at?: string
+        }
+        Update: {
+          owner_key?: string
+          profile?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       verdict_alert_log: {
         Row: {
           created_at: string
