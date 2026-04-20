@@ -507,11 +507,11 @@ export default function Picks() {
                 <Activity className="h-3.5 w-3.5" /> Both
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="calls"><Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} /></TabsContent>
-            <TabsContent value="puts"><Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} /></TabsContent>
+            <TabsContent value="calls"><Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} liveMap={liveMap} /></TabsContent>
+            <TabsContent value="puts"><Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} liveMap={liveMap} /></TabsContent>
             <TabsContent value="both" className="space-y-6">
-              <Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} />
-              <Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} />
+              <Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} liveMap={liveMap} />
+              <Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} liveMap={liveMap} />
             </TabsContent>
           </Tabs>
         ) : (
