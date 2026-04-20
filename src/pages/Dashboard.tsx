@@ -105,6 +105,11 @@ export default function Dashboard() {
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const { hiddenSet, hide } = useHiddenSections();
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
+  // DTE quick-filter — lets the user narrow Top Opportunities to ultra-short
+  // dated contracts. "all" = no filter, "0dte" = expires today (≤1 day),
+  // "week" = expires within the next 7 days. Applied AFTER Nova/affordability
+  // filters so it only narrows what's already eligible.
+  const [dteFilter, setDteFilter] = useState<"all" | "0dte" | "week">("all");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
