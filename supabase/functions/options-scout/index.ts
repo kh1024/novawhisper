@@ -414,7 +414,10 @@ INSTRUCTIONS:
       console.error("[options-scout] AI error", aiResp.status, t);
       throw new Error(`AI gateway ${aiResp.status}`);
     }
-    const aiJson = await aiResp.json();
+    const aiText = await aiResp.text();
+    let aiJson: any = {};
+    try { aiJson = aiText ? JSON.parse(aiText) : {}; }
+    catch (e) { console.error("[options-scout] AI body not JSON:", aiText.slice(0, 200)); }
     const toolCall = aiJson?.choices?.[0]?.message?.tool_calls?.[0];
     let buckets: Record<string, unknown> = {
       marketRead: "", regime: "sideways", timeState: time.label, bestStrategyNow: "", avoidRightNow: "",
