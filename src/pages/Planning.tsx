@@ -311,9 +311,15 @@ function rankPick(p: PlanningPick): number {
 }
 
 function SlottedPicks({ picks }: { picks: PlanningPick[] }) {
+  const [budget] = useBudget();
+  // Drop picks whose premium*100 exceeds the per-trade budget from Settings.
+  const affordable = picks.filter((p) => {
+    const prem = parsePremiumEstimate(p.premiumEstimate);
+    return prem == null || prem * 100 <= budget;
+  });
   // Bucket + rank
   const buckets: Record<RiskTier, PlanningPick[]> = { safe: [], mild: [], aggressive: [] };
-  for (const p of picks) buckets[classifyRisk(p)].push(p);
+  for (const p of affordable) buckets[classifyRisk(p)].push(p);
   (Object.keys(buckets) as RiskTier[]).forEach((k) => buckets[k].sort((a, b) => rankPick(b) - rankPick(a)));
   const cursors: Record<RiskTier, number> = { safe: 0, mild: 0, aggressive: 0 };
 
