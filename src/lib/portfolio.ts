@@ -95,6 +95,35 @@ export function usePortfolio() {
   });
 }
 
+/** Count of OPEN positions — used by the sidebar badge. */
+export function useOpenPortfolioCount(): number {
+  const { data } = usePortfolio();
+  return (data ?? []).filter((p) => p.status === "open").length;
+}
+
+/** "Is this exact contract already open in the user's portfolio?" — used by
+ *  AddToPortfolioButton to swap into a "View in Portfolio" link. */
+export function useIsHeld(
+  symbol: string,
+  optionType: string,
+  strike: number,
+  expiry: string,
+): { held: boolean; id: string | null } {
+  const { data } = usePortfolio();
+  if (!symbol) return { held: false, id: null };
+  const sym = symbol.toUpperCase();
+  const ot = optionType.toLowerCase();
+  const match = (data ?? []).find(
+    (p) =>
+      p.status === "open" &&
+      p.symbol.toUpperCase() === sym &&
+      p.option_type.toLowerCase() === ot &&
+      Number(p.strike) === Number(strike) &&
+      p.expiry === expiry,
+  );
+  return { held: !!match, id: match?.id ?? null };
+}
+
 export function useAddPosition() {
   const qc = useQueryClient();
   const owner = getOwnerKey();
