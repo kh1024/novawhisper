@@ -655,12 +655,61 @@ export default function Scanner() {
             safetyBlocked.length === 0 &&
             strategyProfile.riskTolerance === "Conservative";
 
+          // Diagnostic: cheapest budget-blocked alternative (sorted by cost asc).
+          const cheapestBlocked = budgetBlocked.length > 0
+            ? [...budgetBlocked].sort((a, b) => (a.cost ?? Infinity) - (b.cost ?? Infinity))[0]
+            : null;
+
           return (
             <div className="space-y-3">
               <StrategyContextBar counts={pipelineCounts} onEdit={() => setStrategyDrawerOpen(true)} />
 
+              {/* Pre-market estimate banner — every premium below is theoretical until 9:30 AM ET. */}
+              {preMarket.isPreMarket && approvedRows.length > 0 && (
+                <Card className="glass-card p-3 border-warning/40 bg-warning/5 flex items-start gap-2.5">
+                  <Sparkles className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                  <div className="text-[12px]">
+                    <div className="font-semibold text-warning">Pre-market estimate</div>
+                    <div className="text-muted-foreground mt-0.5">
+                      Options markets open at 9:30 AM ET. Premiums shown are theoretical — real fills may differ ±10–30%.
+                      Use <span className="font-semibold text-foreground">Queue for Open</span> to re-validate at 9:35 AM.
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               {showBudgetMismatch && (
                 <BudgetMismatchCard cap={cap} budgetBlockedCount={budgetBlocked.length} />
+              )}
+
+              {/* Diagnostic: 0 approved + budget-blocked exist → suggest cheapest alternative. */}
+              {approvedRows.length === 0 && cheapestBlocked && (
+                <Card className="glass-card p-3 border-primary/40 bg-primary/5 flex items-start gap-2.5">
+                  <Search className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <div className="text-[12px] flex-1">
+                    <div className="font-semibold text-foreground">
+                      🔎 Every gate-passing pick is over your ${cap.toLocaleString()} cap.
+                    </div>
+                    <div className="text-muted-foreground mt-0.5">
+                      Cheapest option:{" "}
+                      <span className="mono font-semibold text-foreground">
+                        {cheapestBlocked.row.symbol} ${cheapestBlocked.contract.strike}
+                        {cheapestBlocked.contract.optionType === "call" ? "C" : "P"}
+                      </span>{" "}
+                      at ~<span className="mono font-semibold text-foreground">
+                        ${cheapestBlocked.cost?.toLocaleString()}
+                      </span>{" "}
+                      total.{" "}
+                      <button
+                        type="button"
+                        className="underline decoration-dotted underline-offset-2 text-primary"
+                        onClick={() => setOpenSymbol(cheapestBlocked.row.symbol)}
+                      >
+                        Open to approve →
+                      </button>
+                    </div>
+                  </div>
+                </Card>
               )}
 
               {showLoosen && !showBudgetMismatch && (
