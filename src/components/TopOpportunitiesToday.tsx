@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
 import { TRADE_STATUS_CLASSES, TRADE_STATUS_LABEL } from "@/lib/tradeStatus";
+import { TIER_CLASSES, TIER_LABEL, MIN_BUY_NOW_PER_BUCKET } from "@/lib/pickTier";
 import { Hint } from "@/components/Hint";
 import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { cn } from "@/lib/utils";
