@@ -30,9 +30,14 @@ const QUERIES: Record<Category, string[]> = {
     "treasury yield 10-year today",
   ],
   earnings: [
-    "site:reuters.com OR site:cnbc.com OR site:bloomberg.com earnings beat miss guidance today",
-    "site:seekingalpha.com OR site:barrons.com quarterly earnings today",
-    "site:wsj.com earnings preannounce warning today",
+    // Real corporate earnings prints — Q1/Q2/Q3/Q4 reports, beats/misses, guidance
+    "site:cnbc.com/earnings OR site:cnbc.com reports Q1 OR Q2 OR Q3 OR Q4 earnings beat miss EPS revenue today",
+    "site:reuters.com/business reports quarterly earnings results EPS guidance today",
+    "site:seekingalpha.com/news earnings results EPS revenue beat miss today",
+    "site:bloomberg.com OR site:ft.com company reports earnings beat estimates raised lowered guidance today",
+    "site:wsj.com OR site:barrons.com earnings report quarterly results preannounce warning today",
+    // Earnings calendar / what's reporting
+    "site:zacks.com OR site:earningswhispers.com earnings calendar today this week",
   ],
 };
 
