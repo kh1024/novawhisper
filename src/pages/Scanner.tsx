@@ -62,6 +62,8 @@ import { generatePreMarketPicks, isPreMarketWindow } from "@/lib/preMarketGenera
 import { useStrategyProfile, maxPerTradeDollars, isStructureAllowed } from "@/lib/strategyProfile";
 import { useScannerOverrides } from "@/lib/scannerOverrides";
 import { usePreMarketStatus } from "@/lib/preMarketPreview";
+import { isConservativeCheapTicker } from "@/lib/bucketing";
+import { BudgetMismatchCard } from "@/components/BudgetMismatchCard";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
