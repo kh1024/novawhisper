@@ -54,22 +54,32 @@ export function SaveToPortfolioButton({ size = "sm", className, validation, ...p
       ?? "A safety gate is blocking this trade."
     : null;
 
-  if (blocked) {
+  // Preview mode — Gate 5 (ORB) only. Show a friendlier "locked until 10:30
+  // AM ET" state so the user knows it's a timing lock, not a setup failure.
+  const previewLocked = !blocked && validation?.previewMode === true;
+
+  if (blocked || previewLocked) {
+    const label = previewLocked ? "🔒 Locked Until 10:30 AM ET" : "Blocked";
+    const tip = previewLocked
+      ? "👁 Preview Mode — buy CTAs unlock when the opening range settles at 10:30 AM ET. Save to Watchlist still works."
+      : `🚫 BLOCKED — ${blockedReason}`;
     return (
-      <Hint label={`🚫 BLOCKED — ${blockedReason}`}>
+      <Hint label={tip}>
         <Button
           size="sm"
           variant="outline"
           disabled
           className={cn(
             size === "xs" ? "h-6 px-2 text-[10px]" : "h-7 px-2 text-[11px]",
-            "border-bearish/40 bg-bearish/10 text-bearish opacity-80 cursor-not-allowed",
+            previewLocked
+              ? "border-warning/40 bg-warning/10 text-warning opacity-90 cursor-not-allowed"
+              : "border-bearish/40 bg-bearish/10 text-bearish opacity-80 cursor-not-allowed",
             className,
           )}
           onClick={(e) => e.stopPropagation()}
         >
           <Lock className="mr-1 h-3 w-3" />
-          Blocked
+          {label}
         </Button>
       </Hint>
     );

@@ -40,11 +40,22 @@ export function SaveToWatchlistButton({ size = "sm", className, validation, ...p
         ?? "A safety gate is blocking this trade."
     : null;
 
+  // Preview mode — explicitly ALLOW watchlist saves so the user can queue
+  // picks for the 10:30 AM ORB release. Tag with meta.queuedForOrbRelease so
+  // verdict-cron can fire a "your queued pick just unlocked" webhook later.
+  const previewQueue = validation?.previewMode === true && !watching;
+
   const onClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (pending || blocked) return;
-    if (existing) remove.mutate(existing.id);
-    else add.mutate(pick);
+    if (existing) {
+      remove.mutate(existing.id);
+    } else {
+      const meta = previewQueue
+        ? { ...(pick.meta ?? {}), queuedForOrbRelease: true, queuedAt: new Date().toISOString() }
+        : pick.meta;
+      add.mutate({ ...pick, meta });
+    }
   };
 
   if (blocked) {
