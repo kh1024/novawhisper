@@ -26,10 +26,14 @@ const FED_RATES_TERMS = [
   "treasury yield", "10-year", "yield curve", "dot plot",
 ];
 
+// Strict earnings keywords — must indicate an actual EARNINGS PRINT, not
+// generic "revenue" / "outlook" market chatter. Used to filter the curated
+// earnings feed from event-sources so the tile is real prints only.
 const EARNINGS_TERMS = [
-  "earnings", "guidance", "quarterly results", "beat estimates", "miss estimates",
-  "revenue", "eps", "outlook", "raised forecast", "lowered forecast", "warns",
-  "warning", "preannounce",
+  "earnings", "eps", "beat estimates", "missed estimates", "beats estimates",
+  "misses estimates", "quarterly results", "q1 ", "q2 ", "q3 ", "q4 ",
+  "fiscal", "raised guidance", "lowered guidance", "cuts guidance",
+  "preannounce", "profit warning", "earnings call",
 ];
 
 const POSITIVE_HINTS = ["beat", "raise", "raised", "surge", "record", "strong", "ease", "ceasefire", "deal", "agreement"];
@@ -276,13 +280,28 @@ export function useEventRiskSignals() {
       "No Fed/CPI/yields headlines",
       "rate headlines",
     );
+    // Earnings tile uses ONLY the curated earnings sources (CNBC/Reuters/SA
+    // earnings sections + earnings calendars). The general news feed is
+    // intentionally excluded — it pollutes the tile with macro/market chatter
+    // that merely mentions "revenue" or "guidance".
+    const earningsTally = tallyTopical(earnTopical, EARNINGS_TERMS);
+    const filteredMatches = earningsTally.matches.filter((m) => {
+      const t = `${m.headline} ${m.summary}`.toLowerCase();
+      return EARNINGS_TERMS.some((term) => t.includes(term));
+    });
+    const earningsFiltered: ReturnType<typeof scoreFeed> = {
+      ...earningsTally,
+      hits: filteredMatches.length,
+      matches: filteredMatches,
+      topHeadline: filteredMatches[0]?.headline,
+    };
     const earnings = buildSignal(
       "earnings",
       "Earnings",
-      mergeTally(scoreFeed(items, EARNINGS_TERMS), tallyTopical(earnTopical, EARNINGS_TERMS)),
+      earningsFiltered,
       { hot: 5, warm: 2 },
       "No major earnings prints today",
-      "earnings headlines",
+      "earnings prints",
     );
 
     return {

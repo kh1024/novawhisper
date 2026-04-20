@@ -30,9 +30,15 @@ const QUERIES: Record<Category, string[]> = {
     "treasury yield 10-year today",
   ],
   earnings: [
-    "site:reuters.com OR site:cnbc.com OR site:bloomberg.com earnings beat miss guidance today",
-    "site:seekingalpha.com OR site:barrons.com quarterly earnings today",
-    "site:wsj.com earnings preannounce warning today",
+    // Real corporate earnings prints — keep queries simple so Firecrawl
+    // returns actual hits. Each one targets a single high-quality earnings
+    // source with explicit "earnings beat/miss/guidance" wording.
+    "earnings beat estimates EPS revenue today site:cnbc.com",
+    "quarterly earnings results beat miss site:reuters.com",
+    "earnings report EPS revenue site:seekingalpha.com",
+    "earnings beat raised guidance site:bloomberg.com",
+    "earnings preannounce profit warning site:wsj.com",
+    "earnings calendar today site:earningswhispers.com",
   ],
 };
 
@@ -62,32 +68,35 @@ function hostFromUrl(u: string): string {
   }
 }
 
-async function firecrawlSearch(query: string, limit: number): Promise<SearchHit[]> {
+async function firecrawlSearch(query: string, limit: number, tbs: string): Promise<SearchHit[]> {
   const r = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${FIRECRAWL_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      query,
-      limit,
-      tbs: "qdr:d", // last 24h
-    }),
+    body: JSON.stringify({ query, limit, tbs }),
   });
   if (!r.ok) {
     const t = await r.text();
-    console.error("[firecrawl search]", r.status, t);
+    console.error("[firecrawl search]", r.status, query.slice(0, 60), t.slice(0, 200));
     return [];
   }
   const data = await r.json();
-  // v2 may return { web: { results: [...] } } or { data: [...] }
+  // v2 returns { success, data: { web: [...], news: [...] } } most commonly,
+  // but older shapes used data.web.results / web.results. Try them all and
+  // also fall back to data.news for news vertical results.
   const arr =
     (data?.data?.web?.results as SearchHit[] | undefined) ??
+    (data?.data?.web as SearchHit[] | undefined) ??
+    (data?.data?.news as SearchHit[] | undefined) ??
     (data?.web?.results as SearchHit[] | undefined) ??
     (data?.data as SearchHit[] | undefined) ??
     (data?.results as SearchHit[] | undefined) ??
     [];
+  if (!Array.isArray(arr) || arr.length === 0) {
+    console.log("[firecrawl search] empty", query.slice(0, 60), "shape:", Object.keys(data ?? {}), "data keys:", Object.keys(data?.data ?? {}));
+  }
   return Array.isArray(arr) ? arr : [];
 }
 
@@ -104,7 +113,9 @@ Deno.serve(async (req) => {
     const queries = QUERIES[category] ?? QUERIES.geopolitics;
     const perQuery = Math.max(3, Math.ceil(limit / queries.length) + 1);
 
-    const settled = await Promise.allSettled(queries.map((q) => firecrawlSearch(q, perQuery)));
+    // Earnings prints cluster around report days — widen to last week.
+    const tbs = category === "earnings" ? "qdr:w" : "qdr:d";
+    const settled = await Promise.allSettled(queries.map((q) => firecrawlSearch(q, perQuery, tbs)));
     const all: SearchHit[] = [];
     for (const s of settled) if (s.status === "fulfilled") all.push(...s.value);
 
