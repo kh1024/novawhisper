@@ -29,6 +29,8 @@ import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { PickMetaChips } from "@/components/PickMetaChips";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
+import { TomorrowWatchlist } from "@/components/TomorrowWatchlist";
+import { useBudget } from "@/lib/budget";
 
 // Parse a premium-estimate string ("$2.50", "$1.20–$1.50", "≈$3") down to the
 // lowest dollar value so the budget gate (premium × 100 ≤ budget) is generous.
@@ -127,6 +129,10 @@ export default function Planning() {
         </div>
       ) : (
         <>
+          {/* Tomorrow's Watchlist — internet-wide aggregator with chain-verified
+              strikes + Settings budget enforcement. Sits above the slotted picks. */}
+          <TomorrowWatchlist />
+
           {/* AI Picks grid — fixed slots: 3 Safe + 2 Mild + 1 Aggressive */}
           <SlottedPicks picks={picks} />
 
@@ -305,9 +311,15 @@ function rankPick(p: PlanningPick): number {
 }
 
 function SlottedPicks({ picks }: { picks: PlanningPick[] }) {
+  const [budget] = useBudget();
+  // Drop picks whose premium*100 exceeds the per-trade budget from Settings.
+  const affordable = picks.filter((p) => {
+    const prem = parsePremiumEstimate(p.premiumEstimate);
+    return prem == null || prem * 100 <= budget;
+  });
   // Bucket + rank
   const buckets: Record<RiskTier, PlanningPick[]> = { safe: [], mild: [], aggressive: [] };
-  for (const p of picks) buckets[classifyRisk(p)].push(p);
+  for (const p of affordable) buckets[classifyRisk(p)].push(p);
   (Object.keys(buckets) as RiskTier[]).forEach((k) => buckets[k].sort((a, b) => rankPick(b) - rankPick(a)));
   const cursors: Record<RiskTier, number> = { safe: 0, mild: 0, aggressive: 0 };
 
@@ -499,6 +511,7 @@ function WebPicksPanel() {
   const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
   const qc = useQueryClient();
   const [settings] = useSettings();
+  const [budget] = useBudget();
 
   // Collect every pick across tiers + their stable keys so the expiration
   // engine has a single flat list to chew on.
@@ -599,12 +612,15 @@ function WebPicksPanel() {
     return Math.max(0, Math.round((d - todayMs) / 86_400_000));
   };
 
-  // Hide timed-out picks per tier + apply NOVA AI filter.
+  // Hide timed-out picks per tier + apply NOVA AI filter + Settings budget cap.
   const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
     const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
     return (src ?? []).filter((p) => {
       if (expiryStatus.get(pickKey(p))?.isTimedOut) return false;
       const premium = parsePremiumEstimate(p.premiumEstimate);
+      // Per-trade budget gate from Settings: drop anything that would cost
+      // more than the user is willing to risk per trade (premium × 100).
+      if (premium != null && premium * 100 > budget) return false;
       return pickMatchesFilter({
         symbol: p.symbol,
         strategy: p.strategy,
