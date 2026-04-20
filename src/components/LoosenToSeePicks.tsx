@@ -16,7 +16,7 @@ export function LoosenToSeePicks({
   orbBlockedCount: number;
   ivBlockedCount: number;
 }) {
-  const { update } = useStrategyProfile();
+  const { profile, update } = useStrategyProfile();
   const { overrides, set } = useScannerOverrides();
 
   const showResetButton = true;
@@ -72,7 +72,7 @@ export function LoosenToSeePicks({
             size="sm"
             variant="ghost"
             className="h-8 gap-1.5 text-[12px] text-muted-foreground"
-            onClick={() => update({ ...DEFAULT_PROFILE, accountSize: undefined as unknown as number })}
+            onClick={() => update({ ...DEFAULT_PROFILE, accountSize: profile.accountSize })}
             title="Reset profile to Moderate defaults (keeps account size)"
           >
             <RotateCcw className="h-3.5 w-3.5" />
