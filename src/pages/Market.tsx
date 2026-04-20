@@ -146,7 +146,7 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
             spot: quote?.price ?? p.playAt ?? null,
             ivRank: null,
             bucket: p.risk,
-            initialScore: typeof p.score === "number" ? p.score : null,
+            initialScore: null,
             thesis: p.thesis,
             source: "market-hottest",
           }}
