@@ -129,6 +129,10 @@ export default function Planning() {
         </div>
       ) : (
         <>
+          {/* Tomorrow's Watchlist — internet-wide aggregator with chain-verified
+              strikes + Settings budget enforcement. Sits above the slotted picks. */}
+          <TomorrowWatchlist />
+
           {/* AI Picks grid — fixed slots: 3 Safe + 2 Mild + 1 Aggressive */}
           <SlottedPicks picks={picks} />
 
