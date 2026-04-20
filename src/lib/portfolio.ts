@@ -243,6 +243,40 @@ export function useClosePosition() {
   });
 }
 
+/** Edit the exit price of an already-closed position and recompute realized P&L. */
+export function useUpdateExitPrice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      id, closePremium, contracts, entryPremium, direction,
+    }: {
+      id: string;
+      closePremium: number;
+      contracts: number;
+      entryPremium: number | null;
+      direction: string;
+    }) => {
+      const realized = entryPremium != null
+        ? (direction === "long" ? 1 : -1) * (closePremium - entryPremium) * 100 * contracts
+        : null;
+      const { error } = await supabase
+        .from("portfolio_positions")
+        .update({
+          close_premium: closePremium,
+          exit_price: closePremium,
+          realized_pnl: realized,
+        } as never)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      toast({ title: "Exit price updated", description: "Realized P&L recomputed." });
+    },
+    onError: (e: Error) => toast({ title: "Couldn't update exit price", description: e.message, variant: "destructive" }),
+  });
+}
+
 export function useDeletePosition() {
   const qc = useQueryClient();
   return useMutation({
