@@ -37,7 +37,7 @@ const items = [
   { id: "market", title: "Market", url: "/market", icon: Globe },
   { id: "scanner", title: "Market Scanner", url: "/scanner", icon: Radar },
   { id: "patterns", title: "Patterns", url: "/patterns", icon: Activity },
-  { id: "planning", title: "Planning", url: "/planning", icon: Brain },
+  
   { id: "strategy", title: "Strategy Builder", url: "/strategy", icon: Compass },
   { id: "chains", title: "Chains", url: "/chains", icon: Layers },
   { id: "portfolio", title: "Portfolio", url: "/portfolio", icon: Briefcase },
