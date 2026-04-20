@@ -15,6 +15,7 @@
 //
 // Idempotent — call manually with { ownerKey?: string, force?: boolean }.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { getOptionSnapshot, buildOsiTicker } from "../_shared/getOptionSnapshot.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -356,64 +357,11 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  // ─── Per-contract Massive fallback ───────────────────────────────────────
-  // For positions whose contract isn't in the chain (e.g., far-dated expiries
-  // outside the 250-contract slice), call Massive's per-contract snapshot
-  // endpoint directly. This always returns the exact contract.
-  const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
-  function osiTicker(sym: string, expiry: string, isCall: boolean, strike: number): string {
-    // OSI: O:SYMyymmdd[C|P]########  (strike * 1000, 8 digits)
-    const [y, m, d] = expiry.split("-");
-    const yy = y.slice(2);
-    const cp = isCall ? "C" : "P";
-    const k = String(Math.round(Number(strike) * 1000)).padStart(8, "0");
-    return `O:${sym}${yy}${m}${d}${cp}${k}`;
-  }
-  async function fetchMassiveContract(underlying: string, ticker: string): Promise<ChainEntry | null> {
-    if (!MASSIVE_KEY) {
-      console.warn(`[per-contract] ${ticker} skipped — MASSIVE_API_KEY not set`);
-      return null;
-    }
-    try {
-      const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(ticker)}`;
-      const r = await fetch(url, {
-        headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
-      });
-      if (!r.ok) {
-        const txt = await r.text().catch(() => "");
-        console.warn(`[per-contract] ${ticker} HTTP ${r.status} body=${txt.slice(0, 200)}`);
-        return null;
-      }
-      const d = await r.json();
-      const result = d?.results ?? d?.result ?? null;
-      if (!result) {
-        console.warn(`[per-contract] ${ticker} no results in payload`);
-        return null;
-      }
-      const quote = result.last_quote ?? {};
-      const trade = result.last_trade ?? {};
-      const day = result.day ?? {};
-      const bid = Number(quote.bid ?? 0);
-      const ask = Number(quote.ask ?? 0);
-      // Prefer NBBO mid; fall back to last trade, then to day's close/vwap
-      // (off-hours: Massive often omits last_quote/last_trade but includes day.*).
-      let mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
-      let last = Number(trade.price ?? 0);
-      if (mid === 0 && last > 0) mid = last;
-      if (mid === 0) {
-        const dayClose = Number(day.close ?? 0);
-        const dayVwap = Number(day.vwap ?? 0);
-        if (dayClose > 0) { mid = dayClose; if (last === 0) last = dayClose; }
-        else if (dayVwap > 0) { mid = dayVwap; if (last === 0) last = dayVwap; }
-      }
-      console.log(`[per-contract] ${ticker} parsed bid=${bid} ask=${ask} mid=${mid} last=${last} dayClose=${day.close ?? "n/a"}`);
-      if (mid <= 0 && last <= 0) return null;
-      return { bid, ask, mid, last };
-    } catch (e) {
-      console.warn(`[per-contract] ${ticker} failed`, e);
-      return null;
-    }
-  }
+  // ─── Per-contract Massive snapshot (canonical source) ───────────────────
+  // Now uses _shared/getOptionSnapshot.ts which is the SINGLE source of truth
+  // for option data across portfolio-exit-eval, picks-engine, and any future
+  // per-contract preview. Returns a fully-classified snapshot (VALID / STALE /
+  // MISSING / ANOMALOUS) so we no longer hand-roll the validator here.
 
   let evaluated = 0;
   let stops = 0;
@@ -424,31 +372,36 @@ Deno.serve(async (req: Request) => {
     const isCall = p.option_type.toLowerCase().includes("call");
     const dte = dteFromExpiry(p.expiry);
     const key = `${p.symbol}|${isCall ? "call" : "put"}|${Number(p.strike)}|${p.expiry}`;
-    let chainEntry = realChain.get(key);
+    const chainEntry = realChain.get(key);
     let fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
     let entrySource = chainSource.get(p.symbol) ?? "none";
 
-    // Per-contract Massive fallback: if the chain didn't include this contract,
-    // OR it returned bid=ask=0 (off-hours, illiquid), call Massive for just this
-    // option ticker. Always returns the exact contract.
-    const contractIsZero = chainEntry &&
-      (chainEntry.bid ?? 0) === 0 && (chainEntry.ask ?? 0) === 0;
-    if (!chainEntry || contractIsZero) {
-      const ticker = p.option_symbol ?? osiTicker(p.symbol, p.expiry, isCall, Number(p.strike));
-      const direct = await fetchMassiveContract(p.symbol, ticker);
-      if (direct && (direct.bid! > 0 || direct.ask! > 0 || (direct.last ?? 0) > 0)) {
-        chainEntry = direct;
-        fetchedAt = Date.now();
-        entrySource = "massive-contract";
-        console.log(`[per-contract] ${ticker} bid=${direct.bid} ask=${direct.ask} mid=${direct.mid}`);
-      } else if (!chainEntry) {
-        // still nothing at all
-        chainEntry = undefined;
-      }
-    }
+    // Always prefer the per-contract Massive snapshot — it returns the exact
+    // contract with NBBO + Greeks + day aggregates. Bulk chain is only used
+    // as a hint when the per-contract call fails entirely.
+    const ticker = p.option_symbol ?? buildOsiTicker(p.symbol, p.expiry, isCall, Number(p.strike));
+    const snapshot = await getOptionSnapshot({
+      underlying: p.symbol,
+      optionSymbol: ticker,
+    });
 
     let classified: ClassifiedQuote;
-    if (chainEntry) {
+    if (snapshot.quality !== "MISSING" || snapshot.mark != null) {
+      // Use the canonical snapshot (VALID / STALE / ANOMALOUS / MISSING).
+      classified = {
+        bid: snapshot.bid,
+        ask: snapshot.ask,
+        mark: snapshot.mark,
+        last: snapshot.last,
+        updatedAt: snapshot.updatedAt,
+        quality: snapshot.quality,
+        reason: snapshot.reason,
+        source: snapshot.source,
+      };
+      fetchedAt = Date.parse(snapshot.updatedAt) || Date.now();
+      entrySource = snapshot.source;
+    } else if (chainEntry) {
+      // Snapshot returned MISSING but bulk chain has the contract — use it.
       const bid = chainEntry.bid ?? null;
       const ask = chainEntry.ask ?? null;
       const mark = chainEntry.mid && chainEntry.mid > 0
@@ -461,17 +414,18 @@ Deno.serve(async (req: Request) => {
         source: entrySource,
       });
     } else {
-      // No real quote at all — synthesize via BS-lite and tag as theoretical.
-      // Mark MISSING so the exit engine treats it as quote-unavailable (no stops fire).
+      // No real quote anywhere — synthesize via BS-lite. Tagged MISSING so the
+      // exit engine treats it as quote-unavailable (no stops fire).
       const bsMid = spot != null ? bsPrice(spot, Number(p.strike), 0.55, dte, isCall) : null;
       classified = {
         bid: null, ask: null, mark: bsMid, last: null,
         updatedAt: new Date().toISOString(),
         quality: "MISSING",
-        reason: "Contract not found in Massive chain — BS-lite estimate (no stop action).",
+        reason: "Massive returned no quote and contract not in chain — BS-lite estimate (no stop action).",
         source: "bs-lite",
       };
     }
+
 
     // Pick which mark to feed into the exit engine.
     //   • VALID quote → use it, update last_valid_mark.

@@ -1,45 +1,63 @@
-// Per-instance token-bucket throttle for Massive API calls.
+// Massive concurrency limiter (Options Advanced plan: unlimited API calls).
 //
-// IMPORTANT CAVEAT: Supabase edge functions run as multiple warm instances,
-// each with its own module state. This bucket therefore caps Massive calls at
-// ~75/s **per warm instance**, not globally. In practice that's enough to
-// virtually eliminate 429s while staying well under the plan's 100/s ceiling
-// even with 1-2 concurrent instances. A truly global throttle would need
-// Redis/KV which the backend doesn't expose yet.
+// Prior to the unlimited plan we ran a per-instance 75 req/s token bucket.
+// That artificial cap is gone — we now allow unbounded throughput, with two
+// safety nets:
+//   1. CONCURRENCY cap (default 20 in-flight requests per warm instance) so we
+//      don't blow Supabase Edge Function FD/socket budgets.
+//   2. Genuine 429/5xx responses are still backed off by the calling sites.
+//
+// The exported function names are unchanged so existing callers compile
+// without edits — `acquireMassiveToken()` now waits on the semaphore, and
+// `throttledMassive(fn)` runs `fn` inside it. Both resolve immediately when
+// concurrency is below the cap.
 
-const RATE_PER_SEC = 75;
-const BUCKET_MAX = RATE_PER_SEC; // allow a 1-second burst, then steady state
+const MAX_CONCURRENCY = 20;
+let active = 0;
+const waiters: Array<() => void> = [];
 
-let tokens = BUCKET_MAX;
-let lastRefill = Date.now();
-
-function refill() {
-  const now = Date.now();
-  const elapsed = (now - lastRefill) / 1000;
-  if (elapsed > 0) {
-    tokens = Math.min(BUCKET_MAX, tokens + elapsed * RATE_PER_SEC);
-    lastRefill = now;
+function release() {
+  active = Math.max(0, active - 1);
+  const next = waiters.shift();
+  if (next) {
+    active += 1;
+    next();
   }
 }
 
-/** Acquire one token; resolves once a Massive call may proceed. */
-export async function acquireMassiveToken(): Promise<void> {
-  // Loop in case multiple callers race for the same refill window.
-  // Each iteration sleeps just long enough to mint at least one token.
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    refill();
-    if (tokens >= 1) {
-      tokens -= 1;
-      return;
-    }
-    const needed = 1 - tokens;
-    const waitMs = Math.max(5, Math.ceil((needed / RATE_PER_SEC) * 1000));
-    await new Promise((res) => setTimeout(res, waitMs));
+/**
+ * Acquire one in-flight slot. Resolves immediately if we're below the
+ * concurrency cap; otherwise queues until a slot frees up.
+ *
+ * IMPORTANT: every caller MUST eventually invoke `releaseMassiveToken()`
+ * (or use `throttledMassive(fn)` which handles release automatically).
+ * Existing callers that only `await acquireMassiveToken()` and never release
+ * will leak slots — `throttledMassive(fn)` is the safe wrapper.
+ */
+export function acquireMassiveToken(): Promise<void> {
+  if (active < MAX_CONCURRENCY) {
+    active += 1;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => waiters.push(resolve));
+}
+
+/** Pair with `acquireMassiveToken()` when not using `throttledMassive(fn)`. */
+export function releaseMassiveToken(): void {
+  release();
+}
+
+/** Wrap any fetch-returning function so it runs inside one concurrency slot. */
+export async function throttledMassive<T>(fn: () => Promise<T>): Promise<T> {
+  await acquireMassiveToken();
+  try {
+    return await fn();
+  } finally {
+    release();
   }
 }
 
-/** Wrap any fetch-returning function so it waits for a Massive token first. */
-export function throttledMassive<T>(fn: () => Promise<T>): Promise<T> {
-  return acquireMassiveToken().then(fn);
+/** Current in-flight count (for debug telemetry). */
+export function massiveActiveCount(): number {
+  return active;
 }

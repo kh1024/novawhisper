@@ -25,6 +25,7 @@ import { areAnyDisabled, setManyDisabled } from "@/lib/disabledFunctions";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { KvCacheAdminCard } from "@/components/KvCacheAdminCard";
 import { HiddenSectionsCard } from "@/components/HiddenSectionsCard";
+import { DebugDataLayerDrawer } from "@/components/DebugDataLayerDrawer";
 
 const PORTFOLIO_PRESETS = [5_000, 10_000, 25_000, 50_000, 100_000];
 const RISK_PRESETS = [1, 2, 3, 5, 10];
@@ -942,6 +943,20 @@ export default function Settings() {
 
       {/* ───────────── Background cron (server-side, runs even when app closed) ───────────── */}
       <BackgroundCronCard />
+
+      {/* ───────────── Debug data layer (Massive snapshots) ───────────── */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-semibold">Debug Data Layer</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 max-w-xl">
+              Inspect the canonical Massive option-snapshot pipeline (last 20 requests
+              with HTTP status + latency). Force-refresh all open positions on demand.
+            </p>
+          </div>
+          <DebugDataLayerDrawer />
+        </div>
+      </Card>
 
       {/* ───────────── Backend cache (kv_cache inspector) ───────────── */}
       <KvCacheAdminCard />
