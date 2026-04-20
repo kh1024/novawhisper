@@ -347,8 +347,11 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
           </div>
           <div className="text-[11px] text-muted-foreground">
             Entry ${p.entry_premium != null ? Number(p.entry_premium).toFixed(2) : "—"}
-            {currentMid != null && (<>
+            {isOpen && currentMid != null && (<>
               {" · "}Now <span className="text-foreground font-mono">${currentMid.toFixed(2)}</span>
+            </>)}
+            {!isOpen && p.close_premium != null && (<>
+              {" · "}Exit <span className="text-foreground font-mono">${Number(p.close_premium).toFixed(2)}</span>
             </>)}
             {profitPct != null && (
               <span className={cn("ml-2 font-mono", profitPct >= 0 ? "text-bullish" : "text-bearish")}>
