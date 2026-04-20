@@ -50,6 +50,18 @@ import {
 } from "@/lib/verdictModel";
 import { MobileScannerList } from "@/components/scanner/MobileScannerList";
 import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
+import { StrategyContextBar, type PipelineCounts } from "@/components/StrategyContextBar";
+import { StrategyEditDrawer } from "@/components/StrategyEditDrawer";
+import { CollapsibleBlockedSection } from "@/components/CollapsibleBlockedSection";
+import { BlockedPickCard, type BlockedPickInfo } from "@/components/BlockedPickCard";
+import { PreMarketPickCard } from "@/components/PreMarketPickCard";
+import { LoosenToSeePicks } from "@/components/LoosenToSeePicks";
+import { ScanCache, formatCacheAge, cacheKeyOf } from "@/lib/scanCache";
+import { useRef } from "react";
+import { generatePreMarketPicks, isPreMarketWindow } from "@/lib/preMarketGenerator";
+import { useStrategyProfile, maxPerTradeDollars, isStructureAllowed } from "@/lib/strategyProfile";
+import { useScannerOverrides } from "@/lib/scannerOverrides";
+import { usePreMarketStatus } from "@/lib/preMarketPreview";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
