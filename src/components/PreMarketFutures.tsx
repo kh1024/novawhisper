@@ -138,10 +138,10 @@ export function PreMarketFutures() {
   const allMissing = quotes.length > 0 && quotes.every((q) => q.price == null);
 
   return (
-    <Card className="glass-card p-5">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+    <Card className="glass-card p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold tracking-wide">Pre-Market Futures Coverage</h2>
+          <h2 className="text-xs font-semibold tracking-wide">Pre-Market Futures</h2>
           <TooltipProvider delayDuration={150}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -168,10 +168,10 @@ export function PreMarketFutures() {
         <div className="text-xs text-muted-foreground py-2">No quotes returned — futures provider may be temporarily unavailable.</div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {quotes.length === 0 && isLoading
           ? Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-[200px] rounded-lg border border-border/40 bg-surface/40 animate-pulse" />
+              <div key={i} className="h-[110px] rounded-lg border border-border/40 bg-surface/40 animate-pulse" />
             ))
           : quotes.map((q, i) => {
               const tone = toneOf(q.changePct);
@@ -183,29 +183,22 @@ export function PreMarketFutures() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05, duration: 0.35 }}
-                  className="p-4 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all"
+                  className="p-2 rounded-lg border border-border bg-surface/40 hover:border-primary/40 hover:bg-surface transition-all"
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <div>
-                      <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{q.label}</div>
-                      <div className="font-mono text-[10px] text-muted-foreground/60 mt-0.5">{q.symbol}</div>
-                    </div>
-                    <Icon className={`h-4 w-4 ${textCls}`} />
+                  <div className="flex items-center justify-between mb-0.5">
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground truncate">{q.label}</div>
+                    <Icon className={`h-3 w-3 ${textCls}`} />
                   </div>
 
-                  <Gauge pct={q.changePct} />
+                  <div className="max-w-[120px] mx-auto"><Gauge pct={q.changePct} /></div>
 
-                  <div className="flex items-baseline justify-between gap-2 mt-1">
-                    <span className="mono text-xl font-semibold">
+                  <div className="flex items-baseline justify-between gap-2 mt-0.5">
+                    <span className="mono text-sm font-semibold">
                       {q.price != null ? q.price.toLocaleString(undefined, { maximumFractionDigits: 2 }) : "—"}
                     </span>
-                    <span className={`mono text-sm font-semibold ${textCls}`}>
+                    <span className={`mono text-xs font-semibold ${textCls}`}>
                       {q.changePct != null ? `${q.changePct >= 0 ? "+" : ""}${q.changePct.toFixed(2)}%` : "—"}
                     </span>
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {q.change != null ? `${q.change >= 0 ? "+" : ""}${q.change.toFixed(2)} pts` : "Awaiting quote…"}
-                    {q.lastTime ? ` · ${q.lastTime}` : ""}
                   </div>
                 </motion.div>
               );
