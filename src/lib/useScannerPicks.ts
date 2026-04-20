@@ -474,7 +474,19 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     });
   }, [rows, pipelineQ.data, profile, overrides, cap, bucketFilter]);
 
-  const approvedFinal = opts.maxResults != null ? bucketed.approved.slice(0, opts.maxResults) : bucketed.approved;
+  // ── Fail-soft selector ──────────────────────────────────────────────────
+  // When viewing a single bucket, ensure at least MIN_BUY_NOW_PER_BUCKET
+  // ranked ideas appear by allowing NEAR-LIMIT then BEST-OF-WAIT to fill.
+  // bucketPicks already includes them in `approved` (sorted by tier), so
+  // here we just trim to maxResults — but we floor at MIN_BUY_NOW_PER_BUCKET
+  // when the user supplied a stricter maxResults.
+  const minPicks = MIN_BUY_NOW_PER_BUCKET;
+  const effectiveMax = opts.maxResults != null
+    ? Math.max(opts.maxResults, minPicks)
+    : undefined;
+  const approvedFinal = effectiveMax != null
+    ? bucketed.approved.slice(0, effectiveMax)
+    : bucketed.approved;
 
   const filterChipParts: string[] = [];
   if (bucketed.profileFilteredCount > 0) {
@@ -489,6 +501,13 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     [bucketed.budgetBlocked],
   );
 
+  // Funnel metrics for the debug panel.
+  const cleanCount = bucketed.approved.filter((p) => p.pickTier === "CLEAN").length;
+  const nearLimitCount = bucketed.approved.filter((p) => p.pickTier === "NEAR-LIMIT").length;
+  const bestOfWaitCount = bucketed.approved.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
+  const safetyPassingCount = bucketed.approved.length;
+  const budgetPassingCount = bucketed.approved.filter((p) => p.estCost <= cap).length;
+
   return {
     approved: approvedFinal,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
@@ -500,6 +519,14 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
       budgetBlocked: bucketed.budgetBlocked.length,
       shown: approvedFinal.length,
       filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
+      safetyPassingCount,
+      budgetPassingCount,
+      scoredCount: bucketed.approved.length,
+      tradeReadyCount: cleanCount,
+      cleanCount,
+      nearLimitCount,
+      bestOfWaitCount,
+      marketMode: currentMarketMode(),
     },
     activeBucket: bucketFilter,
     cap,
