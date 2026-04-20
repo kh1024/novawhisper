@@ -95,11 +95,11 @@ export function classifyPickTier(i: TierInputs): TierResult {
     return { tier: "EXCLUDED", adjustedScore, penalties, caveat: "Failed safety gate", hardDrop: false };
   }
 
-  if (adjustedScore >= 70 && !budgetNearLimit && !ivpNearLimit && i.nonSafetyRuleFailures === 0) {
+  if (adjustedScore >= 60 && !budgetNearLimit && !ivpNearLimit && i.nonSafetyRuleFailures === 0) {
     return { tier: "CLEAN", adjustedScore, penalties, caveat: null, hardDrop: false };
   }
 
-  if (adjustedScore >= 60 && (budgetNearLimit || ivpNearLimit || i.nonSafetyRuleFailures <= 1)) {
+  if (adjustedScore >= 50 && (budgetNearLimit || ivpNearLimit || i.nonSafetyRuleFailures <= 1)) {
     const reasons: string[] = [];
     if (budgetNearLimit) reasons.push("slightly over budget");
     if (ivpNearLimit) reasons.push("IV elevated");
@@ -108,7 +108,7 @@ export function classifyPickTier(i: TierInputs): TierResult {
       caveat: reasons.join(" · ") || "near limits", hardDrop: false };
   }
 
-  if (adjustedScore >= 55 && i.nonSafetyRuleFailures <= 1) {
+  if (adjustedScore >= 45 && i.nonSafetyRuleFailures <= 1) {
     return { tier: "BEST-OF-WAIT", adjustedScore, penalties,
       caveat: "Best of WAIT — 1 rule relaxed", hardDrop: false };
   }
