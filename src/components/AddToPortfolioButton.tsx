@@ -18,6 +18,7 @@ import { estimatePremium, ivRankToIv } from "@/lib/premiumEstimator";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ApprovedPick } from "@/lib/useScannerPicks";
+import { canAddToPortfolio, type TradeStage } from "@/lib/tradeStage";
 
 /** Generic shape any pick surface can supply. */
 export interface PickSpec {
@@ -41,6 +42,8 @@ export interface PickSpec {
   thesis?: string | null;
   /** Source surface — "scanner" / "watchlist" / "top-opportunities" etc. */
   source?: string;
+  /** Trade stage — only ENTRY_CONFIRMED / OPEN_POSITION may add. */
+  tradeStage?: TradeStage;
 }
 
 interface Props {
@@ -79,6 +82,7 @@ function specFromPick(pick: ApprovedPick): PickSpec {
       budget: pick.tradeStatus.budget,
       liquidity: pick.tradeStatus.liquidity,
       tradeStatus: pick.tradeStatus.tradeStatus,
+      tradeStage: pick.tradeStage,
     },
   };
 }
@@ -130,6 +134,10 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
   const [notes, setNotes] = useState("");
 
   if (!resolved) return null;
+
+  // Stage gate — only ENTRY_CONFIRMED ideas (or already-OPEN positions) may add.
+  const stage = pick?.tradeStage ?? spec ? (pick?.tradeStage ?? "ENTRY_CONFIRMED") : "ENTRY_CONFIRMED";
+  const stageAllowsAdd = canAddToPortfolio(stage as TradeStage) || held.held;
 
   const numContracts = Math.max(1, Math.floor(Number(contracts) || 1));
   const numEntry = Number(entryPrice) || 0;
