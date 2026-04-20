@@ -169,8 +169,8 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                   </div>
                   <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </button>
-                {p.tradeStatus.tradeStatus === "TradeReady" && (
-                  <div className="flex items-center gap-2 px-3 pb-3">
+                <div className="flex items-center gap-2 px-3 pb-3 flex-wrap">
+                  {p.tradeStatus.tradeStatus === "TradeReady" ? (
                     <Button
                       size="sm"
                       className="h-7 text-[11px]"
@@ -178,12 +178,23 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                     >
                       BUY NOW →
                     </Button>
-                    <AddToPortfolioButton pick={p} />
-                    <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
-                      We'll alert you when to take profits or cut the loss.
-                    </span>
-                  </div>
-                )}
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled
+                      className="h-7 text-[11px] border-warning/40 text-warning bg-warning/5"
+                    >
+                      ⏳ WAIT
+                    </Button>
+                  )}
+                  <AddToPortfolioButton pick={p} />
+                  <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
+                    {p.tradeStatus.tradeStatus === "TradeReady"
+                      ? "We'll alert you when to take profits or cut the loss."
+                      : "Track speculatively — exit guidance updates every 5 min."}
+                  </span>
+                </div>
               </div>
             );
           })}
