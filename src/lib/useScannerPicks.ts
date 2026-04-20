@@ -310,6 +310,30 @@ export function bucketPicks(args: {
       continue;
     }
 
+    // ── TradeState evaluation — the new authoritative state machine ────────
+    // Quote validity proxies: contract/premium present and not flagged suspect.
+    const quoteValid = Number.isFinite(pick.candidate.premium) && pick.candidate.premium > 0;
+    const quoteFresh = !pick.candidate.suspect; // upstream flags suspect/stale premiums
+    const ratio = pick.candidate.contractCost / Math.max(1, args.cap);
+    const budgetNearLimit = ratio > 1 && ratio <= 1 + 0.5;
+    const ivpNearLimit = (r.ivRank ?? 0) > 75 && (r.ivRank ?? 0) <= 90;
+
+    const tradeStateResult = evaluateExecutionState({
+      row: r,
+      rank: rankResult,
+      tradeStatus,
+      tier,
+      quoteValid,
+      quoteFresh,
+      preMarket,
+      // Strategy profile opt-ins: default false (per chosen spec).
+      allowsEarnings: false,
+      allowsDeepItm: false,
+      budgetNearLimit,
+      ivpNearLimit,
+    });
+    const cta = resolveCta(tradeStateResult.state, tradeStateResult);
+
     approved.push({
       key,
       row: r,
@@ -328,13 +352,18 @@ export function bucketPicks(args: {
       adjustedScore: tier.adjustedScore,
       tierCaveat: tier.caveat,
       tierPenalties: tier.penalties,
+      tradeState: tradeStateResult.state,
+      tradeStateResult,
+      cta,
     });
   }
 
-  // Sort: tier rank DESC (CLEAN > NEAR-LIMIT > BEST-OF-WAIT), then
-  // adjustedScore DESC, then setup score. Ensures CLEAN picks always
-  // surface first while NEAR-LIMIT/BEST-OF-WAIT fill the bucket below.
+  // Sort: TradeState rank DESC (TRADE_READY > NEAR_LIMIT > WATCHLIST > EXCLUDED),
+  // then adjustedScore DESC, then setup score. The new state machine drives
+  // ordering so the UI never has to re-sort.
   approved.sort((a, b) => {
+    const sDelta = tradeStateRank(b.tradeState) - tradeStateRank(a.tradeState);
+    if (sDelta !== 0) return sDelta;
     const tDelta = tierRank(b.pickTier) - tierRank(a.pickTier);
     if (tDelta !== 0) return tDelta;
     if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
