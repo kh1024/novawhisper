@@ -1,5 +1,6 @@
-// Generic drag-and-drop sortable list with grip-handle interaction.
-// Order persists to localStorage under the given storageKey.
+// Generic drag-and-drop sortable list with grip-handle + optional hide button.
+// Order persists to localStorage under the given storageKey. Hidden ids are
+// filtered out and animated away with framer-motion's AnimatePresence.
 import { useEffect, useState, type ReactNode } from "react";
 import {
   DndContext,
@@ -18,7 +19,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
+import { GripVertical, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 function readOrder(key: string): string[] | null {
@@ -48,12 +50,12 @@ export function reconcileOrder(saved: string[] | null, all: string[]): string[] 
 
 interface SortableItemProps {
   id: string;
-  children: (handle: ReactNode) => ReactNode;
-  /** wrapper className applied to the outer sortable element */
+  children: (handle: ReactNode, hideButton: ReactNode | null) => ReactNode;
   className?: string;
+  onHide?: (id: string) => void;
 }
 
-function SortableItem({ id, children, className }: SortableItemProps) {
+function SortableItem({ id, children, className, onHide }: SortableItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -73,9 +75,20 @@ function SortableItem({ id, children, className }: SortableItemProps) {
       <GripVertical className="h-4 w-4" />
     </button>
   );
+  const hideButton = onHide ? (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onHide(id); }}
+      aria-label="Hide this section (find it in Settings to restore)"
+      title="Hide section — restore from Settings"
+      className="inline-flex items-center justify-center rounded p-1 text-muted-foreground/60 hover:text-bearish hover:bg-bearish/10 transition-colors"
+    >
+      <X className="h-4 w-4" />
+    </button>
+  ) : null;
   return (
     <div ref={setNodeRef} style={style} className={cn(className, isDragging && "ring-2 ring-primary/40 rounded-lg")}>
-      {children(handle)}
+      {children(handle, hideButton)}
     </div>
   );
 }
@@ -83,10 +96,14 @@ function SortableItem({ id, children, className }: SortableItemProps) {
 interface SortableListProps<T extends { id: string }> {
   items: T[];
   storageKey: string;
-  /** Render each item; receives the item plus a drag-handle node to place anywhere. */
-  renderItem: (item: T, handle: ReactNode) => ReactNode;
+  /** Render each item; receives the item, drag-handle node, and (optional) hide button node. */
+  renderItem: (item: T, handle: ReactNode, hideButton: ReactNode | null) => ReactNode;
   itemClassName?: string;
   className?: string;
+  /** Set of ids to filter out (driven by useHiddenSections). */
+  hiddenIds?: Set<string>;
+  /** When provided, each item shows an X button that calls this with its id. */
+  onHide?: (id: string) => void;
 }
 
 export function SortableList<T extends { id: string }>({
@@ -95,11 +112,12 @@ export function SortableList<T extends { id: string }>({
   renderItem,
   itemClassName,
   className,
+  hiddenIds,
+  onHide,
 }: SortableListProps<T>) {
   const allIds = items.map((i) => i.id);
   const [order, setOrder] = useState<string[]>(() => reconcileOrder(readOrder(storageKey), allIds));
 
-  // Reconcile when source items change (added / removed).
   useEffect(() => {
     setOrder((prev) => {
       const next = reconcileOrder(prev, allIds);
@@ -128,17 +146,33 @@ export function SortableList<T extends { id: string }>({
   };
 
   const byId = new Map(items.map((i) => [i.id, i]));
-  const ordered = order.map((id) => byId.get(id)).filter((x): x is T => Boolean(x));
+  const ordered = order
+    .map((id) => byId.get(id))
+    .filter((x): x is T => Boolean(x))
+    .filter((x) => !hiddenIds?.has(x.id));
+  const visibleIds = ordered.map((x) => x.id);
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={order} strategy={verticalListSortingStrategy}>
+      <SortableContext items={visibleIds} strategy={verticalListSortingStrategy}>
         <div className={className}>
-          {ordered.map((item) => (
-            <SortableItem key={item.id} id={item.id} className={itemClassName}>
-              {(handle) => renderItem(item, handle)}
-            </SortableItem>
-          ))}
+          <AnimatePresence mode="popLayout" initial={false}>
+            {ordered.map((item) => (
+              <motion.div
+                key={item.id}
+                layout
+                initial={{ opacity: 0, scale: 0.96, y: -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: -12, height: 0, marginTop: 0, marginBottom: 0 }}
+                transition={{ type: "spring", stiffness: 320, damping: 28 }}
+                style={{ overflow: "hidden" }}
+              >
+                <SortableItem id={item.id} className={itemClassName} onHide={onHide}>
+                  {(handle, hideButton) => renderItem(item, handle, hideButton)}
+                </SortableItem>
+              </motion.div>
+            ))}
+          </AnimatePresence>
         </div>
       </SortableContext>
     </DndContext>
