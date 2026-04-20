@@ -73,6 +73,16 @@ export interface ValidationResult {
     overBudget: boolean;        // > 5%
     suggestion?: GateResult["suggestion"];
   };
+  /**
+   * NEW: Pre-Market Preview Mode flag.
+   * Set to `true` ONLY when the pipeline returned WAIT and the SOLE reason
+   * was Gate 5 (ORB Lock). Tells the UI to keep the pick visible (research
+   * + watchlist queue allowed) but lock the BUY/Save-to-portfolio CTAs
+   * until 10:30 AM ET. Computed outside gates.ts so the gate logic itself
+   * is never weakened.
+   */
+  previewMode?: boolean;
+  previewReason?: string;
 }
 
 export const GATE_ORDER = [
