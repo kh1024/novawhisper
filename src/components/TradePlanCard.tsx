@@ -16,6 +16,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Clock, Ban, Target, DollarSign, Calendar, AlertTriangle, ShoppingCart, Wallet } from "lucide-react";
 import { useCapitalSettings } from "@/lib/budget";
+import { useSettings } from "@/lib/settings";
+import { classifyAffordability } from "@/lib/affordability";
+import { AffordabilityBadge } from "@/components/AffordabilityBadge";
 import { isMarketOpen, isWeekend } from "@/lib/verdictModel";
 import type { NovaCard } from "@/components/NovaVerdictCard";
 
