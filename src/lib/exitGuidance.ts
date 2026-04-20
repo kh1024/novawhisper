@@ -70,8 +70,10 @@ export function getExitRecommendation(
     };
   }
 
-  // 2) Target 2
-  if (profitPct >= target_2_pct) {
+  // 2) Target 2 — guard: never fire TAKE_PROFIT unless current mark is
+  //    strictly above entry. Prevents phantom take-profits when an upstream
+  //    caller passes an inflated mark or stale data.
+  if (profitPct >= target_2_pct && ctx.optionMidPrice > entry_price) {
     return {
       recommendation: "TAKE_PROFIT",
       reason: `Premium up ${profitPct.toFixed(1)}%, above target_2 (${target_2_pct}%). Lock in full profits.`,
@@ -79,8 +81,8 @@ export function getExitRecommendation(
     };
   }
 
-  // 3) Target 1
-  if (profitPct >= target_1_pct) {
+  // 3) Target 1 — same guard.
+  if (profitPct >= target_1_pct && ctx.optionMidPrice > entry_price) {
     return {
       recommendation: "TRIM_PARTIAL",
       reason: `Premium up ${profitPct.toFixed(1)}%, above target_1 (${target_1_pct}%). Take partial profits, move stop to breakeven.`,
