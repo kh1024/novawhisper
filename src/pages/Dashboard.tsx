@@ -186,13 +186,29 @@ export default function Dashboard() {
     return m;
   }, [partition]);
 
+  // Apply DTE quick-filter on top of affordability — keeps the cap consistent
+  // with what the user sees in the chip toolbar.
+  const dteFiltered = useMemo(() => {
+    const recs = partition.recommendable;
+    if (dteFilter === "all") return recs;
+    if (dteFilter === "0dte") return recs.filter(({ item }) => item.dte <= 1);
+    return recs.filter(({ item }) => item.dte <= 7);
+  }, [partition, dteFilter]);
+
   // Top picks the user actually sees — affordability-filtered FIRST, then
-  // capped. Blocked items live in their own collapsible drawer below.
+  // DTE-narrowed, then capped. Blocked items live in their own drawer below.
   const picks = useMemo(
-    () => partition.recommendable.map((r) => r.item).slice(0, novaActive ? 12 : 6),
-    [partition, novaActive],
+    () => dteFiltered.map((r) => r.item).slice(0, novaActive ? 12 : 6),
+    [dteFiltered, novaActive],
   );
   const blockedPicks = partition.blocked;
+  // Counts for the chip toolbar — shown as small badges so users see at a
+  // glance how many same-day / same-week affordable picks exist right now.
+  const dteCounts = useMemo(() => ({
+    all: partition.recommendable.length,
+    "0dte": partition.recommendable.filter(({ item }) => item.dte <= 1).length,
+    week: partition.recommendable.filter(({ item }) => item.dte <= 7).length,
+  }), [partition]);
   // True when there's nothing affordable to recommend AT ALL.
   const noAffordableTrades = partition.recommendable.length === 0 && filtered.length > 0;
 
