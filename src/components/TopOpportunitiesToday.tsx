@@ -85,19 +85,22 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       </div>
 
-      {/* Loading state — only when truly nothing has rendered yet. */}
-      {picks.isLoading && totalApproved === 0 && totalBlocked === 0 && (
+      {/* Loading state — show while quotes are still arriving OR universe hasn't
+          materialized yet. The /scanner page may already be rendering picks via
+          its own cached pipeline; we treat universe===0 as "still loading" so
+          users don't see a misleading "warming up" while /scanner has data. */}
+      {(picks.isLoading || picks.counts.universe === 0) && totalApproved === 0 && totalBlocked === 0 && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="h-4 w-4 animate-spin" /> Scanning universe…
         </div>
       )}
 
-      {/* Empty state — no approved AND no blocked across all buckets. */}
-      {!picks.isLoading && everythingEmpty && (
+      {/* Empty state — universe loaded, but every gate-passing pick was blocked. */}
+      {!picks.isLoading && picks.counts.universe > 0 && everythingEmpty && (
         <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-6 text-center space-y-2">
           <div className="text-sm font-semibold">Scanner is still warming up</div>
           <div className="text-xs text-muted-foreground">
-            Next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span>
+            Universe of <span className="mono text-foreground">{picks.counts.universe}</span> scanned · next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span>
           </div>
           <Button variant="outline" size="sm" onClick={() => picks.refetch()} className="mt-2 gap-1.5">
             <RefreshCw className="h-3 w-3" /> Refresh now
