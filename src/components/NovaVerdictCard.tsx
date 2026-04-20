@@ -65,6 +65,8 @@ export function NovaVerdictCard({
   const [sparkMode, setSparkMode] = useState<"price" | "rsi">("price");
   const style = ACTION_STYLES[card.action];
   const c = card.best_contract;
+  const preMarket = usePreMarketStatus();
+  const isPreview = card.preview_mode === true && preMarket.isPreMarket && preMarket.enabled;
 
   // Last 20 closes for the sparkline (price mode) and a 14-step RSI walk (rsi mode).
   const priceTail = closes && closes.length >= 2 ? closes.slice(-20) : null;
@@ -78,7 +80,15 @@ export function NovaVerdictCard({
   const sparkValues = sparkMode === "rsi" ? rsiSeries : priceTail;
 
   return (
-    <Card className={`glass-card p-5 ring-1 ${style.ring}`}>
+    <Card className={`glass-card p-5 ring-1 ${style.ring} ${isPreview ? "opacity-[0.92]" : ""}`}>
+      {isPreview && (
+        <div className="-mx-5 -mt-5 mb-4 px-4 py-2 rounded-t-lg border-b border-warning/40 bg-warning/15 flex items-center gap-2 text-[12px] text-warning">
+          <Eye className="h-3.5 w-3.5 shrink-0" />
+          <span className="font-semibold">PREVIEW</span>
+          <span className="text-warning/85">— Unlocks at 10:30 AM ET</span>
+          <span className="ml-auto font-mono font-semibold">{preMarket.countdown}</span>
+        </div>
+      )}
       {/* Hero: action label */}
       <div className={`rounded-lg ${style.bg} p-4 text-center`}>
         <div className={`text-4xl font-bold tracking-tight ${style.text} flex items-center justify-center gap-2`}>
