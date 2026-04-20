@@ -77,6 +77,14 @@ export interface ApprovedPick {
   tradeStatus: TradeStatusResult;
   /** Trade State Machine stage — drives UI styling + Add-to-Portfolio gating. */
   tradeStage: TradeStage;
+  /** Fail-soft tier — CLEAN / NEAR-LIMIT / BEST-OF-WAIT. */
+  pickTier: PickTier;
+  /** Score AFTER soft-penalty deductions, used for tier ranking. */
+  adjustedScore: number;
+  /** Human-readable caveat ("slightly over budget"). null when CLEAN. */
+  tierCaveat: string | null;
+  /** Tier penalties for the debug drawer. */
+  tierPenalties: TierResult["penalties"];
 }
 
 export interface BlockedPick {
@@ -96,6 +104,8 @@ export interface BlockedPick {
   premium?: number;
   suspect?: boolean;
   preMarket?: boolean;
+  /** Funnel-debug tags. */
+  dropReasons: string[];
 }
 
 export interface PipelineCounts {
