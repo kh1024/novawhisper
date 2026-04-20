@@ -40,6 +40,11 @@ import { buildStrikeLadder, pickBestRung, type Rung } from "@/lib/strikeLadder";
 import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
 import { tradeStageFromStatus, type TradeStage } from "@/lib/tradeStage";
+import {
+  classifyPickTier, MIN_BUY_NOW_PER_BUCKET, tierRank,
+  type PickTier, type TierResult,
+} from "@/lib/pickTier";
+import { currentMarketMode } from "@/lib/marketHours";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -72,6 +77,14 @@ export interface ApprovedPick {
   tradeStatus: TradeStatusResult;
   /** Trade State Machine stage — drives UI styling + Add-to-Portfolio gating. */
   tradeStage: TradeStage;
+  /** Fail-soft tier — CLEAN / NEAR-LIMIT / BEST-OF-WAIT. */
+  pickTier: PickTier;
+  /** Score AFTER soft-penalty deductions, used for tier ranking. */
+  adjustedScore: number;
+  /** Human-readable caveat ("slightly over budget"). null when CLEAN. */
+  tierCaveat: string | null;
+  /** Tier penalties for the debug drawer. */
+  tierPenalties: TierResult["penalties"];
 }
 
 export interface BlockedPick {
@@ -91,6 +104,8 @@ export interface BlockedPick {
   premium?: number;
   suspect?: boolean;
   preMarket?: boolean;
+  /** Funnel-debug tags. */
+  dropReasons: string[];
 }
 
 export interface PipelineCounts {
@@ -100,6 +115,15 @@ export interface PipelineCounts {
   budgetBlocked: number;
   shown: number;             // after bucket-narrowing + maxResults
   filterChip: string | null;
+  // ── Funnel metrics (debug panel) ──
+  safetyPassingCount: number;
+  budgetPassingCount: number;     // soft-band inside cap
+  scoredCount: number;            // got a score (not hard-dropped)
+  tradeReadyCount: number;        // tier === CLEAN
+  cleanCount: number;
+  nearLimitCount: number;
+  bestOfWaitCount: number;
+  marketMode: "LIVE" | "PREVIEW" | "CLOSED";
 }
 
 export interface ScannerPicksResult {
@@ -200,11 +224,14 @@ export function bucketPicks(args: {
       dte,
       includeOTM: rowB === "Lottery",
     });
-    const pick = pickBestRung(ladder, args.cap);
-    if (!pick) {
-      // Degenerate row (no usable price). Skip silently.
-      continue;
-    }
+    // Try the best-fitting rung first, but DON'T hard-drop on cap miss; the
+    // tier classifier converts budget into a soft penalty unless cost > 10×.
+    const fitPick = pickBestRung(ladder, args.cap);
+    const pick = fitPick
+      ?? (ladder.length > 0
+        ? { candidate: ladder[0], cheapest: ladder[ladder.length - 1], fitsCap: false } as const
+        : null);
+    if (!pick) continue;
 
     const contract: PickContract = {
       symbol: r.symbol,
@@ -224,30 +251,7 @@ export function bucketPicks(args: {
         premium: pick.candidate.premium,
         suspect: pick.candidate.suspect,
         preMarket,
-      });
-      continue;
-    }
-
-    // Budget logic — pick.fitsCap is the source of truth (already considered
-    // every ladder rung). When it doesn't fit, we surface the cheapest rung
-    // as the "block reason" and include the cost gap.
-    if (!pick.fitsCap && !args.overrides.showBudgetBlocked) {
-      const cheapest = pick.cheapest;
-      const overBy = cheapest.contractCost - args.cap;
-      budgetBlocked.push({
-        key, row: r, contract, bucket: rowB, kind: "budget",
-        reason: `Over per-trade cap by $${overBy.toLocaleString()}`,
-        detail:
-          `Cap $${args.cap.toLocaleString()}. Cheapest ladder rung is ` +
-          `${cheapest.rung} ${cheapest.optionType} $${cheapest.strike} @ ~$${cheapest.premium.toFixed(2)} ` +
-          `= $${cheapest.contractCost.toLocaleString()}/contract.`,
-        overBudgetBy: overBy,
-        cap: args.cap,
-        cost: cheapest.contractCost,
-        premium: cheapest.premium,
-        suspect: cheapest.suspect,
-        preMarket,
-        cheaperAlternative: null,
+        dropReasons: ["safety_gate"],
       });
       continue;
     }
@@ -260,6 +264,42 @@ export function bucketPicks(args: {
       finalRank: rankResult?.finalRank ?? null,
     });
     const tradeStage = tradeStageFromStatus(tradeStatus, preMarket, true);
+
+    // ── Tier classification (soft budget + score-based fail-soft) ─────────
+    const nonSafetyRuleFailures = tradeStatus.blockers.filter(
+      (b) => !b.includes("budget") && !b.includes("pre-market"),
+    ).length;
+    const tier = classifyPickTier({
+      score: rankResult?.finalRank ?? r.setupScore,
+      safetyPass: !isSafetyBlocked,
+      contractCost: pick.candidate.contractCost,
+      cap: args.cap,
+      nonSafetyRuleFailures,
+      ivRank: r.ivRank,
+    });
+
+    // Hard drop: cost > 10× cap → still report as budget-blocked (visible).
+    if (tier.hardDrop) {
+      const overBy = pick.candidate.contractCost - args.cap;
+      budgetBlocked.push({
+        key, row: r, contract, bucket: rowB, kind: "budget",
+        reason: `Cost $${pick.candidate.contractCost.toLocaleString()} > 10× cap $${args.cap.toLocaleString()}`,
+        detail:
+          `Per-trade cap $${args.cap.toLocaleString()}. Cheapest rung ` +
+          `${pick.cheapest.rung} ${pick.cheapest.optionType} $${pick.cheapest.strike} ` +
+          `@ ~$${pick.cheapest.premium.toFixed(2)} = $${pick.cheapest.contractCost.toLocaleString()}.`,
+        overBudgetBy: overBy,
+        cap: args.cap,
+        cost: pick.candidate.contractCost,
+        premium: pick.cheapest.premium,
+        suspect: pick.cheapest.suspect,
+        preMarket,
+        cheaperAlternative: null,
+        dropReasons: ["budget_hard_drop_10x"],
+      });
+      continue;
+    }
+
     approved.push({
       key,
       row: r,
@@ -274,15 +314,20 @@ export function bucketPicks(args: {
       bucket: rowB,
       tradeStatus,
       tradeStage,
+      pickTier: tier.tier === "EXCLUDED" ? "BEST-OF-WAIT" : tier.tier,
+      adjustedScore: tier.adjustedScore,
+      tierCaveat: tier.caveat,
+      tierPenalties: tier.penalties,
     });
   }
 
-  // Sort approved by Final Rank desc (with setup score tiebreaker) so every
-  // surface — Scanner table, Dashboard top-N widget — agrees on order.
+  // Sort: tier rank DESC (CLEAN > NEAR-LIMIT > BEST-OF-WAIT), then
+  // adjustedScore DESC, then setup score. Ensures CLEAN picks always
+  // surface first while NEAR-LIMIT/BEST-OF-WAIT fill the bucket below.
   approved.sort((a, b) => {
-    const ra = a.rank?.finalRank ?? a.row.setupScore;
-    const rb = b.rank?.finalRank ?? b.row.setupScore;
-    if (rb !== ra) return rb - ra;
+    const tDelta = tierRank(b.pickTier) - tierRank(a.pickTier);
+    if (tDelta !== 0) return tDelta;
+    if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
     return b.row.setupScore - a.row.setupScore;
   });
 
@@ -429,7 +474,19 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     });
   }, [rows, pipelineQ.data, profile, overrides, cap, bucketFilter]);
 
-  const approvedFinal = opts.maxResults != null ? bucketed.approved.slice(0, opts.maxResults) : bucketed.approved;
+  // ── Fail-soft selector ──────────────────────────────────────────────────
+  // When viewing a single bucket, ensure at least MIN_BUY_NOW_PER_BUCKET
+  // ranked ideas appear by allowing NEAR-LIMIT then BEST-OF-WAIT to fill.
+  // bucketPicks already includes them in `approved` (sorted by tier), so
+  // here we just trim to maxResults — but we floor at MIN_BUY_NOW_PER_BUCKET
+  // when the user supplied a stricter maxResults.
+  const minPicks = MIN_BUY_NOW_PER_BUCKET;
+  const effectiveMax = opts.maxResults != null
+    ? Math.max(opts.maxResults, minPicks)
+    : undefined;
+  const approvedFinal = effectiveMax != null
+    ? bucketed.approved.slice(0, effectiveMax)
+    : bucketed.approved;
 
   const filterChipParts: string[] = [];
   if (bucketed.profileFilteredCount > 0) {
@@ -444,6 +501,13 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     [bucketed.budgetBlocked],
   );
 
+  // Funnel metrics for the debug panel.
+  const cleanCount = bucketed.approved.filter((p) => p.pickTier === "CLEAN").length;
+  const nearLimitCount = bucketed.approved.filter((p) => p.pickTier === "NEAR-LIMIT").length;
+  const bestOfWaitCount = bucketed.approved.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
+  const safetyPassingCount = bucketed.approved.length;
+  const budgetPassingCount = bucketed.approved.filter((p) => p.estCost <= cap).length;
+
   return {
     approved: approvedFinal,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
@@ -455,6 +519,14 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
       budgetBlocked: bucketed.budgetBlocked.length,
       shown: approvedFinal.length,
       filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
+      safetyPassingCount,
+      budgetPassingCount,
+      scoredCount: bucketed.approved.length,
+      tradeReadyCount: cleanCount,
+      cleanCount,
+      nearLimitCount,
+      bestOfWaitCount,
+      marketMode: currentMarketMode(),
     },
     activeBucket: bucketFilter,
     cap,

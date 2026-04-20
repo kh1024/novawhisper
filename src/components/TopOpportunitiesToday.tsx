@@ -8,10 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
 import { TRADE_STATUS_CLASSES, TRADE_STATUS_LABEL } from "@/lib/tradeStatus";
+import { TIER_CLASSES, TIER_LABEL, MIN_BUY_NOW_PER_BUCKET } from "@/lib/pickTier";
 import { Hint } from "@/components/Hint";
 import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { cn } from "@/lib/utils";
@@ -40,19 +41,14 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
     );
   };
 
-  // TradeStatus middleware filter — only TradeReady picks are surfaced.
-  // During pre-market every pick is WatchlistOnly, so we fall back to those
-  // so the widget isn't blank but flag it as "Watchlist preview".
-  const tradeReady = useMemo(
-    () => picks.approved.filter((p) => p.tradeStatus.tradeStatus === "TradeReady"),
-    [picks.approved],
-  );
-  const watchlistFallback = useMemo(
-    () => picks.approved.filter((p) => p.tradeStatus.tradeStatus === "WatchlistOnly"),
-    [picks.approved],
-  );
-  const display: ApprovedPick[] = tradeReady.length > 0 ? tradeReady : watchlistFallback;
-  const usingFallback = tradeReady.length === 0 && watchlistFallback.length > 0;
+  // Tier-based selector — never empty when CLEAN/NEAR-LIMIT/BEST-OF-WAIT
+  // candidates exist. Picks are already sorted by tier in useScannerPicks.
+  // Floor display at MIN_BUY_NOW_PER_BUCKET so users always see ≥3 ideas
+  // when the universe has them.
+  const minShown = Math.max(MIN_BUY_NOW_PER_BUCKET, maxResults);
+  const display: ApprovedPick[] = picks.approved.slice(0, minShown);
+  const hasOnlyRelaxed = display.length > 0 && display.every((p) => p.pickTier !== "CLEAN");
+  const inPreview = picks.counts.marketMode === "PREVIEW";
 
   const totalApproved = display.length;
   const totalBlocked = picks.budgetBlocked.length + picks.safetyBlocked.length;
@@ -111,9 +107,14 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
       {/* Approved picks — top N as compact cards */}
       {totalApproved > 0 && (
         <div className="space-y-2">
-          {usingFallback && (
+          {inPreview && (
             <div className="text-[11px] text-warning bg-warning/5 border border-warning/30 rounded px-2 py-1.5">
-              👀 Watchlist preview — pre-market window. Real Trade-Ready picks unlock at 9:30 AM ET after intraday confirmation.
+              👀 Pre-market preview — markets open at 9:30 AM ET. Picks shown for planning; live tier badges activate at the open.
+            </div>
+          )}
+          {!inPreview && hasOnlyRelaxed && (
+            <div className="text-[11px] text-primary bg-primary/5 border border-primary/30 rounded px-2 py-1.5">
+              ⚠️ No <strong>Clean Pass</strong> setups right now — surfacing best <strong>Near-limit</strong> / <strong>Best-of-WAIT</strong> ideas so you can still see the top of the funnel. Reduce size on these.
             </div>
           )}
           {display.map((p) => {
@@ -144,6 +145,17 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
                         {bucketEmoji(p.bucket)} {p.bucket}
                       </span>
+                      <Hint
+                        label={p.tierCaveat ?? `${TIER_LABEL[p.pickTier]} · score ${p.adjustedScore}`}
+                        asChild={false}
+                      >
+                        <span className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
+                          TIER_CLASSES[p.pickTier],
+                        )}>
+                          {TIER_LABEL[p.pickTier]}
+                        </span>
+                      </Hint>
                       <Hint label={p.tradeStatus.reason} asChild={false}>
                         <span className={cn(
                           "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
@@ -173,13 +185,13 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                   <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </button>
                 <div className="flex items-center gap-2 px-3 pb-3 flex-wrap">
-                  {p.tradeStatus.tradeStatus === "TradeReady" ? (
+                  {(p.pickTier === "CLEAN" || p.pickTier === "NEAR-LIMIT") && !inPreview ? (
                     <Button
                       size="sm"
                       className="h-7 text-[11px]"
                       onClick={(e) => { e.stopPropagation(); open(p); }}
                     >
-                      BUY NOW →
+                      {p.pickTier === "CLEAN" ? "BUY NOW →" : "BUY (REDUCE SIZE) →"}
                     </Button>
                   ) : (
                     <Button
@@ -188,14 +200,16 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                       disabled
                       className="h-7 text-[11px] border-warning/40 text-warning bg-warning/5"
                     >
-                      ⏳ WAIT
+                      ⏳ {inPreview ? "OPENS 9:30 ET" : "WATCH"}
                     </Button>
                   )}
                   <AddToPortfolioButton pick={p} />
                   <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
-                    {p.tradeStatus.tradeStatus === "TradeReady"
-                      ? "We'll alert you when to take profits or cut the loss."
-                      : "Track speculatively — exit guidance updates every 5 min."}
+                    {p.pickTier === "CLEAN"
+                      ? "Clean pass — full size OK per your risk profile."
+                      : p.pickTier === "NEAR-LIMIT"
+                      ? "Near limits — reduce size; we'll alert on exit."
+                      : "Best of WAIT — track speculatively; one rule relaxed."}
                   </span>
                 </div>
               </div>
@@ -254,16 +268,21 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       )}
 
-      {/* Footer — counts mirror Scanner exactly. */}
-      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
-        <div className="flex items-center gap-3">
-          <span><span className="mono text-foreground">{picks.counts.universe}</span> in universe</span>
+      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span><span className="mono text-foreground">{picks.counts.universe}</span> universe</span>
           <span>·</span>
-          <span><span className="mono text-foreground">{picks.counts.gatePassing}</span> gate-passing</span>
+          <span><span className="mono text-bullish">{picks.counts.cleanCount}</span> clean</span>
           <span>·</span>
-          <span><span className="mono text-warning">{picks.counts.budgetBlocked}</span> budget</span>
+          <span><span className="mono text-warning">{picks.counts.nearLimitCount}</span> near-limit</span>
+          <span>·</span>
+          <span><span className="mono text-primary">{picks.counts.bestOfWaitCount}</span> best-of-WAIT</span>
+          <span>·</span>
+          <span><span className="mono text-warning">{picks.counts.budgetBlocked}</span> budget-drop</span>
           <span>·</span>
           <span><span className="mono text-bearish">{picks.counts.gateBlocked}</span> safety</span>
+          <span>·</span>
+          <span className="text-[10px]">Mode: <span className="mono text-foreground">{picks.counts.marketMode}</span></span>
         </div>
         <Link to="/scanner" className="text-primary hover:underline underline-offset-2 inline-flex items-center gap-1">
           View in Scanner <ExternalLink className="h-3 w-3" />
