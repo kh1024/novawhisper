@@ -215,11 +215,14 @@ export function bucketPicks(args: {
       dte,
       includeOTM: rowB === "Lottery",
     });
-    const pick = pickBestRung(ladder, args.cap);
-    if (!pick) {
-      // Degenerate row (no usable price). Skip silently.
-      continue;
-    }
+    // Try the best-fitting rung first, but DON'T hard-drop on cap miss; the
+    // tier classifier converts budget into a soft penalty unless cost > 10×.
+    const fitPick = pickBestRung(ladder, args.cap);
+    const pick = fitPick
+      ?? (ladder.length > 0
+        ? { candidate: ladder[0], cheapest: ladder[ladder.length - 1], fitsCap: false } as const
+        : null);
+    if (!pick) continue;
 
     const contract: PickContract = {
       symbol: r.symbol,
@@ -239,30 +242,7 @@ export function bucketPicks(args: {
         premium: pick.candidate.premium,
         suspect: pick.candidate.suspect,
         preMarket,
-      });
-      continue;
-    }
-
-    // Budget logic — pick.fitsCap is the source of truth (already considered
-    // every ladder rung). When it doesn't fit, we surface the cheapest rung
-    // as the "block reason" and include the cost gap.
-    if (!pick.fitsCap && !args.overrides.showBudgetBlocked) {
-      const cheapest = pick.cheapest;
-      const overBy = cheapest.contractCost - args.cap;
-      budgetBlocked.push({
-        key, row: r, contract, bucket: rowB, kind: "budget",
-        reason: `Over per-trade cap by $${overBy.toLocaleString()}`,
-        detail:
-          `Cap $${args.cap.toLocaleString()}. Cheapest ladder rung is ` +
-          `${cheapest.rung} ${cheapest.optionType} $${cheapest.strike} @ ~$${cheapest.premium.toFixed(2)} ` +
-          `= $${cheapest.contractCost.toLocaleString()}/contract.`,
-        overBudgetBy: overBy,
-        cap: args.cap,
-        cost: cheapest.contractCost,
-        premium: cheapest.premium,
-        suspect: cheapest.suspect,
-        preMarket,
-        cheaperAlternative: null,
+        dropReasons: ["safety_gate"],
       });
       continue;
     }
@@ -275,6 +255,42 @@ export function bucketPicks(args: {
       finalRank: rankResult?.finalRank ?? null,
     });
     const tradeStage = tradeStageFromStatus(tradeStatus, preMarket, true);
+
+    // ── Tier classification (soft budget + score-based fail-soft) ─────────
+    const nonSafetyRuleFailures = tradeStatus.blockers.filter(
+      (b) => !b.includes("budget") && !b.includes("pre-market"),
+    ).length;
+    const tier = classifyPickTier({
+      score: rankResult?.finalRank ?? r.setupScore,
+      safetyPass: !isSafetyBlocked,
+      contractCost: pick.candidate.contractCost,
+      cap: args.cap,
+      nonSafetyRuleFailures,
+      ivRank: r.ivRank,
+    });
+
+    // Hard drop: cost > 10× cap → still report as budget-blocked (visible).
+    if (tier.hardDrop) {
+      const overBy = pick.candidate.contractCost - args.cap;
+      budgetBlocked.push({
+        key, row: r, contract, bucket: rowB, kind: "budget",
+        reason: `Cost $${pick.candidate.contractCost.toLocaleString()} > 10× cap $${args.cap.toLocaleString()}`,
+        detail:
+          `Per-trade cap $${args.cap.toLocaleString()}. Cheapest rung ` +
+          `${pick.cheapest.rung} ${pick.cheapest.optionType} $${pick.cheapest.strike} ` +
+          `@ ~$${pick.cheapest.premium.toFixed(2)} = $${pick.cheapest.contractCost.toLocaleString()}.`,
+        overBudgetBy: overBy,
+        cap: args.cap,
+        cost: pick.candidate.contractCost,
+        premium: pick.cheapest.premium,
+        suspect: pick.cheapest.suspect,
+        preMarket,
+        cheaperAlternative: null,
+        dropReasons: ["budget_hard_drop_10x"],
+      });
+      continue;
+    }
+
     approved.push({
       key,
       row: r,
@@ -289,6 +305,10 @@ export function bucketPicks(args: {
       bucket: rowB,
       tradeStatus,
       tradeStage,
+      pickTier: tier.tier === "EXCLUDED" ? "BEST-OF-WAIT" : tier.tier,
+      adjustedScore: tier.adjustedScore,
+      tierCaveat: tier.caveat,
+      tierPenalties: tier.penalties,
     });
   }
 
