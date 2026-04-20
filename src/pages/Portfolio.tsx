@@ -74,12 +74,13 @@ function previewExitDecision(p: PortfolioPosition, spot: number | null) {
     );
   }
   const isCall = p.option_type.toLowerCase().includes("call");
-  // Approximate IV from a 50 ivRank (good enough for preview).
-  const est = estimatePremium({
-    spot, strike: Number(p.strike), iv: ivRankToIv(50),
-    dte: Math.max(1, dteFromExpiry(p.expiry)),
-    optionType: isCall ? "call" : "put",
-  });
+  // CRITICAL: optionMidPrice MUST be the validated Massive mark written by the
+  // exit-eval cron (p.current_price), NEVER a BS-lite estimate. Using an
+  // estimated premium here caused a phantom +120% / TAKE_PROFIT to display
+  // while the real Massive quote was actually below entry. If no cron-written
+  // mark exists yet, return null so the card shows a clean "awaiting tick"
+  // HOLD state instead of inventing a profitPct from a model.
+  if (p.current_price == null) return null;
   return getExitRecommendation(
     {
       side: isCall ? "CALL" : "PUT",
@@ -92,7 +93,7 @@ function previewExitDecision(p: PortfolioPosition, spot: number | null) {
     },
     {
       underlyingPrice: spot,
-      optionMidPrice: est.perShare,
+      optionMidPrice: Number(p.current_price),
       vwap: spot, intradayMA: spot,
       openingRangeHigh: 0, openingRangeLow: 0,
       relVolume: 1, timeOfDayMinutes: 60,
