@@ -13,6 +13,7 @@ import { Hint } from "@/components/Hint";
 import { Link } from "react-router-dom";
 import { ExternalLink } from "lucide-react";
 import { useStrategyProfile, maxPerTradeDollars, allowedStructureCount, type AllowedStructures } from "@/lib/strategyProfile";
+import { useScannerOverrides } from "@/lib/scannerOverrides";
 
 const STRUCTURE_LABELS: Record<keyof AllowedStructures, string> = {
   longCall: "Long Call",
@@ -25,6 +26,7 @@ const STRUCTURE_LABELS: Record<keyof AllowedStructures, string> = {
 
 export function StrategyEditDrawer({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { profile, update } = useStrategyProfile();
+  const { overrides, set } = useScannerOverrides();
   const cap = maxPerTradeDollars(profile);
   const structures = allowedStructureCount(profile.allowedStructures);
 
@@ -111,6 +113,23 @@ export function StrategyEditDrawer({ open, onOpenChange }: { open: boolean; onOp
                 onValueChange={(v) => update({ gateOverrides: { ...profile.gateOverrides, ivpMaxThreshold: v[0] } })}
               />
             </div>
+          </section>
+
+          {/* Universe — Small-Cap Friendly toggle */}
+          <section className="space-y-3 pt-2 border-t border-border/60">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">Universe</div>
+            <div className="flex items-center justify-between">
+              <Hint label="Inject ~19 sub-$25 tickers (SOFI, T, NIO, SNAP, AAL, NU, LCID, CCL, HOOD, NOK, SIRI, GRAB, WBD, PLUG, OPEN, KRE, XRT, EEM, FXI) so a small per-trade cap can find affordable ITM calls.">
+                <Label className="text-sm cursor-help">Small-Cap Friendly</Label>
+              </Hint>
+              <Switch
+                checked={overrides.smallCapFriendly}
+                onCheckedChange={(v) => set("smallCapFriendly", v)}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Best for accounts with a per-trade cap under $1,000. Session-scoped — clears on refresh.
+            </p>
           </section>
         </div>
 
