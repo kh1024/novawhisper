@@ -368,10 +368,10 @@ Deno.serve(async (req: Request) => {
     const k = String(Math.round(Number(strike) * 1000)).padStart(8, "0");
     return `O:${sym}${yy}${m}${d}${cp}${k}`;
   }
-  async function fetchMassiveContract(ticker: string): Promise<ChainEntry | null> {
+  async function fetchMassiveContract(underlying: string, ticker: string): Promise<ChainEntry | null> {
     if (!MASSIVE_KEY) return null;
     try {
-      const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(ticker.split(":")[0] === "O" ? ticker.split(":")[1].replace(/\d{6}[CP]\d{8}$/, "") : ticker)}/${encodeURIComponent(ticker)}`;
+      const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(ticker)}`;
       const r = await fetch(url, {
         headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
       });
