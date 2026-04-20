@@ -103,6 +103,10 @@ export interface ScannerPicksResult {
   counts: PipelineCounts;
   activeBucket: ActiveBucket;
   cap: number;
+  /** True between 4:00 AM and 9:30 AM ET — premiums are estimates. */
+  preMarket: boolean;
+  /** Cheapest budget-blocked alternative for the diagnostic line. */
+  cheapestAlternative: BlockedPick | null;
   isLoading: boolean;
   isFetching: boolean;
   refetch: () => void;
@@ -288,7 +292,13 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
   const { overrides } = useScannerOverrides();
   const [globalBucket] = useActiveBucket();
   const [budget] = useBudget();
-  const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
+  // Universe — exclude Small-Cap-Friendly names unless the user toggled them
+  // on (they're injected; "off" = classic large-cap universe behavior).
+  const universe = useMemo(() => {
+    return TICKER_UNIVERSE
+      .filter((t) => overrides.smallCapFriendly || !SMALL_CAP_FRIENDLY_SYMBOLS.has(t.symbol))
+      .map((t) => t.symbol);
+  }, [overrides.smallCapFriendly]);
 
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
     refetchMs: 60_000,
@@ -328,11 +338,13 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     profile.allowedStructures.longCall, profile.allowedStructures.longPut,
     profile.allowedStructures.leapsCall, profile.allowedStructures.leapsPut,
     overrides.conservativeCheapOnly, overrides.showBudgetBlocked,
+    overrides.smallCapFriendly,
     budget,
   ] as const, [
     universe.length, rows.length, dataUpdatedAt,
     cap, profile.riskTolerance, profile.horizon, profile.allowedStructures,
-    overrides.conservativeCheapOnly, overrides.showBudgetBlocked, budget,
+    overrides.conservativeCheapOnly, overrides.showBudgetBlocked,
+    overrides.smallCapFriendly, budget,
   ]);
 
   const pipelineQ = useQuery({
@@ -411,6 +423,11 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     filterChipParts.push(`excluded ${bucketed.universeFilteredCount} non-cheap-universe`);
   }
 
+  const cheapestAlternative = useMemo(
+    () => findCheapestAlternative(bucketed.budgetBlocked),
+    [bucketed.budgetBlocked],
+  );
+
   return {
     approved: approvedFinal,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
@@ -425,6 +442,8 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     },
     activeBucket: bucketFilter,
     cap,
+    preMarket: isPreMarketWindow(),
+    cheapestAlternative,
     isLoading: isLoading || pipelineQ.isLoading,
     isFetching: isFetching || pipelineQ.isFetching,
     refetch,
