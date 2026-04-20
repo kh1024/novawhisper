@@ -44,7 +44,7 @@ import {
   classifyPickTier, MIN_BUY_NOW_PER_BUCKET, tierRank,
   type PickTier, type TierResult,
 } from "@/lib/pickTier";
-import { isMarketOpenNow } from "@/lib/marketHours";
+import { currentMarketMode } from "@/lib/marketHours";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
