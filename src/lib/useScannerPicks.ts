@@ -38,6 +38,7 @@ import { isConservativeCheapTicker } from "@/lib/bucketing";
 import { SMALL_CAP_FRIENDLY_SYMBOLS } from "@/lib/mockData";
 import { buildStrikeLadder, pickBestRung, type Rung } from "@/lib/strikeLadder";
 import { isPreMarketWindow } from "@/lib/preMarketGenerator";
+import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,8 @@ export interface ApprovedPick {
   /** True between 4:00 AM and 9:30 AM ET — options markets closed. */
   preMarket: boolean;
   bucket: ActiveBucket;
+  /** TradeStatus middleware result — readiness layer on top of scoring. */
+  tradeStatus: TradeStatusResult;
 }
 
 export interface BlockedPick {
@@ -246,10 +249,17 @@ export function bucketPicks(args: {
       continue;
     }
 
+    const rankResult = args.rankMap.get(r.symbol) ?? null;
+    const tradeStatus = computeTradeStatus({
+      row: r,
+      preMarket,
+      fitsCap: pick.fitsCap,
+      finalRank: rankResult?.finalRank ?? null,
+    });
     approved.push({
       key,
       row: r,
-      rank: args.rankMap.get(r.symbol) ?? null,
+      rank: rankResult,
       verdict: v ?? null,
       contract,
       estCost: pick.candidate.contractCost,
@@ -258,6 +268,7 @@ export function bucketPicks(args: {
       suspect: pick.candidate.suspect,
       preMarket,
       bucket: rowB,
+      tradeStatus,
     });
   }
 
