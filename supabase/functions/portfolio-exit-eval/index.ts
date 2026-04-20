@@ -75,30 +75,42 @@ interface ClassifiedQuote {
   reason: string;
   source: string;
 }
+function getQuoteQuality(
+  mark: number | null,
+  bid: number | null,
+  ask: number | null,
+  updatedAt: Date,
+): Quality {
+  const ageSec = (Date.now() - updatedAt.getTime()) / 1000;
+
+  if (bid == null && ask == null && mark == null) return "MISSING";
+  if (ageSec > 60) return "STALE";
+  if (mark == null) return "ANOMALOUS";
+  if (mark <= 0.01) return "ANOMALOUS";
+  if (bid != null && ask != null && bid > ask) return "ANOMALOUS";
+
+  return "VALID";
+}
 function classifyQuote(args: {
   bid: number | null; ask: number | null; mark: number | null; last: number | null;
   updatedAt: number; underlyingPrice: number | null; source: string;
 }): ClassifiedQuote {
-  const ageMs = Date.now() - args.updatedAt;
+  const updatedAt = new Date(args.updatedAt);
+  const quality = getQuoteQuality(args.mark, args.bid, args.ask, updatedAt);
   const base = {
     bid: args.bid, ask: args.ask, mark: args.mark, last: args.last,
-    updatedAt: new Date(args.updatedAt).toISOString(),
+    updatedAt: updatedAt.toISOString(),
     source: args.source,
   };
-  if ((args.bid == null || !Number.isFinite(args.bid)) && (args.ask == null || !Number.isFinite(args.ask))) {
-    return { ...base, quality: "MISSING", reason: "Bid and ask both unavailable." };
-  }
-  if (Number.isFinite(ageMs) && ageMs > 60_000) {
-    return { ...base, quality: "STALE", reason: `Quote ${Math.round(ageMs / 1000)}s old.` };
-  }
-  if (args.mark === 0 || (args.bid === 0 && args.ask === 0)) {
-    return { ...base, quality: "ANOMALOUS", reason: "Mark is 0.00 — closed market or bad print." };
-  }
-  if (args.mark != null && args.mark < 0) {
-    return { ...base, quality: "ANOMALOUS", reason: "Mark negative — invalid." };
+  if (quality === "MISSING") return { ...base, quality, reason: "Bid, ask, and mark are all unavailable." };
+  if (quality === "STALE") return { ...base, quality, reason: `Quote ${Math.round((Date.now() - updatedAt.getTime()) / 1000)}s old.` };
+  if (quality === "ANOMALOUS") {
+    if (args.mark == null) return { ...base, quality, reason: "Mark missing — invalid quote." };
+    if (args.mark <= 0.01) return { ...base, quality, reason: "Mark is 0.00 or near zero — likely bad print." };
+    if (args.bid != null && args.ask != null && args.bid > args.ask) return { ...base, quality, reason: "Bid is above ask — crossed market." };
   }
   if (args.underlyingPrice != null && args.underlyingPrice > 0 && args.mark != null && args.mark > args.underlyingPrice * 0.7) {
-    return { ...base, quality: "ANOMALOUS", reason: `Mark > 70% of underlying — implausible.` };
+    return { ...base, quality: "ANOMALOUS", reason: "Mark > 70% of underlying — implausible." };
   }
   return { ...base, quality: "VALID", reason: "Bid/ask within sane bounds." };
 }
@@ -207,7 +219,7 @@ function decide(
     recommendation: "HOLD",
     reason: quoteValid
       ? "Position within risk parameters. Hold and re-evaluate intraday."
-      : "Quote unavailable — using last valid mark; no exit action this tick.",
+      : "Quote unavailable or anomalous; using last valid price. No stop triggered.",
     profitPct,
     stopConfirmCount: breach ? p.stop_confirm_count : 0,
     firstBreachAt: breach ? p.stop_first_breach_at : null,
@@ -362,6 +374,10 @@ Deno.serve(async (req: Request) => {
     }
     if (frozenFlag) frozen++;
 
+    if ((classified.mark ?? null) != null && classified.mark! <= 0.01 && Number(p.entry_premium ?? 0) >= 0.5) {
+      console.warn(`suspicious 0.00 quote ignored for ${p.symbol} ${Number(p.strike)}${isCall ? "C" : "P"}`);
+    }
+
     const dec = decide(
       p,
       usedMark,
@@ -397,7 +413,7 @@ Deno.serve(async (req: Request) => {
     await supabase
       .from("portfolio_positions")
       .update({
-        current_price: classified.mark != null ? +classified.mark.toFixed(4) : null,
+        current_price: +usedMark.toFixed(4),
         current_profit_pct: +dec.profitPct.toFixed(2),
         exit_recommendation: dec.recommendation,
         exit_reason: dec.reason,
