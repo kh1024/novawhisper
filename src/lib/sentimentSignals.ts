@@ -26,10 +26,14 @@ const FED_RATES_TERMS = [
   "treasury yield", "10-year", "yield curve", "dot plot",
 ];
 
+// Strict earnings keywords — must indicate an actual EARNINGS PRINT, not
+// generic "revenue" / "outlook" market chatter. Used to filter the curated
+// earnings feed from event-sources so the tile is real prints only.
 const EARNINGS_TERMS = [
-  "earnings", "guidance", "quarterly results", "beat estimates", "miss estimates",
-  "revenue", "eps", "outlook", "raised forecast", "lowered forecast", "warns",
-  "warning", "preannounce",
+  "earnings", "eps", "beat estimates", "missed estimates", "beats estimates",
+  "misses estimates", "quarterly results", "q1 ", "q2 ", "q3 ", "q4 ",
+  "fiscal", "raised guidance", "lowered guidance", "cuts guidance",
+  "preannounce", "profit warning", "earnings call",
 ];
 
 const POSITIVE_HINTS = ["beat", "raise", "raised", "surge", "record", "strong", "ease", "ceasefire", "deal", "agreement"];
