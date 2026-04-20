@@ -612,12 +612,15 @@ function WebPicksPanel() {
     return Math.max(0, Math.round((d - todayMs) / 86_400_000));
   };
 
-  // Hide timed-out picks per tier + apply NOVA AI filter.
+  // Hide timed-out picks per tier + apply NOVA AI filter + Settings budget cap.
   const tierPicks = (tier: "safe" | "mild" | "aggressive"): ScoutPick[] => {
     const src = tier === "safe" ? data?.safe : tier === "mild" ? data?.mild : data?.aggressive;
     return (src ?? []).filter((p) => {
       if (expiryStatus.get(pickKey(p))?.isTimedOut) return false;
       const premium = parsePremiumEstimate(p.premiumEstimate);
+      // Per-trade budget gate from Settings: drop anything that would cost
+      // more than the user is willing to risk per trade (premium × 100).
+      if (premium != null && premium * 100 > budget) return false;
       return pickMatchesFilter({
         symbol: p.symbol,
         strategy: p.strategy,
