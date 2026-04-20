@@ -511,6 +511,7 @@ function WebPicksPanel() {
   const { data, isLoading, isFetching, error, refetch } = useOptionsScout(true);
   const qc = useQueryClient();
   const [settings] = useSettings();
+  const [budget] = useBudget();
 
   // Collect every pick across tiers + their stable keys so the expiration
   // engine has a single flat list to chew on.
