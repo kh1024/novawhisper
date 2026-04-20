@@ -118,15 +118,24 @@ function keepPreviousOnBackoff(
   }
 }
 
+// Global cooldowns — when a provider 429s, skip ALL further calls to it
+// for the cooldown window so we stop wasting budget and let the free
+// sources (Yahoo/Stooq/CNBC/Google) carry the load.
+let finnhubCooldownUntil = 0;
+let massiveCooldownUntil = 0;
+const PROVIDER_COOLDOWN_MS = 90_000;
+
 async function fetchFinnhub(symbol: string): Promise<SourceQuote | null> {
   if (!FINNHUB_KEY) return null;
+  if (Date.now() < finnhubCooldownUntil) return finnhubCache.get(symbol)?.q ?? null;
   const cached = finnhubCache.get(symbol);
   if (cached && Date.now() - cached.at < FINNHUB_TTL_MS) return cached.q;
   try {
     const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB_KEY}`;
     const r = await fetch(url);
     if (r.status === 429) {
-      console.warn(`[finnhub] ${symbol} 429 rate-limit — backing off 60s`);
+      finnhubCooldownUntil = Date.now() + PROVIDER_COOLDOWN_MS;
+      console.warn(`[finnhub] ${symbol} 429 — global cooldown ${PROVIDER_COOLDOWN_MS}ms`);
       keepPreviousOnBackoff(finnhubCache, symbol, cached, FINNHUB_TTL_MS, 60_000);
       return cached?.q ?? null;
     }
@@ -192,6 +201,7 @@ async function fetchAlpha(symbol: string): Promise<SourceQuote | null> {
 
 async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
   if (!MASSIVE_KEY) return null;
+  if (Date.now() < massiveCooldownUntil) return massiveCache.get(symbol)?.q ?? null;
   // Kill-switch — skip Massive entirely while flagged offline. Hourly
   // massive-ping clears the flag when API recovers.
   if (await isMassiveDown()) return null;
@@ -204,7 +214,8 @@ async function fetchMassive(symbol: string): Promise<SourceQuote | null> {
       headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
     });
     if (r.status === 429) {
-      console.warn(`[massive] ${symbol} 429 rate-limit — backing off 60s`);
+      massiveCooldownUntil = Date.now() + PROVIDER_COOLDOWN_MS;
+      console.warn(`[massive] ${symbol} 429 — global cooldown ${PROVIDER_COOLDOWN_MS}ms`);
       keepPreviousOnBackoff(massiveCache, symbol, cached, MASSIVE_TTL_MS, 60_000);
       return cached?.q ?? null;
     }
