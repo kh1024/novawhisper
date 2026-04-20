@@ -401,6 +401,39 @@ export default function Dashboard() {
               </Tabs>
             </div>
           </div>
+          {/* Expiry quick-filter — same-day (0DTE) and same-week (≤7d) picks. */}
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Expires:</span>
+            {([
+              { v: "all" as const,  label: "Any DTE" },
+              { v: "0dte" as const, label: "Today (0DTE)" },
+              { v: "week" as const, label: "This week" },
+            ]).map((opt) => {
+              const active = dteFilter === opt.v;
+              const count = dteCounts[opt.v];
+              return (
+                <button
+                  key={opt.v}
+                  onClick={() => setDteFilter(opt.v)}
+                  className={`inline-flex items-center gap-1.5 h-6 px-2 rounded-full border text-[11px] font-semibold transition-colors ${
+                    active
+                      ? "bg-primary/15 border-primary/50 text-primary"
+                      : "bg-surface/40 border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
+                  }`}
+                >
+                  {opt.label}
+                  <span className={`mono text-[10px] px-1 rounded ${active ? "bg-primary/20" : "bg-muted/40"}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {dteFilter !== "all" && dteCounts[dteFilter] === 0 && (
+              <span className="ml-1 text-[10px] text-warning">
+                no {dteFilter === "0dte" ? "same-day" : "same-week"} picks fit your budget — try another expiry
+              </span>
+            )}
+          </div>
           {picks.length === 0 && (() => {
             const ts = detectTimeState();
             const closed = ts.state === "weekend" || ts.state === "closed" || ts.state === "holiday";
