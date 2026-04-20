@@ -17,6 +17,7 @@ import { useBudget } from "@/lib/budget";
 import { useSettings } from "@/lib/settings";
 import { NovaVerdictCard, type NovaCard } from "@/components/NovaVerdictCard";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { useEventRiskSignals } from "@/lib/sentimentSignals";
 import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
@@ -542,19 +543,37 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         <div className="text-muted-foreground">spread {c.spreadPct.toFixed(1)}%</div>
                       </div>
                       <div className="mono text-lg font-semibold w-10 text-right">{score}</div>
-                      <SaveToWatchlistButton
-                        size="xs"
-                        symbol={symbol}
-                        direction="long"
-                        optionType={c.type}
-                        strike={c.strike}
-                        expiry={c.expiration}
-                        entryPrice={q?.price ?? null}
-                        premiumEstimate={mid > 0 ? `$${mid.toFixed(2)}` : null}
-                        thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`}
-                        source="research-drawer"
-                        meta={{ score, annualized, dte: c.dte }}
-                      />
+                      <div className="flex flex-col items-end gap-1">
+                        <SaveToWatchlistButton
+                          size="xs"
+                          symbol={symbol}
+                          direction="long"
+                          optionType={c.type}
+                          strike={c.strike}
+                          expiry={c.expiration}
+                          entryPrice={q?.price ?? null}
+                          premiumEstimate={mid > 0 ? `$${mid.toFixed(2)}` : null}
+                          thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`}
+                          source="research-drawer"
+                          meta={{ score, annualized, dte: c.dte }}
+                        />
+                        <AddToPortfolioButton
+                          size="xs"
+                          variant="default"
+                          spec={{
+                            symbol,
+                            optionType: c.type,
+                            strike: c.strike,
+                            expiry: c.expiration,
+                            spot: q?.price ?? null,
+                            premium: mid > 0 ? mid : null,
+                            ivRank: c.iv != null ? Math.round(c.iv * 100) : null,
+                            initialScore: score,
+                            thesis: `Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`,
+                            source: "research-drawer",
+                          }}
+                        />
+                      </div>
                     </Card>
                     );
                   })}
