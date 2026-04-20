@@ -431,6 +431,12 @@ export default function Picks() {
               <Calendar className="h-3 w-3" />
               Picks for <span className="font-medium text-foreground">{targetSession}</span>
               {data?.cached && <Badge variant="outline" className="text-[10px] ml-1">Cached</Badge>}
+              {liveMap.size > 0 && (
+                <Badge variant="outline" className="text-[10px] ml-1 border-bullish/40 text-bullish gap-1">
+                  <Radio className="h-2.5 w-2.5 animate-pulse" />
+                  Live spot · {liveMap.size}
+                </Badge>
+              )}
             </p>
           </div>
           <div className="flex items-center gap-3">
