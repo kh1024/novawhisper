@@ -111,10 +111,15 @@ export function SafetyExitAlert() {
   };
 
   const exitNow = async () => {
+    const pos = open.find((p) => p.id === active.positionId);
+    if (!pos) { dismiss(); return; }
     await close.mutateAsync({
       id: active.positionId,
       closePremium: active.currentPremium,
       status: "closed",
+      contracts: pos.contracts,
+      entryPremium: pos.entry_premium,
+      direction: pos.direction,
     });
     dismiss();
   };

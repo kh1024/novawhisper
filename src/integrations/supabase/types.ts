@@ -190,21 +190,39 @@ export type Database = {
           closed_at: string | null
           contracts: number
           created_at: string
+          current_price: number | null
+          current_profit_pct: number | null
           direction: string
           entry_at: string
+          entry_cost_total: number | null
           entry_premium: number | null
+          entry_thesis: string | null
           entry_underlying: number | null
+          exit_price: number | null
+          exit_reason: string | null
+          exit_recommendation: string
+          exit_time: string | null
           expiry: string
+          hard_stop_pct: number
           id: string
+          initial_gates: Json | null
+          initial_score: number | null
           is_paper: boolean
+          last_evaluated_at: string | null
+          max_hold_days: number | null
           notes: string | null
+          option_symbol: string | null
           option_type: string
           owner_key: string
+          realized_pnl: number | null
+          risk_bucket: string | null
           source: string | null
           status: string
           strike: number
           strike_short: number | null
           symbol: string
+          target_1_pct: number
+          target_2_pct: number
           thesis: string | null
           updated_at: string
         }
@@ -213,21 +231,39 @@ export type Database = {
           closed_at?: string | null
           contracts?: number
           created_at?: string
+          current_price?: number | null
+          current_profit_pct?: number | null
           direction: string
           entry_at?: string
+          entry_cost_total?: number | null
           entry_premium?: number | null
+          entry_thesis?: string | null
           entry_underlying?: number | null
+          exit_price?: number | null
+          exit_reason?: string | null
+          exit_recommendation?: string
+          exit_time?: string | null
           expiry: string
+          hard_stop_pct?: number
           id?: string
+          initial_gates?: Json | null
+          initial_score?: number | null
           is_paper?: boolean
+          last_evaluated_at?: string | null
+          max_hold_days?: number | null
           notes?: string | null
+          option_symbol?: string | null
           option_type: string
           owner_key: string
+          realized_pnl?: number | null
+          risk_bucket?: string | null
           source?: string | null
           status?: string
           strike: number
           strike_short?: number | null
           symbol: string
+          target_1_pct?: number
+          target_2_pct?: number
           thesis?: string | null
           updated_at?: string
         }
@@ -236,21 +272,39 @@ export type Database = {
           closed_at?: string | null
           contracts?: number
           created_at?: string
+          current_price?: number | null
+          current_profit_pct?: number | null
           direction?: string
           entry_at?: string
+          entry_cost_total?: number | null
           entry_premium?: number | null
+          entry_thesis?: string | null
           entry_underlying?: number | null
+          exit_price?: number | null
+          exit_reason?: string | null
+          exit_recommendation?: string
+          exit_time?: string | null
           expiry?: string
+          hard_stop_pct?: number
           id?: string
+          initial_gates?: Json | null
+          initial_score?: number | null
           is_paper?: boolean
+          last_evaluated_at?: string | null
+          max_hold_days?: number | null
           notes?: string | null
+          option_symbol?: string | null
           option_type?: string
           owner_key?: string
+          realized_pnl?: number | null
+          risk_bucket?: string | null
           source?: string | null
           status?: string
           strike?: number
           strike_short?: number | null
           symbol?: string
+          target_1_pct?: number
+          target_2_pct?: number
           thesis?: string | null
           updated_at?: string
         }
