@@ -58,8 +58,7 @@ import { CollapsibleBlockedSection } from "@/components/CollapsibleBlockedSectio
 import { BlockedPickCard, type BlockedPickInfo } from "@/components/BlockedPickCard";
 import { PreMarketPickCard } from "@/components/PreMarketPickCard";
 import { LoosenToSeePicks } from "@/components/LoosenToSeePicks";
-import { ScanCache, formatCacheAge, cacheKeyOf } from "@/lib/scanCache";
-import { useRef } from "react";
+import { ScanCache, formatCacheAge } from "@/lib/scanCache";
 import { generatePreMarketPicks, isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { useStrategyProfile, maxPerTradeDollars, isStructureAllowed } from "@/lib/strategyProfile";
 import { useScannerOverrides } from "@/lib/scannerOverrides";
