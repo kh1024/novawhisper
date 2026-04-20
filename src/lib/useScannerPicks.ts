@@ -120,15 +120,15 @@ export interface UseScannerPicksOptions {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function deriveContract(r: SetupRow): PickContract & { entryUnderlying: number } {
-  const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
-  const step = r.price >= 100 ? 5 : 1;
-  const strike = Math.max(step, Math.round(r.price / step) * step);
+/** Compute the next monthly Friday-ish expiry ~28 days out. Shared with the
+ *  legacy callers that still derive their own contracts. */
+function nextExpiry(daysAhead = 28): { expiry: string; dte: number } {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() + 28);
+  d.setUTCDate(d.getUTCDate() + daysAhead);
   while (d.getUTCDay() !== 5) d.setUTCDate(d.getUTCDate() + 1);
   const expiry = d.toISOString().slice(0, 10);
-  return { symbol: r.symbol, optionType, strike, expiry, entryUnderlying: r.price };
+  const dte = Math.max(1, Math.round((d.getTime() - Date.now()) / 86_400_000));
+  return { expiry, dte };
 }
 
 function contractKey(c: PickContract): string {
@@ -157,55 +157,103 @@ export function bucketPicks(args: {
   const safetyBlocked: BlockedPick[] = [];
   let profileFilteredCount = 0;
   let universeFilteredCount = 0;
+  const preMarket = isPreMarketWindow();
 
   for (const r of args.rows) {
     if (args.overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
       universeFilteredCount++;
       continue;
     }
-    const c = deriveContract(r);
-    const key = contractKey(c);
+    const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
+    const { expiry, dte } = nextExpiry(28);
+
     const rowB = rowBucket({
       riskBadge: r.crl?.riskBadge,
       earningsInDays: r.earningsInDays,
       ivRank: r.ivRank,
     });
-    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) {
-      continue;
-    }
-    const expDate = new Date(c.expiry + "T00:00:00");
-    const dte = isNaN(expDate.getTime()) ? 30
-      : Math.max(0, Math.round((expDate.getTime() - Date.now()) / 86_400_000));
-    if (!isStructureAllowed(args.profile, c.optionType, dte)) {
+    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) continue;
+
+    if (!isStructureAllowed(args.profile, optionType, dte)) {
       profileFilteredCount++;
       continue;
     }
+
+    // ── Strike ladder: generate Deep ITM / ITM / ATM (+OTM for lottery) ──
+    // and price each rung via Black-Scholes-lite. The picker then selects
+    // the highest-quality rung that fits the per-trade cap.
+    const ladder = buildStrikeLadder({
+      spot: r.price,
+      ivRank: r.ivRank,
+      optionType,
+      expiry,
+      dte,
+      includeOTM: rowB === "Lottery",
+    });
+    const pick = pickBestRung(ladder, args.cap);
+    if (!pick) {
+      // Degenerate row (no usable price). Skip silently.
+      continue;
+    }
+
+    const contract: PickContract = {
+      symbol: r.symbol,
+      optionType,
+      strike: pick.candidate.strike,
+      expiry: pick.candidate.expiry,
+    };
+    const key = contractKey(contract);
     const v = args.verdictByRow.get(r.symbol);
-    const estCost = Math.round(r.price * 100);
-    const overBy = estCost - args.cap;
-    const isBudgetBlocked = !args.overrides.showBudgetBlocked && overBy > 0;
     const isSafetyBlocked = v?.verdict === "Avoid" || (v?.reason ?? "").toLowerCase().includes("block");
 
     if (isSafetyBlocked) {
       safetyBlocked.push({
-        key, row: r, contract: c, bucket: rowB, kind: "safety",
+        key, row: r, contract, bucket: rowB, kind: "safety",
         reason: v?.reason || "Safety gate failure",
         detail: v?.reason || "One or more safety gates flagged this pick.",
+        premium: pick.candidate.premium,
+        suspect: pick.candidate.suspect,
+        preMarket,
       });
       continue;
     }
-    if (isBudgetBlocked) {
+
+    // Budget logic — pick.fitsCap is the source of truth (already considered
+    // every ladder rung). When it doesn't fit, we surface the cheapest rung
+    // as the "block reason" and include the cost gap.
+    if (!pick.fitsCap && !args.overrides.showBudgetBlocked) {
+      const cheapest = pick.cheapest;
+      const overBy = cheapest.contractCost - args.cap;
       budgetBlocked.push({
-        key, row: r, contract: c, bucket: rowB, kind: "budget",
+        key, row: r, contract, bucket: rowB, kind: "budget",
         reason: `Over per-trade cap by $${overBy.toLocaleString()}`,
-        detail: `Per-trade cap is $${args.cap.toLocaleString()}. Estimated cost for 1 contract is $${estCost.toLocaleString()}.`,
-        overBudgetBy: overBy, cap: args.cap, cost: estCost,
+        detail:
+          `Cap $${args.cap.toLocaleString()}. Cheapest ladder rung is ` +
+          `${cheapest.rung} ${cheapest.optionType} $${cheapest.strike} @ ~$${cheapest.premium.toFixed(2)} ` +
+          `= $${cheapest.contractCost.toLocaleString()}/contract.`,
+        overBudgetBy: overBy,
+        cap: args.cap,
+        cost: cheapest.contractCost,
+        premium: cheapest.premium,
+        suspect: cheapest.suspect,
+        preMarket,
+        cheaperAlternative: null,
       });
       continue;
     }
+
     approved.push({
-      key, row: r, rank: args.rankMap.get(r.symbol) ?? null, verdict: v ?? null,
-      contract: c, estCost, bucket: rowB,
+      key,
+      row: r,
+      rank: args.rankMap.get(r.symbol) ?? null,
+      verdict: v ?? null,
+      contract,
+      estCost: pick.candidate.contractCost,
+      premium: pick.candidate.premium,
+      rung: pick.candidate.rung,
+      suspect: pick.candidate.suspect,
+      preMarket,
+      bucket: rowB,
     });
   }
 
@@ -219,6 +267,18 @@ export function bucketPicks(args: {
   });
 
   return { approved, budgetBlocked, safetyBlocked, profileFilteredCount, universeFilteredCount };
+}
+
+/**
+ * Find the cheapest ITM/Deep-ITM rung across ALL budget-blocked picks. Used
+ * by the Scanner's diagnostic line "🔎 Every gate-passing pick is over your
+ * $X cap. Cheapest option: F $11C at ~$210 total — click to approve."
+ */
+export function findCheapestAlternative(blocked: BlockedPick[]): BlockedPick | null {
+  if (blocked.length === 0) return null;
+  return [...blocked]
+    .filter((b) => !b.suspect && (b.cost ?? Infinity) > 0)
+    .sort((a, b) => (a.cost ?? Infinity) - (b.cost ?? Infinity))[0] ?? null;
 }
 
 // ─── Hook ───────────────────────────────────────────────────────────────────
