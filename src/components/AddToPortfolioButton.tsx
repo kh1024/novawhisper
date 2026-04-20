@@ -209,6 +209,28 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
     );
   };
 
+  // Stage gate UI — when not eligible, render a disabled "Wait for Confirmation" pill
+  // instead of the dialog trigger so the user can never accidentally enter a non-confirmed trade.
+  if (!stageAllowsAdd) {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        disabled
+        className={cn(
+          size === "xs" ? "h-6 px-2 text-[10px]" : size === "default" ? "h-9 px-3" : "h-7 px-2 text-[11px]",
+          "border-warning/40 bg-warning/5 text-warning cursor-not-allowed",
+          className,
+        )}
+        onClick={(e) => e.stopPropagation()}
+        title="Add to Portfolio unlocks once direction, volume, gap and liquidity are all confirmed."
+      >
+        <Briefcase className={cn("h-3 w-3", !iconOnly && "mr-1")} />
+        {!iconOnly && "Wait — not confirmed"}
+      </Button>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
