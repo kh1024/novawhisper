@@ -285,12 +285,13 @@ function SummaryCard({ label, icon: Icon, children }: {
 }
 
 function Section({
-  side, rows, gradeFilter, onGradeFilter,
+  side, rows, gradeFilter, onGradeFilter, liveMap,
 }: {
   side: "call" | "put";
   rows: Pick[];
   gradeFilter: GradeFilter;
   onGradeFilter: (g: GradeFilter) => void;
+  liveMap: Map<string, { price: number; chg: number }>;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(rows.length ? 0 : null);
   const filtered = useMemo(
@@ -329,7 +330,7 @@ function Section({
               No picks match the {gradeFilter} filter.
             </Card>
           ) : (
-            <PicksTable rows={filtered} kind={side} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
+            <PicksTable rows={filtered} kind={side} selectedIdx={selectedIdx} onSelect={setSelectedIdx} liveMap={liveMap} />
           )}
         </div>
         <div>
