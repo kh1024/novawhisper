@@ -369,19 +369,26 @@ Deno.serve(async (req: Request) => {
     return `O:${sym}${yy}${m}${d}${cp}${k}`;
   }
   async function fetchMassiveContract(underlying: string, ticker: string): Promise<ChainEntry | null> {
-    if (!MASSIVE_KEY) return null;
+    if (!MASSIVE_KEY) {
+      console.warn(`[per-contract] ${ticker} skipped — MASSIVE_API_KEY not set`);
+      return null;
+    }
     try {
       const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(ticker)}`;
       const r = await fetch(url, {
         headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
       });
       if (!r.ok) {
-        console.warn(`[per-contract] ${ticker} HTTP ${r.status}`);
+        const txt = await r.text().catch(() => "");
+        console.warn(`[per-contract] ${ticker} HTTP ${r.status} body=${txt.slice(0, 200)}`);
         return null;
       }
       const d = await r.json();
       const result = d?.results ?? d?.result ?? null;
-      if (!result) return null;
+      if (!result) {
+        console.warn(`[per-contract] ${ticker} no results in payload`);
+        return null;
+      }
       const quote = result.last_quote ?? {};
       const trade = result.last_trade ?? {};
       const day = result.day ?? {};
@@ -398,6 +405,8 @@ Deno.serve(async (req: Request) => {
         if (dayClose > 0) { mid = dayClose; if (last === 0) last = dayClose; }
         else if (dayVwap > 0) { mid = dayVwap; if (last === 0) last = dayVwap; }
       }
+      console.log(`[per-contract] ${ticker} parsed bid=${bid} ask=${ask} mid=${mid} last=${last} dayClose=${day.close ?? "n/a"}`);
+      if (mid <= 0 && last <= 0) return null;
       return { bid, ask, mid, last };
     } catch (e) {
       console.warn(`[per-contract] ${ticker} failed`, e);
