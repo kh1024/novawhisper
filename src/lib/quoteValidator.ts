@@ -47,54 +47,64 @@ function toDate(x: Date | string | number | null): Date {
   return Number.isFinite(t) ? new Date(t) : new Date(0);
 }
 
+export function getQuoteQuality(
+  mark: number | null,
+  bid: number | null,
+  ask: number | null,
+  updatedAt: Date,
+): QuoteQuality {
+  const ageSec = (Date.now() - updatedAt.getTime()) / 1000;
+
+  if (bid == null && ask == null && mark == null) return "MISSING";
+  if (ageSec > 60) return "STALE";
+  if (mark == null) return "ANOMALOUS";
+  if (mark <= 0.01) return "ANOMALOUS";
+  if (bid != null && ask != null && bid > ask) return "ANOMALOUS";
+
+  return "VALID";
+}
+
 export function classifyQuote(raw: RawQuote): OptionQuote {
   const updatedAt = toDate(raw.updatedAt);
-  const ageMs = Date.now() - updatedAt.getTime();
   const bid = raw.bid;
   const ask = raw.ask;
   const mark = raw.mark;
+  const quality = getQuoteQuality(mark, bid, ask, updatedAt);
 
-  // 1) MISSING — both sides absent.
-  if ((bid == null || !Number.isFinite(bid)) && (ask == null || !Number.isFinite(ask))) {
+  if (quality === "MISSING") {
     return {
       bid, ask, last: raw.last, mark, updatedAt,
-      quality: "MISSING",
-      reason: "Bid and ask both unavailable from quote source.",
+      quality,
+      reason: "Bid, ask, and mark are all unavailable from quote source.",
       source: raw.source,
     };
   }
 
-  // 2) STALE — older than 60s.
-  if (Number.isFinite(ageMs) && ageMs > STALE_AFTER_MS) {
+  if (quality === "STALE") {
     return {
       bid, ask, last: raw.last, mark, updatedAt,
-      quality: "STALE",
-      reason: `Quote ${Math.round(ageMs / 1000)}s old (>60s threshold).`,
+      quality,
+      reason: `Quote ${Math.round((Date.now() - updatedAt.getTime()) / 1000)}s old (>60s threshold).`,
       source: raw.source,
     };
   }
 
-  // 3) ANOMALOUS — mark=0 or both sides zeroed.
-  if (mark === 0 || (bid === 0 && ask === 0)) {
+  if (quality === "ANOMALOUS") {
+    const reason = mark == null
+      ? "Mark missing — invalid quote."
+      : mark <= 0.01
+        ? "Mark is 0.00 or near zero — likely bad print."
+        : bid != null && ask != null && bid > ask
+          ? "Bid is above ask — crossed market, invalid quote."
+          : "Quote failed validation.";
     return {
       bid, ask, last: raw.last, mark, updatedAt,
-      quality: "ANOMALOUS",
-      reason: "Mark is 0.00 — likely closed market or bad print.",
+      quality,
+      reason,
       source: raw.source,
     };
   }
 
-  // 4) ANOMALOUS — negative mark (only happens with bad math).
-  if (mark != null && mark < 0) {
-    return {
-      bid, ask, last: raw.last, mark, updatedAt,
-      quality: "ANOMALOUS",
-      reason: "Mark is negative — invalid.",
-      source: raw.source,
-    };
-  }
-
-  // 5) ANOMALOUS — option mark wildly above 70% of underlying.
   if (
     raw.underlyingPrice != null && raw.underlyingPrice > 0 &&
     mark != null && mark > raw.underlyingPrice * 0.7

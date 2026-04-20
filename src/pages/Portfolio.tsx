@@ -257,9 +257,10 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const isCall = p.option_type.toLowerCase().includes("call");
   const dte = dteFromExpiry(p.expiry);
   const isOpen = p.status === "open";
-  // Only run live exit-decision preview for OPEN positions. Closed/expired
-  // positions must reflect their realized exit price + P&L, never live spot.
-  const dec = isOpen ? previewExitDecision(p, spot ?? null) : null;
+  const quoteUnavailable = isOpen && p.last_quote_quality != null && p.last_quote_quality !== "VALID";
+  // Only run live exit-decision preview for OPEN positions with a valid quote.
+  // Invalid/stale/missing quotes must use the persisted frozen mark from the exit engine.
+  const dec = isOpen && !quoteUnavailable ? previewExitDecision(p, spot ?? null) : null;
   const recommendation = (dec?.recommendation ?? p.exit_recommendation) as ExitRecommendation;
   const reason = dec?.reason ?? p.exit_reason ?? "Awaiting first evaluation tick.";
   const realizedPct = (!isOpen && p.entry_premium != null && p.close_premium != null && Number(p.entry_premium) > 0)
@@ -269,18 +270,17 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
     ? (dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null))
     : realizedPct;
 
-  // Estimated current per-share premium for OPEN positions only.
+  // Prefer the validated mark written by the exit engine. Only fall back to a
+  // client estimate when we truly have no persisted current_price yet.
   let currentMid: number | null = null;
-  if (isOpen) {
-    if (spot != null && p.entry_premium != null) {
-      currentMid = estimatePremium({
-        spot, strike: Number(p.strike), iv: ivRankToIv(50),
-        dte: Math.max(1, dte),
-        optionType: isCall ? "call" : "put",
-      }).perShare;
-    } else if (p.current_price != null) {
-      currentMid = Number(p.current_price);
-    }
+  if (isOpen && p.current_price != null) {
+    currentMid = Number(p.current_price);
+  } else if (isOpen && spot != null && p.entry_premium != null) {
+    currentMid = estimatePremium({
+      spot, strike: Number(p.strike), iv: ivRankToIv(50),
+      dte: Math.max(1, dte),
+      optionType: isCall ? "call" : "put",
+    }).perShare;
   }
 
   const initialGates = (p.initial_gates ?? {}) as Record<string, string>;
@@ -388,10 +388,23 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       )}
 
       {/* Exit guidance line */}
+      {quoteUnavailable && (
+        <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-warning">
+          <span className="font-semibold mr-1">Quote Unavailable —</span>
+          <span>using last valid price. Verify in your broker.</span>
+        </div>
+      )}
       {p.status === "open" && (
-        <div className={cn("rounded-md border px-3 py-2 text-[12px] leading-snug", EXIT_CLASSES[recommendation])}>
-          <span className="font-semibold mr-1">Recommendation: {EXIT_LABEL[recommendation]} —</span>
-          <span className="opacity-90">{reason}</span>
+        <div className={cn(
+          "rounded-md border px-3 py-2 text-[12px] leading-snug",
+          quoteUnavailable ? "border-warning/40 bg-warning/10 text-warning" : EXIT_CLASSES[recommendation],
+        )}>
+          <span className="font-semibold mr-1">
+            {quoteUnavailable ? "Recommendation: HOLD —" : `Recommendation: ${EXIT_LABEL[recommendation]} —`}
+          </span>
+          <span className="opacity-90">
+            {quoteUnavailable ? "Quote unavailable or anomalous; using last valid price. No auto-stop. Check your broker." : reason}
+          </span>
         </div>
       )}
 
