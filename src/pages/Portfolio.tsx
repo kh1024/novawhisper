@@ -259,18 +259,35 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const dte = dteFromExpiry(p.expiry);
   const isOpen = p.status === "open";
   const quoteUnavailable = isOpen && p.last_quote_quality != null && p.last_quote_quality !== "VALID";
+  // True when we have NO mark to display at all — neither a live VALID quote nor a frozen
+  // last_valid_mark from a prior valid tick. In this state we MUST NOT display profit% or
+  // surface stop/target recommendations (would be computed against bogus or zero data).
+  const noMarkAvailable = isOpen
+    && !(p.last_quote_quality === "VALID" && p.current_price != null)
+    && p.last_valid_mark == null
+    && !(p.last_quote_quality == null && p.current_price != null);
   // Only run live exit-decision preview for OPEN positions with a valid quote.
   // Invalid/stale/missing quotes must use the persisted frozen mark from the exit engine.
-  const dec = isOpen && !quoteUnavailable ? previewExitDecision(p, spot ?? null) : null;
-  const recommendation = (dec?.recommendation ?? p.exit_recommendation) as ExitRecommendation;
-  const reason = dec?.reason ?? p.exit_reason ?? "Awaiting first evaluation tick.";
+  const dec = isOpen && !quoteUnavailable && !noMarkAvailable ? previewExitDecision(p, spot ?? null) : null;
+  // When there's no mark, force HOLD — never inherit a stale TAKE_PROFIT/SELL_AT_LOSS from
+  // p.exit_recommendation (the engine may have written it before the quote went bad).
+  const recommendation = (
+    noMarkAvailable
+      ? "HOLD"
+      : (dec?.recommendation ?? p.exit_recommendation)
+  ) as ExitRecommendation;
+  const reason = noMarkAvailable
+    ? "Quote unavailable — waiting for next Massive evaluation tick. No auto-stop."
+    : (dec?.reason ?? p.exit_reason ?? "Awaiting first evaluation tick.");
   const realizedPct = (!isOpen && p.entry_premium != null && p.close_premium != null && Number(p.entry_premium) > 0)
     ? ((Number(p.close_premium) - Number(p.entry_premium)) / Number(p.entry_premium)) * 100
     : null;
   const profitPct = isOpen
-    ? (quoteUnavailable
-        ? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null)
-        : (dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null)))
+    ? (noMarkAvailable
+        ? null
+        : (quoteUnavailable
+            ? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null)
+            : (dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null))))
     : realizedPct;
 
   // Trust ONLY the validated mark written by the exit engine.
