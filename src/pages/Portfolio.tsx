@@ -415,11 +415,25 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
             {!isOpen && p.close_premium != null && (<>
               {" · "}Exit <span className="text-foreground font-mono">${Number(p.close_premium).toFixed(2)}</span>
             </>)}
-            {profitPct != null && currentMidSource !== "frozen" && !noMarkAvailable && (
-              <span className={cn("ml-2 font-mono", profitPct >= 0 ? "text-bullish" : "text-bearish")}>
-                {profitPct >= 0 ? "+" : ""}{profitPct.toFixed(1)}%
-              </span>
-            )}
+            {profitPct != null && currentMidSource !== "frozen" && !noMarkAvailable && (() => {
+              const dollarPnl = (p.entry_premium != null && currentMid != null)
+                ? (currentMid - Number(p.entry_premium)) * 100 * (p.contracts ?? 1)
+                : null;
+              const sign = profitPct >= 0 ? "+" : "−";
+              return (
+                <span
+                  className={cn("ml-2 font-mono", profitPct >= 0 ? "text-bullish" : "text-bearish")}
+                  title={dollarPnl != null
+                    ? `${sign}$${Math.abs(dollarPnl).toFixed(2)} on ${p.contracts ?? 1} contract(s) (each = 100 shares)`
+                    : undefined}
+                >
+                  {sign}{Math.abs(profitPct).toFixed(1)}%
+                  {dollarPnl != null && (
+                    <span className="ml-1 opacity-80">({sign}${Math.abs(dollarPnl).toFixed(2)})</span>
+                  )}
+                </span>
+              );
+            })()}
           </div>
         </div>
         {p.status === "open" && (
