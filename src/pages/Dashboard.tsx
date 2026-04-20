@@ -436,6 +436,7 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{p.symbol}</span>
                     <TickerPrice symbol={p.symbol} showChange showFreshness />
+                    {affBy.get(p.id) && <AffordabilityBadge result={affBy.get(p.id)!} />}
                     <BudgetAltSuggestion
                       symbol={p.symbol}
                       contractCost={(p.premium ?? 0) * 100}
@@ -540,6 +541,45 @@ export default function Dashboard() {
               >
                 {showBlocked ? "Hide blocked" : "Show blocked"}
               </button>
+            </div>
+          )}
+          {/* Blocked-by-Budget drawer — picks Nova surfaced but the user's
+              Settings budget vetoes. Listed cheapest-first so the closest
+              over-budget contract is one click away. */}
+          {blockedPicks.length > 0 && (
+            <div className="mt-2 rounded-md border border-bearish/30 bg-bearish/5 text-bearish/90 px-3 py-2">
+              <div className="flex items-center justify-between text-[11px]">
+                <span>
+                  <span className="font-mono font-semibold">{blockedPicks.length}</span> blocked by budget
+                  <span className="text-bearish/70"> — over your ${budget.toLocaleString()}/trade cap</span>
+                </span>
+                <button
+                  onClick={() => setShowBudgetBlocked((v) => !v)}
+                  className="text-[11px] font-semibold tracking-wide hover:underline underline-offset-2"
+                >
+                  {showBudgetBlocked ? "Hide" : "Show"}
+                </button>
+              </div>
+              {showBudgetBlocked && (
+                <div className="mt-2 space-y-1.5">
+                  {blockedPicks.slice(0, 8).map(({ item: p, aff }) => (
+                    <div
+                      key={`bb-${p.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setOpenSymbol(p.symbol)}
+                      onKeyDown={(e) => { if (e.key === "Enter") setOpenSymbol(p.symbol); }}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded border border-bearish/20 bg-background/40 hover:bg-bearish/10 transition-colors cursor-pointer text-[11px]"
+                    >
+                      <span className="font-mono font-semibold text-foreground w-12">{p.symbol}</span>
+                      <span className="text-muted-foreground flex-1 truncate capitalize">
+                        {p.strategy.replace("-", " ")} ${p.strike} · {p.dte}d
+                      </span>
+                      <AffordabilityBadge result={aff} variant="detailed" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           {isWeekend && hideWeekendGhosts && ghostCount > 0 && (
