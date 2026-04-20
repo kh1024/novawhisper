@@ -135,7 +135,7 @@ const TIPS: Tip[] = [
   { category: "risk", title: "Don't hold expiring OTM into Friday close", body: "If your long option is OTM at 3pm Friday, the math says close it for whatever's left rather than gamble on a 0% PoP." },
 
   // ── Quick wins ────────────────────────────────────────────
-  { category: "strategy", title: "Wheel strategy in one breath", body: "Sell CSP → assigned → sell covered call → called away → repeat. Income on stocks you'd own anyway." },
+  { category: "strategy", title: "Stock-replacement call", body: "Buy a Δ ≥ 0.80 ITM call instead of 100 shares. Tracks the stock 1-for-1, ties up a fraction of the capital, and your max loss is capped at the premium." },
   { category: "strategy", title: "Poor man's covered call", body: "Long deep-ITM LEAPS call + short near-dated OTM call. Capital-efficient version of the covered call." },
   { category: "strategy", title: "Protective put as insurance", body: "Long stock + long OTM put = floor on losses. Costs premium but lets you hold conviction names through volatility." },
   { category: "strategy", title: "Collar strategy", body: "Long stock + long put + short call = defined range. Free or near-free hedge for concentrated positions." },

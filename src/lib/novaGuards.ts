@@ -83,7 +83,7 @@ export function evaluateGuards(i: GuardEvalInput): GuardEval {
     }
   }
 
-  // 2. Intrinsic Audit — a "safe" call whose strike > spot is OTM speculation, not income.
+  // 2. Intrinsic Audit — a "safe" call whose strike > spot is OTM speculation, not intrinsic-backed.
   const bucket = (i.riskBucket ?? "").toLowerCase();
   if (
     bucket === "safe" &&
@@ -97,7 +97,7 @@ export function evaluateGuards(i: GuardEvalInput): GuardEval {
       id: "intrinsic",
       label: "High-Risk Speculation",
       severity: "warning",
-      message: `"Safe" calls must be ITM. Strike $${i.strike} is above spot $${i.livePrice.toFixed(2)} — this is OTM speculation, not income.`,
+      message: `"Safe" calls must be ITM. Strike $${i.strike} is above spot $${i.livePrice.toFixed(2)} — this is OTM speculation, not intrinsic-backed exposure.`,
       blocksSignal: true,
     });
   }
