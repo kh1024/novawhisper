@@ -312,12 +312,13 @@ export function bucketPicks(args: {
     });
   }
 
-  // Sort approved by Final Rank desc (with setup score tiebreaker) so every
-  // surface — Scanner table, Dashboard top-N widget — agrees on order.
+  // Sort: tier rank DESC (CLEAN > NEAR-LIMIT > BEST-OF-WAIT), then
+  // adjustedScore DESC, then setup score. Ensures CLEAN picks always
+  // surface first while NEAR-LIMIT/BEST-OF-WAIT fill the bucket below.
   approved.sort((a, b) => {
-    const ra = a.rank?.finalRank ?? a.row.setupScore;
-    const rb = b.rank?.finalRank ?? b.row.setupScore;
-    if (rb !== ra) return rb - ra;
+    const tDelta = tierRank(b.pickTier) - tierRank(a.pickTier);
+    if (tDelta !== 0) return tDelta;
+    if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
     return b.row.setupScore - a.row.setupScore;
   });
 
