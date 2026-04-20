@@ -157,21 +157,23 @@ function decide(
   const profitPct = ((usedMark - Number(p.entry_premium)) / Number(p.entry_premium)) * 100;
   path.profitPct = profitPct;
 
-  // Take-profit + trim only fire on VALID quotes (don't lock in profits from a stale tick).
-  if (quoteValid && profitPct >= Number(p.target_2_pct)) {
+  // Take-profit + trim only fire on VALID quotes AND only when usedMark is
+  // strictly above entry. Belt-and-suspenders against any caller that might
+  // pass an inflated synthetic mark.
+  if (quoteValid && profitPct >= Number(p.target_2_pct) && usedMark > Number(p.entry_premium)) {
     return {
       recommendation: "TAKE_PROFIT",
       reason: `Premium up ${profitPct.toFixed(1)}%, above target_2 (${p.target_2_pct}%). Lock in full profits.`,
       profitPct, stopConfirmCount: 0, firstBreachAt: null,
-      path: { ...path, branch: "take_profit" },
+      path: { ...path, branch: "take_profit", usedMark, entry: Number(p.entry_premium) },
     };
   }
-  if (quoteValid && profitPct >= Number(p.target_1_pct)) {
+  if (quoteValid && profitPct >= Number(p.target_1_pct) && usedMark > Number(p.entry_premium)) {
     return {
       recommendation: "TRIM_PARTIAL",
       reason: `Premium up ${profitPct.toFixed(1)}%, above target_1 (${p.target_1_pct}%). Take partial profits, move stop to breakeven.`,
       profitPct, stopConfirmCount: 0, firstBreachAt: null,
-      path: { ...path, branch: "trim" },
+      path: { ...path, branch: "trim", usedMark, entry: Number(p.entry_premium) },
     };
   }
 
