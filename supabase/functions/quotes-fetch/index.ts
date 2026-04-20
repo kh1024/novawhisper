@@ -615,11 +615,18 @@ function detectSession(yahooState?: string | null): Session {
 
 function pickExtended(session: Session, yahoo: SourceQuote | null): { price: number | null; pct: number | null } {
   if (!yahoo) return { price: null, pct: null };
+  // Pre-market: surface pre-market quote.
   if (session === "pre" && yahoo.preMarketPrice != null) {
     return { price: yahoo.preMarketPrice, pct: yahoo.preMarketChangePct ?? null };
   }
-  if (session === "post" && yahoo.postMarketPrice != null) {
+  // Post-market (and right after close while we're still "closed" but post data is fresh):
+  // surface the most recent extended-hours price.
+  if ((session === "post" || session === "closed") && yahoo.postMarketPrice != null) {
     return { price: yahoo.postMarketPrice, pct: yahoo.postMarketChangePct ?? null };
+  }
+  // Closed early in the morning before pre opens: prefer pre if it exists.
+  if (session === "closed" && yahoo.preMarketPrice != null) {
+    return { price: yahoo.preMarketPrice, pct: yahoo.preMarketChangePct ?? null };
   }
   return { price: null, pct: null };
 }
