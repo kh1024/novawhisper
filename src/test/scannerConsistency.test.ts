@@ -19,7 +19,7 @@ function makeRow(sym: string, price: number, score: number, badge: "Safe" | "Mil
     breakdown: { liquidity: 70, technical: 70, volatility: 50, timing: 60, catalyst: 40, riskAdjusted: 60 },
     readiness: "NOW", warnings: [],
     crl: { verdict: "GO", reason: "good", riskBadge: badge, score, confidence: 0.7 } as never,
-  } as SetupRow;
+  } as unknown as SetupRow;
 }
 
 const overrides = {
@@ -34,7 +34,7 @@ describe("Scanner ↔ Dashboard pick consistency", () => {
     makeRow("F", 12, 70, "Mild"),
   ];
   const rankMap = new Map<string, RankResult>(
-    rows.map((r) => [r.symbol, { finalRank: r.setupScore, label: "BUY NOW", components: {} } as RankResult]),
+    rows.map((r) => [r.symbol, { finalRank: r.setupScore, label: "BUY NOW", components: {} } as unknown as RankResult]),
   );
   const verdictByRow = new Map<string, VerdictResult>(
     rows.map((r) => [r.symbol, { verdict: "Buy Now", reason: "ok" } as VerdictResult]),
