@@ -20,6 +20,7 @@ const Market = lazy(() => import("./pages/Market"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Strategy = lazy(() => import("./pages/Strategy"));
 const Performance = lazy(() => import("./pages/Performance"));
+const Picks = lazy(() => import("./pages/Picks"));
 const Landing = lazy(() => import("./pages/Landing"));
 const Auth = lazy(() => import("./pages/Auth"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -64,6 +65,7 @@ const App = () => (
               <Route path="/planning" element={<Planning />} />
               <Route path="/strategy" element={<Strategy />} />
               <Route path="/performance" element={<Performance />} />
+              <Route path="/picks" element={<Picks />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />

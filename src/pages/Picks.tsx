@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+// supabase client not needed; using direct fetch with anon key for query params
 
 interface Pick {
   ticker: string;
