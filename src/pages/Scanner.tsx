@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -50,18 +50,6 @@ import {
 } from "@/lib/verdictModel";
 import { MobileScannerList } from "@/components/scanner/MobileScannerList";
 import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
-import { StrategyContextBar, type PipelineCounts } from "@/components/StrategyContextBar";
-import { StrategyEditDrawer } from "@/components/StrategyEditDrawer";
-import { LoosenToSeePicks } from "@/components/LoosenToSeePicks";
-import { CollapsibleBlockedSection } from "@/components/CollapsibleBlockedSection";
-import { BlockedPickCard, type BlockedPickInfo } from "@/components/BlockedPickCard";
-import { PreMarketPickCard } from "@/components/PreMarketPickCard";
-import { generatePreMarketPicks, isPreMarketWindow } from "@/lib/preMarketGenerator";
-import { ScanCache, cacheKeyOf, formatCacheAge } from "@/lib/scanCache";
-import { useScannerOverrides } from "@/lib/scannerOverrides";
-import { useStrategyProfile, maxPerTradeDollars, isStructureAllowed } from "@/lib/strategyProfile";
-import { usePreMarketStatus } from "@/lib/preMarketPreview";
-import { toast } from "@/hooks/use-toast";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
