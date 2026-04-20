@@ -115,6 +115,15 @@ export interface PipelineCounts {
   budgetBlocked: number;
   shown: number;             // after bucket-narrowing + maxResults
   filterChip: string | null;
+  // ── Funnel metrics (debug panel) ──
+  safetyPassingCount: number;
+  budgetPassingCount: number;     // soft-band inside cap
+  scoredCount: number;            // got a score (not hard-dropped)
+  tradeReadyCount: number;        // tier === CLEAN
+  cleanCount: number;
+  nearLimitCount: number;
+  bestOfWaitCount: number;
+  marketMode: "LIVE" | "PREVIEW" | "CLOSED";
 }
 
 export interface ScannerPicksResult {
