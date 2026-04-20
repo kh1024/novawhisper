@@ -390,6 +390,25 @@ export default function Picks() {
     };
   }, [data]);
 
+  // Refresh underlying spot prices live for every visible ticker so the
+  // Price / 1D% columns don't go stale between daily picks runs.
+  const tickers = useMemo(() => {
+    if (!data) return [] as string[];
+    return Array.from(new Set([...data.calls, ...data.puts].map((p) => p.ticker)));
+  }, [data]);
+  const { data: liveQuotes } = useLiveQuotes(tickers, { refetchMs: 30_000 });
+  const liveMap = useMemo(() => {
+    const m = new Map<string, { price: number; chg: number }>();
+    if (Array.isArray(liveQuotes)) {
+      for (const q of liveQuotes) {
+        if (q?.symbol && Number.isFinite(q.price) && q.price > 0) {
+          m.set(q.symbol, { price: q.price, chg: Number(q.changePct ?? 0) });
+        }
+      }
+    }
+    return m;
+  }, [liveQuotes]);
+
   const targetSession = nextSessionLabel(data?.generatedAt);
   const generatedLabel = data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : null;
 
