@@ -27,6 +27,13 @@ export interface TraderProfile {
   ivStance: "low" | "average" | "high";
 }
 
+export interface ExitDefaults {
+  hardStopPct: number;   // e.g. -30  (negative number = loss threshold)
+  target1Pct: number;    // e.g.  50  (trim partial)
+  target2Pct: number;    // e.g. 100  (take profit / runner)
+  maxHoldDays: number | null; // null = derive from DTE
+}
+
 export interface AppSettings {
   refreshMs: number;          // quote polling interval
   tickerSymbols: string[];    // symbols shown in the top tape
@@ -45,6 +52,8 @@ export interface AppSettings {
   paperMode: boolean;         // when true, new saves are tagged is_paper=true
   // Trader profile — used by /strategy to tailor suggestions.
   traderProfile: TraderProfile;
+  // Default exit guidance applied to new positions (editable here, overridable per trade).
+  exitDefaults: ExitDefaults;
 }
 
 export type BrokerPreset = "robinhood" | "webull" | "schwab" | "ibkr" | "tastytrade" | "custom";
@@ -72,6 +81,12 @@ const DEFAULTS: AppSettings = {
     account: "small",
     ivStance: "average",
   },
+  exitDefaults: {
+    hardStopPct: -30,
+    target1Pct: 50,
+    target2Pct: 100,
+    maxHoldDays: null,
+  },
 };
 
 export const BROKER_PRESETS: { value: BrokerPreset; label: string; feePerContract: number; feePerTrade: number; regulatoryFeePerContract: number; hint: string }[] = [
@@ -92,8 +107,9 @@ function read(): AppSettings {
     const merged: AppSettings = {
       ...DEFAULTS,
       ...parsed,
-      // Deep-merge traderProfile so we don't lose new fields added later.
+      // Deep-merge nested objects so we don't lose new fields added later.
       traderProfile: { ...DEFAULTS.traderProfile, ...(parsed?.traderProfile ?? {}) },
+      exitDefaults:  { ...DEFAULTS.exitDefaults,  ...(parsed?.exitDefaults  ?? {}) },
     };
     // Migrate: anyone with the old 5s default gets bumped to safe 30s.
     if (merged.refreshMs < 15_000) merged.refreshMs = 30_000;

@@ -127,10 +127,14 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
 
   const [contracts, setContracts] = useState("1");
   const [entryPrice, setEntryPrice] = useState(prefilledPremium > 0 ? prefilledPremium.toFixed(2) : "");
-  const [hardStop, setHardStop] = useState("-30");
-  const [t1, setT1] = useState("50");
-  const [t2, setT2] = useState("100");
-  const [maxHold, setMaxHold] = useState(String(defaultMaxHoldDays(dte)));
+  const [hardStop, setHardStop] = useState(String(settings.exitDefaults.hardStopPct));
+  const [t1, setT1] = useState(String(settings.exitDefaults.target1Pct));
+  const [t2, setT2] = useState(String(settings.exitDefaults.target2Pct));
+  const [maxHold, setMaxHold] = useState(
+    settings.exitDefaults.maxHoldDays != null
+      ? String(settings.exitDefaults.maxHoldDays)
+      : String(defaultMaxHoldDays(dte)),
+  );
   const [notes, setNotes] = useState("");
 
   if (!resolved) return null;
@@ -180,10 +184,10 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
         thesis: notes.trim() || resolved.thesis || null,
         source: resolved.source ?? "scanner",
         isPaper: settings.paperMode,
-        hardStopPct: Number(hardStop) || -30,
-        target1Pct: Number(t1) || 50,
-        target2Pct: Number(t2) || 100,
-        maxHoldDays: Number(maxHold) || null,
+        hardStopPct: Number(hardStop) || settings.exitDefaults.hardStopPct,
+        target1Pct: Number(t1) || settings.exitDefaults.target1Pct,
+        target2Pct: Number(t2) || settings.exitDefaults.target2Pct,
+        maxHoldDays: Number(maxHold) || settings.exitDefaults.maxHoldDays,
         riskBucket: resolved.bucket ?? null,
         initialScore: resolved.initialScore ?? null,
         initialGates: resolved.initialGates ?? null,
