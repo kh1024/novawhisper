@@ -280,13 +280,28 @@ export function useEventRiskSignals() {
       "No Fed/CPI/yields headlines",
       "rate headlines",
     );
+    // Earnings tile uses ONLY the curated earnings sources (CNBC/Reuters/SA
+    // earnings sections + earnings calendars). The general news feed is
+    // intentionally excluded — it pollutes the tile with macro/market chatter
+    // that merely mentions "revenue" or "guidance".
+    const earningsTally = tallyTopical(earnTopical, EARNINGS_TERMS);
+    const filteredMatches = earningsTally.matches.filter((m) => {
+      const t = `${m.headline} ${m.summary}`.toLowerCase();
+      return EARNINGS_TERMS.some((term) => t.includes(term));
+    });
+    const earningsFiltered: ReturnType<typeof scoreFeed> = {
+      ...earningsTally,
+      hits: filteredMatches.length,
+      matches: filteredMatches,
+      topHeadline: filteredMatches[0]?.headline,
+    };
     const earnings = buildSignal(
       "earnings",
       "Earnings",
-      mergeTally(scoreFeed(items, EARNINGS_TERMS), tallyTopical(earnTopical, EARNINGS_TERMS)),
+      earningsFiltered,
       { hot: 5, warm: 2 },
       "No major earnings prints today",
-      "earnings headlines",
+      "earnings prints",
     );
 
     return {
