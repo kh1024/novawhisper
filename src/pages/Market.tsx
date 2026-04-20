@@ -21,6 +21,7 @@ import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { validatePick } from "@/lib/gates";
 import { useResolvedIvp } from "@/lib/gates/useResolvedIvp";
 import { useCapitalSettings } from "@/lib/budget";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { useSettings } from "@/lib/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -129,6 +130,28 @@ function OptionPickRow({ p, onClick, oi, quote, sma, accountBalance }: {
         <BudgetImpactPill result={validation} />
       </div>
       <GateValidationDashboard result={validation} compact className="pt-1" />
+      <div
+        className="pt-1.5 flex justify-end"
+        onClick={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        <AddToPortfolioButton
+          size="xs"
+          variant="outline"
+          spec={{
+            symbol: p.symbol,
+            optionType: p.optionType,
+            strike: p.strike,
+            expiry: p.expiry,
+            spot: quote?.price ?? p.playAt ?? null,
+            ivRank: null,
+            bucket: p.risk,
+            initialScore: null,
+            thesis: p.thesis,
+            source: "market-hottest",
+          }}
+        />
+      </div>
     </button>
   );
 }

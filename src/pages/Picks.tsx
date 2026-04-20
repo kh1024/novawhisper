@@ -13,6 +13,7 @@ import {
   Zap, RefreshCw, TrendingUp, TrendingDown, Sparkles, AlertTriangle,
   Target, Activity, Droplets, Flame, Calendar, ArrowUpRight, ArrowDownRight, Radio,
 } from "lucide-react";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 
 interface Pick {
   ticker: string;
@@ -234,6 +235,25 @@ function PickDetailCard({ pick, kind }: { pick: Pick; kind: "call" | "put" }) {
             )}
           </div>
         )}
+
+        {/* Add to Portfolio */}
+        <AddToPortfolioButton
+          size="default"
+          variant="default"
+          className="w-full justify-center"
+          spec={{
+            symbol: pick.ticker,
+            optionType: kind,
+            strike: pick.strike,
+            expiry: pick.expiry,
+            spot: pick.price,
+            premium: pick.ask > 0 ? pick.ask : pick.last > 0 ? pick.last : null,
+            ivRank: pick.iv > 0 ? Math.round(pick.iv * 100) : null,
+            initialScore: pick.score,
+            thesis: pick.reasons || `Online Pick · Grade ${pick.grade} · score ${pick.score}`,
+            source: "online-picks",
+          }}
+        />
 
         {/* Why this pick chips */}
         {chips.length > 0 && (
