@@ -40,6 +40,11 @@ import { buildStrikeLadder, pickBestRung, type Rung } from "@/lib/strikeLadder";
 import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
 import { tradeStageFromStatus, type TradeStage } from "@/lib/tradeStage";
+import {
+  classifyPickTier, MIN_BUY_NOW_PER_BUCKET, tierRank,
+  type PickTier, type TierResult,
+} from "@/lib/pickTier";
+import { isMarketOpenNow } from "@/lib/marketHours";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
