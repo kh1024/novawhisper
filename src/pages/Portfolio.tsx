@@ -461,8 +461,8 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
           </span>
           <span>
             {noMarkAvailable
-              ? "no valid Massive quote yet for this contract. Waiting on next evaluation tick — no P&L or auto-stop until then."
-              : "using last valid price. Verify in your broker."}
+              ? "first Massive snapshot still in-flight. Resolves on the next 60 s tick — no P&L or auto-stop until then."
+              : "using last valid Massive price. Verify in your broker before acting."}
           </span>
         </div>
       )}
