@@ -14,7 +14,7 @@ const Scanner = lazy(() => import("./pages/Scanner"));
 const Chains = lazy(() => import("./pages/Chains"));
 const Portfolio = lazy(() => import("./pages/Portfolio"));
 const Alerts = lazy(() => import("./pages/Alerts"));
-const Planning = lazy(() => import("./pages/Planning"));
+
 const Patterns = lazy(() => import("./pages/Patterns"));
 const Market = lazy(() => import("./pages/Market"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -62,7 +62,7 @@ const App = () => (
               <Route path="/chains" element={<Chains />} />
               <Route path="/portfolio" element={<Portfolio />} />
               <Route path="/alerts" element={<Alerts />} />
-              <Route path="/planning" element={<Planning />} />
+              
               <Route path="/strategy" element={<Strategy />} />
               <Route path="/performance" element={<Performance />} />
               <Route path="/picks" element={<Picks />} />
