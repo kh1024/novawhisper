@@ -18,7 +18,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  usePortfolio, useClosePosition, useDeletePosition, useUpdatePositionTargets,
+  usePortfolio, useClosePosition, useDeletePosition, useUpdatePositionTargets, useUpdateExitPrice,
   type PortfolioPosition,
 } from "@/lib/portfolio";
 import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
@@ -253,6 +253,7 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const updateTargets = useUpdatePositionTargets();
+  const updateExitPrice = useUpdateExitPrice();
 
   const isCall = p.option_type.toLowerCase().includes("call");
   const dte = dteFromExpiry(p.expiry);
@@ -286,7 +287,11 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const initialGates = (p.initial_gates ?? {}) as Record<string, string>;
 
   const [closeOpen, setCloseOpen] = useState(false);
-  const [closePrice, setClosePrice] = useState(currentMid != null ? currentMid.toFixed(2) : "");
+  const [closePrice, setClosePrice] = useState(
+    p.close_premium != null ? Number(p.close_premium).toFixed(2)
+      : currentMid != null ? currentMid.toFixed(2)
+      : "",
+  );
   const [editOpen, setEditOpen] = useState(false);
   const [hardStop, setHardStop] = useState(String(p.hard_stop_pct));
   const [t1, setT1] = useState(String(p.target_1_pct));
@@ -294,20 +299,32 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const [maxHold, setMaxHold] = useState(p.max_hold_days != null ? String(p.max_hold_days) : "");
   const [notes, setNotes] = useState(p.notes ?? "");
 
+  const isClosed = p.status !== "open";
+
   const submitClose = async () => {
     const cp = Number(closePrice);
     if (!Number.isFinite(cp) || cp < 0) {
       toast({ title: "Enter a valid exit price", variant: "destructive" });
       return;
     }
-    await close.mutateAsync({
-      id: p.id,
-      closePremium: cp,
-      status: "closed",
-      contracts: p.contracts,
-      entryPremium: p.entry_premium,
-      direction: p.direction,
-    });
+    if (isClosed) {
+      await updateExitPrice.mutateAsync({
+        id: p.id,
+        closePremium: cp,
+        contracts: p.contracts,
+        entryPremium: p.entry_premium,
+        direction: p.direction,
+      });
+    } else {
+      await close.mutateAsync({
+        id: p.id,
+        closePremium: cp,
+        status: "closed",
+        contracts: p.contracts,
+        entryPremium: p.entry_premium,
+        direction: p.direction,
+      });
+    }
     setCloseOpen(false);
   };
 
@@ -436,7 +453,14 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       )}
 
       {p.status !== "open" && (
-        <div className="flex justify-end pt-1">
+        <div className="flex justify-end gap-2 pt-1">
+          <Button
+            size="sm" variant="ghost"
+            className="h-7 text-[11px] gap-1"
+            onClick={() => setCloseOpen(true)}
+          >
+            <Pencil className="h-3 w-3" /> Edit exit price
+          </Button>
           <Button
             size="sm" variant="ghost"
             className="h-7 text-[11px] text-bearish hover:bg-bearish/10"
@@ -451,17 +475,22 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       <Dialog open={closeOpen} onOpenChange={setCloseOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Close {p.symbol} ${p.strike}{isCall ? "C" : "P"}</DialogTitle>
+            <DialogTitle>{isClosed ? "Edit exit price" : "Close"} {p.symbol} ${p.strike}{isCall ? "C" : "P"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
             <Label className="text-[10px] uppercase tracking-widest text-muted-foreground">Exit price (per contract)</Label>
             <Input type="number" min={0} step="0.01" value={closePrice}
               onChange={(e) => setClosePrice(e.target.value)} className="h-8 text-xs" />
+            {isClosed && (
+              <p className="text-[10px] text-muted-foreground">
+                Realized P&L will be recomputed as (exit − entry) × 100 × {p.contracts}.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setCloseOpen(false)}>Cancel</Button>
-            <Button size="sm" onClick={submitClose} disabled={close.isPending}>
-              {close.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Close position"}
+            <Button size="sm" onClick={submitClose} disabled={close.isPending || updateExitPrice.isPending}>
+              {(close.isPending || updateExitPrice.isPending) ? <Loader2 className="h-3 w-3 animate-spin" /> : (isClosed ? "Save" : "Close position")}
             </Button>
           </DialogFooter>
         </DialogContent>
