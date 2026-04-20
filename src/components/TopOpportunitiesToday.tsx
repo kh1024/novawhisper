@@ -185,13 +185,13 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                   <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 </button>
                 <div className="flex items-center gap-2 px-3 pb-3 flex-wrap">
-                  {p.tradeStatus.tradeStatus === "TradeReady" ? (
+                  {(p.pickTier === "CLEAN" || p.pickTier === "NEAR-LIMIT") && !inPreview ? (
                     <Button
                       size="sm"
                       className="h-7 text-[11px]"
                       onClick={(e) => { e.stopPropagation(); open(p); }}
                     >
-                      BUY NOW →
+                      {p.pickTier === "CLEAN" ? "BUY NOW →" : "BUY (REDUCE SIZE) →"}
                     </Button>
                   ) : (
                     <Button
@@ -200,14 +200,16 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                       disabled
                       className="h-7 text-[11px] border-warning/40 text-warning bg-warning/5"
                     >
-                      ⏳ WAIT
+                      ⏳ {inPreview ? "OPENS 9:30 ET" : "WATCH"}
                     </Button>
                   )}
                   <AddToPortfolioButton pick={p} />
                   <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
-                    {p.tradeStatus.tradeStatus === "TradeReady"
-                      ? "We'll alert you when to take profits or cut the loss."
-                      : "Track speculatively — exit guidance updates every 5 min."}
+                    {p.pickTier === "CLEAN"
+                      ? "Clean pass — full size OK per your risk profile."
+                      : p.pickTier === "NEAR-LIMIT"
+                      ? "Near limits — reduce size; we'll alert on exit."
+                      : "Best of WAIT — track speculatively; one rule relaxed."}
                   </span>
                 </div>
               </div>
