@@ -68,7 +68,7 @@ function hostFromUrl(u: string): string {
   }
 }
 
-async function firecrawlSearch(query: string, limit: number): Promise<SearchHit[]> {
+async function firecrawlSearch(query: string, limit: number, tbs: string): Promise<SearchHit[]> {
   const r = await fetch("https://api.firecrawl.dev/v2/search", {
     method: "POST",
     headers: {
@@ -78,7 +78,7 @@ async function firecrawlSearch(query: string, limit: number): Promise<SearchHit[
     body: JSON.stringify({
       query,
       limit,
-      tbs: "qdr:d", // last 24h
+      tbs,
     }),
   });
   if (!r.ok) {
