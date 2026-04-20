@@ -408,6 +408,16 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                 ))}
               </div>
 
+              {/* Buy plan: what / when / where / how many — anchored to Settings budget */}
+              {novaCard && (
+                <TradePlanCard
+                  card={novaCard}
+                  symbol={symbol}
+                  spot={q?.price ?? null}
+                  brokerHref={`https://robinhood.com/options/chains/${symbol}`}
+                />
+              )}
+
               <Tabs defaultValue="why">
                 <TabsList className="bg-surface/60 w-full justify-start flex-wrap h-auto">
                   <TabsTrigger value="why">Ask Nova</TabsTrigger>
