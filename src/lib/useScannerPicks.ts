@@ -129,7 +129,12 @@ export interface PipelineCounts {
   safetyPassingCount: number;
   budgetPassingCount: number;     // soft-band inside cap
   scoredCount: number;            // got a score (not hard-dropped)
-  tradeReadyCount: number;        // tier === CLEAN
+  tradeReadyCount: number;        // tradeState === TRADE_READY
+  /** New TradeState counts. */
+  nearLimitConfirmedCount: number;
+  watchlistOnlyCount: number;
+  excludedCount: number;
+  /** Legacy tier counts kept for back-compat. */
   cleanCount: number;
   nearLimitCount: number;
   bestOfWaitCount: number;
@@ -138,6 +143,10 @@ export interface PipelineCounts {
 
 export interface ScannerPicksResult {
   approved: ApprovedPick[];
+  /** WATCHLIST_ONLY picks — interesting setups not yet tradable. */
+  watchlistOnly: ApprovedPick[];
+  /** Top WATCHLIST_ONLY picks shown when there are 0 trade-ready (max 3). */
+  bestPending: ApprovedPick[];
   budgetBlocked: BlockedPick[];
   safetyBlocked: BlockedPick[];
   counts: PipelineCounts;
