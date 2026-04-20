@@ -13,6 +13,7 @@ import {
   Search, LayoutGrid, Table2, SlidersHorizontal, RefreshCw, Loader2,
   TrendingUp, TrendingDown, Minus, AlertTriangle, ShieldAlert, Activity,
   Gauge, Zap, Clock, Newspaper, Scale, RotateCcw, CandlestickChart, ExternalLink,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
@@ -224,15 +225,27 @@ export default function Scanner() {
   );
   useSnapshotUploader(snapshotInputs);
 
-  // Re-sort rows by Final Rank desc; ties broken by Setup Score.
-  const sortedRows = useMemo(
-    () => [...rows].sort((a, b) => {
-      const ra = rankMap.get(a.symbol)?.rank.finalRank ?? 0;
-      const rb = rankMap.get(b.symbol)?.rank.finalRank ?? 0;
-      return rb - ra || b.setupScore - a.setupScore;
-    }),
-    [rows, rankMap],
-  );
+  // Sortable columns. Default = Final Rank desc (with Setup tiebreaker).
+  type SortKey = "symbol" | "price" | "changePct" | "relVol" | "ivRank" | "rsi" | "atrPct" | "optionsLiquidity" | "setupScore" | "finalRank";
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "finalRank", dir: "desc" });
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => s.key === key ? { ...s, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "symbol" ? "asc" : "desc" });
+
+  const sortedRows = useMemo(() => {
+    const getVal = (r: SetupRow): number | string => {
+      if (sort.key === "symbol") return r.symbol;
+      if (sort.key === "finalRank") return rankMap.get(r.symbol)?.rank.finalRank ?? 0;
+      return (r as any)[sort.key] ?? 0;
+    };
+    return [...rows].sort((a, b) => {
+      const va = getVal(a), vb = getVal(b);
+      let cmp = typeof va === "string" || typeof vb === "string"
+        ? String(va).localeCompare(String(vb))
+        : (va as number) - (vb as number);
+      if (cmp === 0 && sort.key !== "setupScore") cmp = b.setupScore - a.setupScore;
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, rankMap, sort]);
 
   // ── Pick Expiration Engine ────────────────────────────────────────────
   // Track first-seen price/time for every scanner row. Force WAIT when RSI > 75.
@@ -514,23 +527,43 @@ export default function Scanner() {
               <table className="w-full text-sm">
                 <thead className="bg-card text-[11px] uppercase tracking-wider text-muted-foreground sticky top-0 z-30 shadow-[0_2px_4px_-2px_hsl(var(--background))] border-b border-border">
                   <tr>
-                    {[
-                      { k: "Ticker" }, { k: "Last" }, { k: "% Chg" },
-                      { k: "Rel Vol", tip: "Volume vs estimated avg" },
+                    {([
+                      { k: "Ticker", sk: "symbol" as SortKey },
+                      { k: "Last", sk: "price" as SortKey },
+                      { k: "% Chg", sk: "changePct" as SortKey },
+                      { k: "Rel Vol", sk: "relVol" as SortKey, tip: "Volume vs estimated avg" },
                       { k: "Trend" },
-                      { k: "IVR", tip: "IV Rank — green <30 (cheap premium), red >60 (rich premium)" },
-                      { k: "RSI", tip: "Estimated — green 45–60 (healthy), red <30 or >70 (over-extended)" },
-                      { k: "ATR%", tip: "Estimated — green <2% (calm), red >4% (volatile)" },
-                      { k: "Opt Liq", tip: "Options liquidity proxy — green ≥60, red <30" },
-                      { k: "Setup", tip: "Weighted final score 0–100 — green ≥70, red <45" },
-                      { k: "Action", tip: "Unified verdict — BUY NOW / WATCHLIST / WAIT / AVOID / EXIT / BLOCKED. Combines Setup × Readiness × Options × Penalties × Guards into one call. Number = Final Rank 0–100." }, { k: "" },
-                    ].map((h) => (
-                      <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap bg-card">
-                        {h.tip ? (
-                          <Tooltip><TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">{h.k}</TooltipTrigger><TooltipContent>{h.tip}</TooltipContent></Tooltip>
-                        ) : h.k}
-                      </th>
-                    ))}
+                      { k: "IVR", sk: "ivRank" as SortKey, tip: "IV Rank — green <30 (cheap premium), red >60 (rich premium)" },
+                      { k: "RSI", sk: "rsi" as SortKey, tip: "Estimated — green 45–60 (healthy), red <30 or >70 (over-extended)" },
+                      { k: "ATR%", sk: "atrPct" as SortKey, tip: "Estimated — green <2% (calm), red >4% (volatile)" },
+                      { k: "Opt Liq", sk: "optionsLiquidity" as SortKey, tip: "Options liquidity proxy — green ≥60, red <30" },
+                      { k: "Setup", sk: "setupScore" as SortKey, tip: "Weighted final score 0–100 — green ≥70, red <45" },
+                      { k: "Action", sk: "finalRank" as SortKey, tip: "Unified verdict — BUY NOW / WATCHLIST / WAIT / AVOID / EXIT / BLOCKED. Combines Setup × Readiness × Options × Penalties × Guards into one call. Number = Final Rank 0–100." },
+                      { k: "" },
+                    ] as { k: string; sk?: SortKey; tip?: string }[]).map((h) => {
+                      const active = h.sk && sort.key === h.sk;
+                      const SortIcon = !h.sk ? null : active ? (sort.dir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                      const inner = h.tip ? (
+                        <Tooltip><TooltipTrigger className="cursor-help underline decoration-dotted underline-offset-2">{h.k}</TooltipTrigger><TooltipContent>{h.tip}</TooltipContent></Tooltip>
+                      ) : h.k;
+                      return (
+                        <th key={h.k} className="text-left px-3 py-2.5 font-medium whitespace-nowrap bg-card">
+                          {h.sk ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleSort(h.sk!)}
+                              className={cn(
+                                "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+                                active && "text-foreground",
+                              )}
+                            >
+                              {inner}
+                              {SortIcon && <SortIcon className={cn("h-3 w-3", !active && "opacity-40")} />}
+                            </button>
+                          ) : inner}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
