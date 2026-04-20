@@ -1,11 +1,9 @@
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
-import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
+import { AlertTriangle, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
 import { Hint } from "@/components/Hint";
-import { getMockPicks, UPCOMING_EVENTS, TICKER_UNIVERSE } from "@/lib/mockData";
+import { UPCOMING_EVENTS } from "@/lib/mockData";
 import { useLiveQuotes, statusMeta, currentSessionET } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
@@ -14,89 +12,26 @@ import { SectorBreakdown } from "@/components/SectorBreakdown";
 import { MarketHeroCards } from "@/components/MarketHeroCards";
 import { PreMarketFutures } from "@/components/PreMarketFutures";
 import { PlaybookCard } from "@/components/PlaybookCard";
-import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
-import { PickMetaRow } from "@/components/PickMetaRow";
-import { TickerPrice } from "@/components/TickerPrice";
 import { QuoteSourceChip } from "@/components/QuoteSourceChip";
 import { TipsRotator } from "@/components/TipsRotator";
 import { SortableList } from "@/components/SortableList";
 import { useHiddenSections } from "@/lib/dashboardSections";
 import { NovaStatusStrip } from "@/components/NovaStatusStrip";
 import { NovaModeBadge } from "@/components/NovaModeBadge";
-import { NovaGuardBadges } from "@/components/NovaGuardBadges";
-import { evaluateGuards } from "@/lib/novaGuards";
-import { useSma200 } from "@/lib/sma200";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
-import { useNovaFilter, pickMatchesFilter, isFilterActive } from "@/lib/novaFilter";
-import { useOptionsScout, type ScoutPick } from "@/lib/optionsScout";
-import { actionFromScore, labelClasses } from "@/lib/finalRank";
-import { smartActionLabel, smartActionTooltip, emptyStateCopy } from "@/lib/actionCopy";
-import { detectTimeState } from "@/lib/novaBrain";
-import { BudgetAltSuggestion } from "@/components/BudgetAltSuggestion";
-import { useBudget } from "@/lib/budget";
-import { useSettings } from "@/lib/settings";
-import { partitionByAffordability, type AffordabilityResult } from "@/lib/affordability";
-import { AffordabilityBadge } from "@/components/AffordabilityBadge";
-import type { OptionPick } from "@/lib/mockData";
-
-/**
- * Compute moneyness for a long option vs the live underlying price.
- * Returns ITM / ATM / OTM with the % distance — used for the inline
- * moneyness chip on every pick row.
- */
-function moneynessOf(optionType: "call" | "put", strike: number, spot: number | null) {
-  if (spot == null || !Number.isFinite(spot) || spot <= 0) return null;
-  const diffPct = ((spot - strike) / spot) * 100;          // call: + = ITM
-  const intrinsicPct = optionType === "call" ? diffPct : -diffPct;
-  if (Math.abs(intrinsicPct) < 1) {
-    return { kind: "ATM" as const, pct: intrinsicPct, cls: "border-muted-foreground/40 text-foreground bg-surface/60" };
-  }
-  if (intrinsicPct > 0) {
-    return { kind: "ITM" as const, pct: intrinsicPct, cls: "border-bullish/50 bg-bullish/10 text-bullish" };
-  }
-  return { kind: "OTM" as const, pct: intrinsicPct, cls: "border-warning/50 bg-warning/10 text-warning" };
-}
+import { TopOpportunitiesToday } from "@/components/TopOpportunitiesToday";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
 const SECTIONS_STORAGE_KEY = "nova_dashboard_sections_order";
 
-type RiskBucket = "safe" | "mild" | "aggressive" | "lottery";
+export default function Dashboard() {
+  const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
+  const [openSymbol, setOpenSymbol] = useState<string | null>(null);
+  const { hiddenSet, hide } = useHiddenSections();
 
-// Map a NOVA scout pick (from the options-scout edge fn) into the OptionPick
-// shape the dashboard row renderer expects. This lets us share a single render
-// path between live scout picks and the mock fallback.
-function scoutToOptionPick(s: ScoutPick, bucket: RiskBucket, idx: number): OptionPick {
-  const isPut = s.optionType === "put";
-  const isLeaps = /leaps/i.test(s.strategy);
-  const strategy: OptionPick["strategy"] = isLeaps
-    ? (isPut ? "leaps-put" : "leaps-call")
-    : (isPut ? "long-put" : "long-call");
-  const expDate = new Date(s.expiry);
-  const dte = Math.max(1, Math.round((expDate.getTime() - Date.now()) / 86_400_000));
-  const premiumNum = Number(String(s.premiumEstimate ?? "").match(/[\d.]+/)?.[0] ?? 0);
-  const annualized = Number(String(s.expectedReturn ?? "").match(/[\d.]+/)?.[0] ?? 0);
-  const score = (s.confidenceScore ?? 7) * 10;
-  const grade: "A" | "B" | "C" = (s.grade as "A" | "B" | "C") ?? "B";
-  return {
-    id: `scout-${bucket}-${s.symbol}-${idx}`,
-    symbol: s.symbol,
-    strategy,
-    riskBucket: bucket,
-    expiration: s.expiry,
-    dte,
-    strike: s.strike,
-    premium: premiumNum,
-    premiumPct: 0,
-    annualized,
-    delta: 0, theta: 0, vega: 0, ivRank: 0, oi: 0, volume: 0, spreadPct: 0,
-    score,
-    confidence: grade,
-    bias: s.bias ?? (isPut ? "bearish" : "bullish"),
-    signals: [],
-    reason: s.thesis,
-  };
-}
+  const etfs = quotes.filter((q) => q.sector === "ETF");
+  const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
 
 export default function Dashboard() {
   const { data: quotes = [], isLoading: quotesLoading } = useLiveQuotes();
