@@ -299,6 +299,9 @@ Deno.serve(async (req: Request) => {
 
   // Real chains for ALL symbols — primary source is Massive (via options-fetch).
   // We need bid/ask to validate, and the Massive snapshot returns NBBO.
+  // NOTE: options-fetch caps at limit=250 contracts which can omit far-dated
+  // expiries. For positions outside the slice we fall back to a per-contract
+  // Massive call below (per-position loop).
   type ChainEntry = { mid?: number; bid?: number; ask?: number; last?: number };
   const realChain = new Map<string, ChainEntry>(); // SYMBOL|TYPE|STRIKE|EXPIRY
   const chainFetchedAt = new Map<string, number>();
@@ -330,7 +333,6 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       console.warn(`options-fetch (Massive) failed for ${sym}`, e);
     }
-    // Fallback to public-options-fetch only if Massive returned nothing.
     if (!gotMassive) {
       try {
         const { data } = await supabase.functions.invoke("public-options-fetch", { body: { symbol: sym } });
@@ -353,6 +355,45 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // ─── Per-contract Massive fallback ───────────────────────────────────────
+  // For positions whose contract isn't in the chain (e.g., far-dated expiries
+  // outside the 250-contract slice), call Massive's per-contract snapshot
+  // endpoint directly. This always returns the exact contract.
+  const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
+  function osiTicker(sym: string, expiry: string, isCall: boolean, strike: number): string {
+    // OSI: O:SYMyymmdd[C|P]########  (strike * 1000, 8 digits)
+    const [y, m, d] = expiry.split("-");
+    const yy = y.slice(2);
+    const cp = isCall ? "C" : "P";
+    const k = String(Math.round(Number(strike) * 1000)).padStart(8, "0");
+    return `O:${sym}${yy}${m}${d}${cp}${k}`;
+  }
+  async function fetchMassiveContract(underlying: string, ticker: string): Promise<ChainEntry | null> {
+    if (!MASSIVE_KEY) return null;
+    try {
+      const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(underlying)}/${encodeURIComponent(ticker)}`;
+      const r = await fetch(url, {
+        headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
+      });
+      if (!r.ok) {
+        console.warn(`[per-contract] ${ticker} HTTP ${r.status}`);
+        return null;
+      }
+      const d = await r.json();
+      const result = d?.results ?? d?.result ?? null;
+      if (!result) return null;
+      const quote = result.last_quote ?? {};
+      const trade = result.last_trade ?? {};
+      const bid = Number(quote.bid ?? 0);
+      const ask = Number(quote.ask ?? 0);
+      const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
+      return { bid, ask, mid, last: Number(trade.price ?? 0) };
+    } catch (e) {
+      console.warn(`[per-contract] ${ticker} failed`, e);
+      return null;
+    }
+  }
+
   let evaluated = 0;
   let stops = 0;
   let profits = 0;
@@ -362,20 +403,41 @@ Deno.serve(async (req: Request) => {
     const isCall = p.option_type.toLowerCase().includes("call");
     const dte = dteFromExpiry(p.expiry);
     const key = `${p.symbol}|${isCall ? "call" : "put"}|${Number(p.strike)}|${p.expiry}`;
-    const chainEntry = realChain.get(key);
-    const fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
+    let chainEntry = realChain.get(key);
+    let fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
+    let entrySource = chainSource.get(p.symbol) ?? "none";
+
+    // Per-contract Massive fallback: if the chain didn't include this contract,
+    // OR it returned bid=ask=0 (off-hours, illiquid), call Massive for just this
+    // option ticker. Always returns the exact contract.
+    const contractIsZero = chainEntry &&
+      (chainEntry.bid ?? 0) === 0 && (chainEntry.ask ?? 0) === 0;
+    if (!chainEntry || contractIsZero) {
+      const ticker = p.option_symbol ?? osiTicker(p.symbol, p.expiry, isCall, Number(p.strike));
+      const direct = await fetchMassiveContract(p.symbol, ticker);
+      if (direct && (direct.bid! > 0 || direct.ask! > 0 || (direct.last ?? 0) > 0)) {
+        chainEntry = direct;
+        fetchedAt = Date.now();
+        entrySource = "massive-contract";
+        console.log(`[per-contract] ${ticker} bid=${direct.bid} ask=${direct.ask} mid=${direct.mid}`);
+      } else if (!chainEntry) {
+        // still nothing at all
+        chainEntry = undefined;
+      }
+    }
 
     let classified: ClassifiedQuote;
-    const symSource = chainSource.get(p.symbol) ?? "none";
     if (chainEntry) {
       const bid = chainEntry.bid ?? null;
       const ask = chainEntry.ask ?? null;
-      const mark = chainEntry.mid ?? (bid != null && ask != null ? (bid + ask) / 2 : null);
+      const mark = chainEntry.mid && chainEntry.mid > 0
+        ? chainEntry.mid
+        : (bid != null && ask != null && bid > 0 && ask > 0 ? (bid + ask) / 2 : null);
       classified = classifyQuote({
         bid, ask, mark, last: chainEntry.last ?? null,
         updatedAt: fetchedAt,
         underlyingPrice: spot,
-        source: symSource,
+        source: entrySource,
       });
     } else {
       // No real quote at all — synthesize via BS-lite and tag as theoretical.
