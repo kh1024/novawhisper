@@ -12,17 +12,21 @@
 // `throttledMassive(fn)` runs `fn` inside it. Both resolve immediately when
 // concurrency is below the cap.
 
-const MAX_CONCURRENCY = 20;
+// NOTE: the previous semaphore (cap = 20 in-flight) deadlocked because
+// several legacy call sites (`quotes-fetch`, `options-fetch`,
+// `live-ticks-broadcast`) call `acquireMassiveToken()` without a paired
+// `releaseMassiveToken()`. Each leaked slot permanently shrinks the cap
+// until every Massive request waits forever and the edge function blows
+// past its CPU budget (WORKER_RESOURCE_LIMIT / "CPU Time exceeded").
+//
+// Since Options Advanced is unlimited, we no longer enforce a cap here.
+// `acquireMassiveToken()` resolves instantly, `releaseMassiveToken()` is
+// a no-op, and `throttledMassive(fn)` simply runs `fn`. This is safe:
+// genuine 429/5xx responses are still backed off by the calling sites.
 let active = 0;
-const waiters: Array<() => void> = [];
 
 function release() {
   active = Math.max(0, active - 1);
-  const next = waiters.shift();
-  if (next) {
-    active += 1;
-    next();
-  }
 }
 
 /**
@@ -35,11 +39,8 @@ function release() {
  * will leak slots — `throttledMassive(fn)` is the safe wrapper.
  */
 export function acquireMassiveToken(): Promise<void> {
-  if (active < MAX_CONCURRENCY) {
-    active += 1;
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => waiters.push(resolve));
+  active += 1;
+  return Promise.resolve();
 }
 
 /** Pair with `acquireMassiveToken()` when not using `throttledMassive(fn)`. */
