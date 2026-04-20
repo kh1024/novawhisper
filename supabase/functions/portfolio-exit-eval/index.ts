@@ -387,6 +387,23 @@ Deno.serve(async (req: Request) => {
       optionSymbol: ticker,
     });
 
+    // Sanity check — Massive's options feed sometimes carries a bad/stale
+    // underlying reference (e.g. a delisted ticker that recycled the symbol).
+    // If the snapshot's underlying price disagrees with our verified equity
+    // quote by more than 10%, the entire option snapshot is unreliable.
+    if (
+      spot != null && spot > 0 &&
+      snapshot.underlyingPrice != null && snapshot.underlyingPrice > 0
+    ) {
+      const diffPct = Math.abs(snapshot.underlyingPrice - spot) / spot;
+      if (diffPct > 0.10) {
+        const reason = `Massive underlying $${snapshot.underlyingPrice.toFixed(2)} ≠ verified spot $${spot.toFixed(2)} (${(diffPct * 100).toFixed(0)}% off) — option mark untrusted.`;
+        console.warn(`[snapshot-anomaly] ${p.symbol} ${Number(p.strike)}${isCall ? "C" : "P"} ${reason}`);
+        snapshot.quality = "ANOMALOUS";
+        snapshot.reason = reason;
+      }
+    }
+
     let classified: ClassifiedQuote;
     if (snapshot.quality !== "MISSING" || snapshot.mark != null) {
       // Use the canonical snapshot (VALID / STALE / ANOMALOUS / MISSING).
