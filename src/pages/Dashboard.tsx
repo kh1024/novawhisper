@@ -108,7 +108,9 @@ export default function Dashboard() {
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
+  const [settings] = useSettings();
   const [showBlocked, setShowBlocked] = useState(false);
+  const [showBudgetBlocked, setShowBudgetBlocked] = useState(false);
   // Weekend Kill-Switch — only meaningful on Sat/Sun. Default ON so users
   // don't see Friday-frozen "ghost" picks on a quiet Saturday morning.
   const isWeekend = useMemo(() => {
@@ -117,11 +119,9 @@ export default function Dashboard() {
   }, []);
   const [hideWeekendGhosts, setHideWeekendGhosts] = useState(true);
 
-  // Prefer live NOVA scout picks; fall back to mock when a bucket is empty.
-  // Capital-fit rule: only surface picks whose estimated 1-contract cost fits
-  // the user's max-per-trade budget. If we can't verify the premium, we do not
-  // show the pick in Top Opportunities.
-  const picks = useMemo(() => {
+  // Step 1 — gather the candidate pool (NOVA scout if available, mock otherwise)
+  // and apply the user's Nova-filter spec. We do NOT touch budget here.
+  const filtered = useMemo(() => {
     const bucketMap: Record<RiskBucket, ScoutPick[]> = {
       safe: scout?.conservative ?? [],
       mild: scout?.moderate ?? [],
@@ -132,7 +132,6 @@ export default function Dashboard() {
       p.strategy === "long-call" || p.strategy === "long-put" ||
       p.strategy === "leaps-call" || p.strategy === "leaps-put"
     );
-
     let pool: OptionPick[];
     if (novaActive) {
       const allScout = (["safe", "mild", "aggressive", "lottery"] as RiskBucket[])
@@ -144,8 +143,7 @@ export default function Dashboard() {
         ? liveBucket
         : singleLegMock.filter((p) => p.riskBucket === riskTab);
     }
-
-    const filtered = pool.filter((p) => pickMatchesFilter({
+    return pool.filter((p) => pickMatchesFilter({
       symbol: p.symbol,
       strategy: p.strategy,
       riskBucket: p.riskBucket,
@@ -158,21 +156,41 @@ export default function Dashboard() {
       annualized: p.annualized,
       earningsInDays: p.earningsInDays ?? null,
     }, novaSpec));
+  }, [allPicks, riskTab, novaSpec, novaActive, scout]);
 
-    // Capital-fit: prefer contracts that fit the per-trade cap. If none in the
-    // bucket fit (common at high prices or with a tiny budget), fall back to
-    // the cheapest available — sorted by cost — so the bucket is never empty.
-    // Each over-budget row still shows the alt-ticker chip + "over budget" note.
-    const fits = filtered.filter((p) => Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget);
-    const overBudget = filtered
-      .filter((p) => !(Number.isFinite(p.premium) && p.premium > 0 && p.premium * 100 <= budget))
-      .sort((a, b) => (a.premium ?? Infinity) - (b.premium ?? Infinity));
-    return (fits.length > 0 ? fits : overBudget).slice(0, novaActive ? 12 : 6);
-  }, [allPicks, riskTab, novaSpec, novaActive, scout, budget]);
+  // Step 2 — HARD AFFORDABILITY FILTER (spec: budget is a hard rule).
+  // Splits the pool into recommendable (Comfortable/Affordable, never blocked)
+  // and blocked (over budget — surfaced separately, never ranked as top picks).
+  // Re-runs whenever `budget` changes so flipping it in Settings refreshes
+  // the recommendation list immediately.
+  const partition = useMemo(
+    () => partitionByAffordability(filtered, budget, (p) => ({
+      perShareCost: p.premium,
+      contracts: 1,
+      settings,
+    })),
+    [filtered, budget, settings],
+  );
 
-  // True only when EVERY pick the user sees is over their per-trade cap.
-  const allOverBudget = picks.length > 0
-    && picks.every((p) => !Number.isFinite(p.premium) || p.premium <= 0 || p.premium * 100 > budget);
+  // Map pick.id → AffordabilityResult so child rows can render the badge.
+  const affBy = useMemo(() => {
+    const m = new Map<string, AffordabilityResult>();
+    for (const r of partition.recommendable) m.set(r.item.id, r.aff);
+    for (const r of partition.blocked)        m.set(r.item.id, r.aff);
+    for (const r of partition.unavailable)    m.set(r.item.id, r.aff);
+    return m;
+  }, [partition]);
+
+  // Top picks the user actually sees — affordability-filtered FIRST, then
+  // capped. Blocked items live in their own collapsible drawer below.
+  const picks = useMemo(
+    () => partition.recommendable.map((r) => r.item).slice(0, novaActive ? 12 : 6),
+    [partition, novaActive],
+  );
+  const blockedPicks = partition.blocked;
+  // True when there's nothing affordable to recommend AT ALL.
+  const noAffordableTrades = partition.recommendable.length === 0 && filtered.length > 0;
+
 
   const etfs = quotes.filter((q) => q.sector === "ETF");
   const verifiedCount = quotes.filter((q) => q.status === "verified" || q.status === "close").length;
