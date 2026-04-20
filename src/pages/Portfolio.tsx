@@ -18,7 +18,7 @@ import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  usePortfolio, useClosePosition, useDeletePosition, useUpdatePositionTargets,
+  usePortfolio, useClosePosition, useDeletePosition, useUpdatePositionTargets, useUpdateExitPrice,
   type PortfolioPosition,
 } from "@/lib/portfolio";
 import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
@@ -253,6 +253,7 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const updateTargets = useUpdatePositionTargets();
+  const updateExitPrice = useUpdateExitPrice();
 
   const isCall = p.option_type.toLowerCase().includes("call");
   const dte = dteFromExpiry(p.expiry);
