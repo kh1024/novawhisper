@@ -384,10 +384,21 @@ Deno.serve(async (req: Request) => {
       if (!result) return null;
       const quote = result.last_quote ?? {};
       const trade = result.last_trade ?? {};
+      const day = result.day ?? {};
       const bid = Number(quote.bid ?? 0);
       const ask = Number(quote.ask ?? 0);
-      const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
-      return { bid, ask, mid, last: Number(trade.price ?? 0) };
+      // Prefer NBBO mid; fall back to last trade, then to day's close/vwap
+      // (off-hours: Massive often omits last_quote/last_trade but includes day.*).
+      let mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
+      let last = Number(trade.price ?? 0);
+      if (mid === 0 && last > 0) mid = last;
+      if (mid === 0) {
+        const dayClose = Number(day.close ?? 0);
+        const dayVwap = Number(day.vwap ?? 0);
+        if (dayClose > 0) { mid = dayClose; if (last === 0) last = dayClose; }
+        else if (dayVwap > 0) { mid = dayVwap; if (last === 0) last = dayVwap; }
+      }
+      return { bid, ask, mid, last };
     } catch (e) {
       console.warn(`[per-contract] ${ticker} failed`, e);
       return null;
