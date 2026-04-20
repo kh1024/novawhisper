@@ -5,10 +5,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX, LayoutList } from "lucide-react";
+import { ChevronDown, ChevronUp, ShieldCheck, ShieldAlert, ShieldX, LayoutList, Eye } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
+import { usePreMarketStatus } from "@/lib/preMarketPreview";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
@@ -28,6 +29,12 @@ export interface NovaCard {
   } | null;
   better_structure?: string | null;
   full_analysis_md?: string;
+  /**
+   * Optional Pre-Market Preview Mode flag — when true, the card renders a
+   * "PREVIEW — Unlocks at 10:30 AM ET" banner and dims itself slightly.
+   * Set by the caller from ValidationResult.previewMode.
+   */
+  preview_mode?: boolean;
 }
 
 const ACTION_STYLES: Record<NovaCard["action"], { bg: string; text: string; ring: string; emoji: string }> = {
