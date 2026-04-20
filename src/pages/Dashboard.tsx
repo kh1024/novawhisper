@@ -22,7 +22,6 @@ import { QuoteSourceChip } from "@/components/QuoteSourceChip";
 import { TipsRotator } from "@/components/TipsRotator";
 import { SortableList } from "@/components/SortableList";
 import { useHiddenSections } from "@/lib/dashboardSections";
-import { Link } from "react-router-dom";
 import { NovaStatusStrip } from "@/components/NovaStatusStrip";
 import { NovaModeBadge } from "@/components/NovaModeBadge";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
