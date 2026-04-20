@@ -1,4 +1,4 @@
-import { LayoutDashboard, Radar, Layers, Briefcase, BellRing, Brain, Settings as SettingsIcon, GripVertical, RotateCcw, Globe, Activity, Compass, LineChart, Zap } from "lucide-react";
+import { LayoutDashboard, Radar, Layers, Briefcase, BellRing, Settings as SettingsIcon, GripVertical, RotateCcw, Globe, Activity, Compass, LineChart, Zap } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -31,6 +31,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { reconcileOrder } from "@/components/SortableList";
 import { Hint } from "@/components/Hint";
+import { useOpenPortfolioCount } from "@/lib/portfolio";
 
 const items = [
   { id: "dashboard", title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -70,6 +71,9 @@ function SortableNavItem({
   // On mobile the sidebar opens as a Sheet overlay — auto-close it after the
   // user picks a workspace so the page underneath becomes interactive again.
   const { isMobile, setOpenMobile } = useSidebar();
+  // Live count of OPEN positions — only fetched here so it stays in one place.
+  const portfolioCount = useOpenPortfolioCount();
+  const badge = item.id === "portfolio" && portfolioCount > 0 ? portfolioCount : null;
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -98,7 +102,17 @@ function SortableNavItem({
             activeClassName="bg-sidebar-accent text-foreground font-medium border-l-2 border-primary"
           >
             <item.icon className="h-4 w-4" />
-            {!collapsed && <span>{item.title}</span>}
+            {!collapsed && <span className="flex-1">{item.title}</span>}
+            {badge != null && !collapsed && (
+              <span className="ml-auto h-5 min-w-[20px] px-1.5 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold inline-flex items-center justify-center">
+                {badge}
+              </span>
+            )}
+            {badge != null && collapsed && (
+              <span className="absolute -top-0.5 -right-0.5 h-3.5 min-w-[14px] px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold inline-flex items-center justify-center">
+                {badge > 9 ? "9+" : badge}
+              </span>
+            )}
           </NavLink>
         </SidebarMenuButton>
       </div>
