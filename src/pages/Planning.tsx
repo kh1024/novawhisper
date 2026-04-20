@@ -29,6 +29,8 @@ import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { PickMetaChips } from "@/components/PickMetaChips";
 import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
+import { TomorrowWatchlist } from "@/components/TomorrowWatchlist";
+import { useBudget } from "@/lib/budget";
 
 // Parse a premium-estimate string ("$2.50", "$1.20–$1.50", "≈$3") down to the
 // lowest dollar value so the budget gate (premium × 100 ≤ budget) is generous.
