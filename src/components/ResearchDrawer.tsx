@@ -21,6 +21,7 @@ import { useEventRiskSignals } from "@/lib/sentimentSignals";
 import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
 import { useSma200 } from "@/lib/sma200";
+import { TradePlanCard } from "@/components/TradePlanCard";
 
 type Props = {
   symbol: string | null;
@@ -406,6 +407,16 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                   </Card>
                 ))}
               </div>
+
+              {/* Buy plan: what / when / where / how many — anchored to Settings budget */}
+              {novaCard && (
+                <TradePlanCard
+                  card={novaCard}
+                  symbol={symbol}
+                  spot={q?.price ?? null}
+                  brokerHref={`https://robinhood.com/options/chains/${symbol}`}
+                />
+              )}
 
               <Tabs defaultValue="why">
                 <TabsList className="bg-surface/60 w-full justify-start flex-wrap h-auto">
