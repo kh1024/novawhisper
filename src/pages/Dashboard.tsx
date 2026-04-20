@@ -6,7 +6,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, Flame, ShieldCheck, Sparkles, Loader2, Info, RotateCcw } from "lucide-react";
 import { Hint } from "@/components/Hint";
 import { getMockPicks, UPCOMING_EVENTS, TICKER_UNIVERSE } from "@/lib/mockData";
-import { useLiveQuotes, statusMeta } from "@/lib/liveData";
+import { useLiveQuotes, statusMeta, currentSessionET } from "@/lib/liveData";
 import { useMemo, useState } from "react";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
 import { NewsFeed } from "@/components/NewsFeed";
@@ -240,7 +240,7 @@ export default function Dashboard() {
           </div>
         )}
         items={[
-          { id: "futures", node: <PreMarketFutures /> },
+          ...(currentSessionET() === "regular" ? [] : [{ id: "futures", node: <PreMarketFutures /> }]),
           { id: "nova-status", node: <NovaStatusStrip /> },
           { id: "nova-filter", node: <NovaFilterBar /> },
           { id: "hero", node: <MarketHeroCards /> },
