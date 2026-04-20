@@ -108,7 +108,7 @@ export function classifyPickTier(i: TierInputs): TierResult {
       caveat: reasons.join(" · ") || "near limits", hardDrop: false };
   }
 
-  if (adjustedScore >= 55 && i.nonSafetyRuleFailures <= 1) {
+  if (adjustedScore >= 45 && i.nonSafetyRuleFailures <= 1) {
     return { tier: "BEST-OF-WAIT", adjustedScore, penalties,
       caveat: "Best of WAIT — 1 rule relaxed", hardDrop: false };
   }
