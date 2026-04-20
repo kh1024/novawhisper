@@ -299,6 +299,9 @@ Deno.serve(async (req: Request) => {
 
   // Real chains for ALL symbols — primary source is Massive (via options-fetch).
   // We need bid/ask to validate, and the Massive snapshot returns NBBO.
+  // NOTE: options-fetch caps at limit=250 contracts which can omit far-dated
+  // expiries. For positions outside the slice we fall back to a per-contract
+  // Massive call below (per-position loop).
   type ChainEntry = { mid?: number; bid?: number; ask?: number; last?: number };
   const realChain = new Map<string, ChainEntry>(); // SYMBOL|TYPE|STRIKE|EXPIRY
   const chainFetchedAt = new Map<string, number>();
@@ -330,7 +333,6 @@ Deno.serve(async (req: Request) => {
     } catch (e) {
       console.warn(`options-fetch (Massive) failed for ${sym}`, e);
     }
-    // Fallback to public-options-fetch only if Massive returned nothing.
     if (!gotMassive) {
       try {
         const { data } = await supabase.functions.invoke("public-options-fetch", { body: { symbol: sym } });
@@ -350,6 +352,45 @@ Deno.serve(async (req: Request) => {
         console.warn(`public-options-fetch fallback failed for ${sym}`, e);
         chainSource.set(sym, "none");
       }
+    }
+  }
+
+  // ─── Per-contract Massive fallback ───────────────────────────────────────
+  // For positions whose contract isn't in the chain (e.g., far-dated expiries
+  // outside the 250-contract slice), call Massive's per-contract snapshot
+  // endpoint directly. This always returns the exact contract.
+  const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
+  function osiTicker(sym: string, expiry: string, isCall: boolean, strike: number): string {
+    // OSI: O:SYMyymmdd[C|P]########  (strike * 1000, 8 digits)
+    const [y, m, d] = expiry.split("-");
+    const yy = y.slice(2);
+    const cp = isCall ? "C" : "P";
+    const k = String(Math.round(Number(strike) * 1000)).padStart(8, "0");
+    return `O:${sym}${yy}${m}${d}${cp}${k}`;
+  }
+  async function fetchMassiveContract(ticker: string): Promise<ChainEntry | null> {
+    if (!MASSIVE_KEY) return null;
+    try {
+      const url = `https://api.massive.com/v3/snapshot/options/${encodeURIComponent(ticker.split(":")[0] === "O" ? ticker.split(":")[1].replace(/\d{6}[CP]\d{8}$/, "") : ticker)}/${encodeURIComponent(ticker)}`;
+      const r = await fetch(url, {
+        headers: { Authorization: `Bearer ${MASSIVE_KEY}`, Accept: "application/json" },
+      });
+      if (!r.ok) {
+        console.warn(`[per-contract] ${ticker} HTTP ${r.status}`);
+        return null;
+      }
+      const d = await r.json();
+      const result = d?.results ?? d?.result ?? null;
+      if (!result) return null;
+      const quote = result.last_quote ?? {};
+      const trade = result.last_trade ?? {};
+      const bid = Number(quote.bid ?? 0);
+      const ask = Number(quote.ask ?? 0);
+      const mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : 0;
+      return { bid, ask, mid, last: Number(trade.price ?? 0) };
+    } catch (e) {
+      console.warn(`[per-contract] ${ticker} failed`, e);
+      return null;
     }
   }
 
