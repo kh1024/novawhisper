@@ -414,7 +414,7 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
             {!isOpen && p.close_premium != null && (<>
               {" · "}Exit <span className="text-foreground font-mono">${Number(p.close_premium).toFixed(2)}</span>
             </>)}
-            {profitPct != null && currentMidSource !== "frozen" && (
+            {profitPct != null && currentMidSource !== "frozen" && !noMarkAvailable && (
               <span className={cn("ml-2 font-mono", profitPct >= 0 ? "text-bullish" : "text-bearish")}>
                 {profitPct >= 0 ? "+" : ""}{profitPct.toFixed(1)}%
               </span>
@@ -422,8 +422,13 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
           </div>
         </div>
         {p.status === "open" && (
-          <span className={cn("text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap", EXIT_CLASSES[recommendation])}>
-            {EXIT_LABEL[recommendation]}
+          <span className={cn(
+            "text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap",
+            noMarkAvailable
+              ? "border-warning/40 text-warning bg-warning/5"
+              : EXIT_CLASSES[recommendation],
+          )}>
+            {noMarkAvailable ? "PENDING" : EXIT_LABEL[recommendation]}
           </span>
         )}
         {p.status !== "open" && (
@@ -449,13 +454,19 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
       )}
 
       {/* Exit guidance line */}
-      {quoteUnavailable && (
+      {(quoteUnavailable || noMarkAvailable) && (
         <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12px] leading-snug text-warning">
-          <span className="font-semibold mr-1">Quote Unavailable —</span>
-          <span>using last valid price. Verify in your broker.</span>
+          <span className="font-semibold mr-1">
+            {noMarkAvailable ? "Quote Pending —" : "Quote Unavailable —"}
+          </span>
+          <span>
+            {noMarkAvailable
+              ? "no valid Massive quote yet for this contract. Waiting on next evaluation tick — no P&L or auto-stop until then."
+              : "using last valid price. Verify in your broker."}
+          </span>
         </div>
       )}
-      {p.status === "open" && (
+      {p.status === "open" && !noMarkAvailable && (
         <div className={cn(
           "rounded-md border px-3 py-2 text-[12px] leading-snug",
           quoteUnavailable ? "border-warning/40 bg-warning/10 text-warning" : EXIT_CLASSES[recommendation],
