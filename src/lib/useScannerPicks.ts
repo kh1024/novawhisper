@@ -41,9 +41,13 @@ import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
 import { tradeStageFromStatus, type TradeStage } from "@/lib/tradeStage";
 import {
-  classifyPickTier, MIN_BUY_NOW_PER_BUCKET, tierRank,
+  classifyPickTier, BUDGET_SOFT_BAND_PCT, tierRank,
   type PickTier, type TierResult,
 } from "@/lib/pickTier";
+import {
+  evaluateExecutionState, resolveCta, tradeStateRank,
+  type TradeState, type TradeStateResult, type CtaPlan,
+} from "@/lib/tradeState";
 import { currentMarketMode } from "@/lib/marketHours";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
