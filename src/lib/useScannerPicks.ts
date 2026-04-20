@@ -35,6 +35,9 @@ import {
 import { useScannerOverrides, type ScannerOverrides } from "@/lib/scannerOverrides";
 import { useActiveBucket, rowBucket, type ActiveBucket } from "@/lib/scannerBucket";
 import { isConservativeCheapTicker } from "@/lib/bucketing";
+import { SMALL_CAP_FRIENDLY_SYMBOLS } from "@/lib/mockData";
+import { buildStrikeLadder, pickBestRung, type LadderCandidate, type Rung } from "@/lib/strikeLadder";
+import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -52,7 +55,16 @@ export interface ApprovedPick {
   rank: RankResult | null;
   verdict: VerdictResult | null;
   contract: PickContract;
+  /** Real per-contract cost from the BS estimator (premium × 100). */
   estCost: number;
+  /** Per-share premium (mid). */
+  premium: number;
+  /** Which delta band the strike sits in. */
+  rung: Rung;
+  /** True when the premium estimate looked suspect (premium > 50% of spot). */
+  suspect: boolean;
+  /** True between 4:00 AM and 9:30 AM ET — options markets closed. */
+  preMarket: boolean;
   bucket: ActiveBucket;
 }
 
@@ -68,6 +80,11 @@ export interface BlockedPick {
   overBudgetBy?: number;
   cap?: number;
   cost?: number;
+  /** Cheapest alternative rung that DID fit the cap (if any). */
+  cheaperAlternative?: { rung: Rung; strike: number; cost: number } | null;
+  premium?: number;
+  suspect?: boolean;
+  preMarket?: boolean;
 }
 
 export interface PipelineCounts {
