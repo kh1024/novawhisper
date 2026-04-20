@@ -243,11 +243,15 @@ export default function Picks() {
     setError(null);
     if (!data) setLoading(true);
     try {
-      const { data: payload, error: err } = await supabase.functions.invoke<PicksResponse>(
-        force ? "picks-engine?refresh=1" : "picks-engine",
-        { method: "GET" } as never,
-      );
-      if (err) throw err;
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const anon = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const url = `https://${projectId}.functions.supabase.co/picks-engine${force ? "?refresh=1" : ""}`;
+      const r = await fetch(url, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${anon}`, apikey: anon },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const payload = (await r.json()) as PicksResponse;
       if (!payload || !Array.isArray(payload.calls)) throw new Error("Invalid response");
       setData(payload);
     } catch (e: unknown) {
