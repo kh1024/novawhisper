@@ -111,6 +111,30 @@ interface Scored {
   rawReasons: string[];
 }
 
+// Estimate option premium when bid/ask/last are all 0 (off-hours).
+// Order of preference: real last → real mid → real (bid+ask)/2 → BS-lite estimate.
+function estimatePremium(c: any, spot: number, type: "call" | "put", ivDecimal: number): number {
+  const last = Number(c.last ?? 0);
+  if (last > 0) return +last.toFixed(2);
+  const mid = Number(c.mid ?? 0);
+  if (mid > 0) return +mid.toFixed(2);
+  const bid = Number(c.bid ?? 0);
+  const ask = Number(c.ask ?? 0);
+  if (bid > 0 && ask > 0) return +(((bid + ask) / 2)).toFixed(2);
+
+  // Lightweight extrinsic estimate: intrinsic + 0.4 * S * IV * sqrt(T)
+  const strike = Number(c.strike ?? 0);
+  if (!strike || !spot) return 0;
+  const intrinsic = type === "call" ? Math.max(0, spot - strike) : Math.max(0, strike - spot);
+  const dte = Number(c.dte ?? 0);
+  const t = Math.max(1, dte) / 365;
+  // Some providers return raw % (e.g. 10.8) instead of decimal; normalize.
+  const iv = ivDecimal > 5 ? ivDecimal / 100 : ivDecimal;
+  const safeIv = Math.max(0.1, Math.min(iv || 0.3, 2));
+  const extrinsic = 0.4 * spot * safeIv * Math.sqrt(t);
+  return +(intrinsic + extrinsic).toFixed(2);
+}
+
 function scoreCall(opts: {
   symbol: string; price: number; chg: number; high52: number | null; low52: number | null;
   c: any;
