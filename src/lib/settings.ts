@@ -27,6 +27,13 @@ export interface TraderProfile {
   ivStance: "low" | "average" | "high";
 }
 
+export interface ExitDefaults {
+  hardStopPct: number;   // e.g. -30  (negative number = loss threshold)
+  target1Pct: number;    // e.g.  50  (trim partial)
+  target2Pct: number;    // e.g. 100  (take profit / runner)
+  maxHoldDays: number | null; // null = derive from DTE
+}
+
 export interface AppSettings {
   refreshMs: number;          // quote polling interval
   tickerSymbols: string[];    // symbols shown in the top tape
