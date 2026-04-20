@@ -79,8 +79,14 @@ export function SaveToWatchlistButton({ size = "sm", className, validation, ...p
     );
   }
 
+  const hint = watching
+    ? "Remove from watchlist"
+    : previewQueue
+      ? "Queue for ORB release — you'll get an alert at 10:30 AM ET if all gates still pass."
+      : "Add to watchlist — review on the Dashboard with a live verdict";
+
   return (
-    <Hint label={watching ? "Remove from watchlist" : "Add to watchlist — review on the Dashboard with a live verdict"}>
+    <Hint label={hint}>
       <Button
         size="sm"
         variant={watching ? "secondary" : "outline"}
@@ -89,11 +95,12 @@ export function SaveToWatchlistButton({ size = "sm", className, validation, ...p
         className={cn(
           size === "xs" ? "h-6 px-2 text-[10px]" : "h-7 px-2 text-[11px]",
           watching && "border-warning/40 bg-warning/10 text-warning hover:bg-warning/15",
+          previewQueue && !watching && "border-warning/40 bg-warning/5 text-warning hover:bg-warning/10",
           className,
         )}
       >
         <Star className={cn("mr-1 h-3 w-3", watching && "fill-current")} />
-        {watching ? "Watching" : "Watch"}
+        {watching ? "Watching" : previewQueue ? "Queue" : "Watch"}
       </Button>
     </Hint>
   );
