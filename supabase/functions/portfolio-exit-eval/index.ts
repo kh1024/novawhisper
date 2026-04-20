@@ -366,6 +366,7 @@ Deno.serve(async (req: Request) => {
     const fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
 
     let classified: ClassifiedQuote;
+    const symSource = chainSource.get(p.symbol) ?? "none";
     if (chainEntry) {
       const bid = chainEntry.bid ?? null;
       const ask = chainEntry.ask ?? null;
@@ -374,17 +375,17 @@ Deno.serve(async (req: Request) => {
         bid, ask, mark, last: chainEntry.last ?? null,
         updatedAt: fetchedAt,
         underlyingPrice: spot,
-        source: "massive-chain",
+        source: symSource,
       });
     } else {
-      // No real quote at all — synthesize via BS-lite and mark MISSING so the
-      // exit engine treats it as quote-unavailable (no stops fire).
+      // No real quote at all — synthesize via BS-lite and tag as theoretical.
+      // Mark MISSING so the exit engine treats it as quote-unavailable (no stops fire).
       const bsMid = spot != null ? bsPrice(spot, Number(p.strike), 0.55, dte, isCall) : null;
       classified = {
         bid: null, ask: null, mark: bsMid, last: null,
         updatedAt: new Date().toISOString(),
         quality: "MISSING",
-        reason: "Contract not found in chain — using BS-lite estimate (no stop action).",
+        reason: "Contract not found in Massive chain — BS-lite estimate (no stop action).",
         source: "bs-lite",
       };
     }
