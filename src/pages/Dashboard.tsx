@@ -105,6 +105,11 @@ export default function Dashboard() {
   const [openSymbol, setOpenSymbol] = useState<string | null>(null);
   const { hiddenSet, hide } = useHiddenSections();
   const [riskTab, setRiskTab] = useState<RiskBucket>("safe");
+  // DTE quick-filter — lets the user narrow Top Opportunities to ultra-short
+  // dated contracts. "all" = no filter, "0dte" = expires today (≤1 day),
+  // "week" = expires within the next 7 days. Applied AFTER Nova/affordability
+  // filters so it only narrows what's already eligible.
+  const [dteFilter, setDteFilter] = useState<"all" | "0dte" | "week">("all");
   const [novaSpec] = useNovaFilter();
   const novaActive = isFilterActive(novaSpec);
   const [budget] = useBudget();
@@ -181,13 +186,29 @@ export default function Dashboard() {
     return m;
   }, [partition]);
 
+  // Apply DTE quick-filter on top of affordability — keeps the cap consistent
+  // with what the user sees in the chip toolbar.
+  const dteFiltered = useMemo(() => {
+    const recs = partition.recommendable;
+    if (dteFilter === "all") return recs;
+    if (dteFilter === "0dte") return recs.filter(({ item }) => item.dte <= 1);
+    return recs.filter(({ item }) => item.dte <= 7);
+  }, [partition, dteFilter]);
+
   // Top picks the user actually sees — affordability-filtered FIRST, then
-  // capped. Blocked items live in their own collapsible drawer below.
+  // DTE-narrowed, then capped. Blocked items live in their own drawer below.
   const picks = useMemo(
-    () => partition.recommendable.map((r) => r.item).slice(0, novaActive ? 12 : 6),
-    [partition, novaActive],
+    () => dteFiltered.map((r) => r.item).slice(0, novaActive ? 12 : 6),
+    [dteFiltered, novaActive],
   );
   const blockedPicks = partition.blocked;
+  // Counts for the chip toolbar — shown as small badges so users see at a
+  // glance how many same-day / same-week affordable picks exist right now.
+  const dteCounts = useMemo(() => ({
+    all: partition.recommendable.length,
+    "0dte": partition.recommendable.filter(({ item }) => item.dte <= 1).length,
+    week: partition.recommendable.filter(({ item }) => item.dte <= 7).length,
+  }), [partition]);
   // True when there's nothing affordable to recommend AT ALL.
   const noAffordableTrades = partition.recommendable.length === 0 && filtered.length > 0;
 
@@ -379,6 +400,39 @@ export default function Dashboard() {
                 </TabsList>
               </Tabs>
             </div>
+          </div>
+          {/* Expiry quick-filter — same-day (0DTE) and same-week (≤7d) picks. */}
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground mr-1">Expires:</span>
+            {([
+              { v: "all" as const,  label: "Any DTE" },
+              { v: "0dte" as const, label: "Today (0DTE)" },
+              { v: "week" as const, label: "This week" },
+            ]).map((opt) => {
+              const active = dteFilter === opt.v;
+              const count = dteCounts[opt.v];
+              return (
+                <button
+                  key={opt.v}
+                  onClick={() => setDteFilter(opt.v)}
+                  className={`inline-flex items-center gap-1.5 h-6 px-2 rounded-full border text-[11px] font-semibold transition-colors ${
+                    active
+                      ? "bg-primary/15 border-primary/50 text-primary"
+                      : "bg-surface/40 border-border/60 text-muted-foreground hover:text-foreground hover:border-border"
+                  }`}
+                >
+                  {opt.label}
+                  <span className={`mono text-[10px] px-1 rounded ${active ? "bg-primary/20" : "bg-muted/40"}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {dteFilter !== "all" && dteCounts[dteFilter] === 0 && (
+              <span className="ml-1 text-[10px] text-warning">
+                no {dteFilter === "0dte" ? "same-day" : "same-week"} picks fit your budget — try another expiry
+              </span>
+            )}
           </div>
           {picks.length === 0 && (() => {
             const ts = detectTimeState();
