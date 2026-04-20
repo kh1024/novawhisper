@@ -110,7 +110,9 @@ Deno.serve(async (req) => {
     const queries = QUERIES[category] ?? QUERIES.geopolitics;
     const perQuery = Math.max(3, Math.ceil(limit / queries.length) + 1);
 
-    const settled = await Promise.allSettled(queries.map((q) => firecrawlSearch(q, perQuery)));
+    // Earnings prints cluster around report days — widen to last week.
+    const tbs = category === "earnings" ? "qdr:w" : "qdr:d";
+    const settled = await Promise.allSettled(queries.map((q) => firecrawlSearch(q, perQuery, tbs)));
     const all: SearchHit[] = [];
     for (const s of settled) if (s.status === "fulfilled") all.push(...s.value);
 
