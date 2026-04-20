@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getOwnerKeySync } from "@/lib/ownerKey";
 import type { ExitRecommendation } from "@/lib/exitGuidance";
+import type { TradeStage } from "@/lib/tradeStage";
+import type { QuoteQuality } from "@/lib/quoteValidator";
 
 export function getOwnerKey(): string {
   return getOwnerKeySync() ?? "";
@@ -49,6 +51,14 @@ export interface PortfolioPosition {
   exit_time: string | null;
   realized_pnl: number | null;
   last_evaluated_at: string | null;
+  // Trade state machine + quote validation
+  trade_stage: TradeStage;
+  last_quote_quality: QuoteQuality | null;
+  last_valid_mark: number | null;
+  last_valid_mark_at: string | null;
+  quote_history: Array<{ mark: number; quality: QuoteQuality; ts: string }>;
+  stop_confirm_count: number;
+  stop_first_breach_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +98,8 @@ export function usePortfolio() {
         .eq("owner_key", owner)
         .order("entry_at", { ascending: false });
       if (error) throw error;
+      // Cast — new columns (trade_stage, quote_history, etc.) live on the row
+      // even though older types in supabase/types.ts may not list them yet.
       return (data ?? []) as unknown as PortfolioPosition[];
     },
     staleTime: 30_000,

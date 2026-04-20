@@ -39,6 +39,7 @@ import { SMALL_CAP_FRIENDLY_SYMBOLS } from "@/lib/mockData";
 import { buildStrikeLadder, pickBestRung, type Rung } from "@/lib/strikeLadder";
 import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
+import { tradeStageFromStatus, type TradeStage } from "@/lib/tradeStage";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,8 @@ export interface ApprovedPick {
   bucket: ActiveBucket;
   /** TradeStatus middleware result — readiness layer on top of scoring. */
   tradeStatus: TradeStatusResult;
+  /** Trade State Machine stage — drives UI styling + Add-to-Portfolio gating. */
+  tradeStage: TradeStage;
 }
 
 export interface BlockedPick {
@@ -256,6 +259,7 @@ export function bucketPicks(args: {
       fitsCap: pick.fitsCap,
       finalRank: rankResult?.finalRank ?? null,
     });
+    const tradeStage = tradeStageFromStatus(tradeStatus, preMarket, true);
     approved.push({
       key,
       row: r,
@@ -269,6 +273,7 @@ export function bucketPicks(args: {
       preMarket,
       bucket: rowB,
       tradeStatus,
+      tradeStage,
     });
   }
 

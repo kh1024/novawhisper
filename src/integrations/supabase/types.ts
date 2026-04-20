@@ -209,21 +209,28 @@ export type Database = {
           initial_score: number | null
           is_paper: boolean
           last_evaluated_at: string | null
+          last_quote_quality: string | null
+          last_valid_mark: number | null
+          last_valid_mark_at: string | null
           max_hold_days: number | null
           notes: string | null
           option_symbol: string | null
           option_type: string
           owner_key: string
+          quote_history: Json
           realized_pnl: number | null
           risk_bucket: string | null
           source: string | null
           status: string
+          stop_confirm_count: number
+          stop_first_breach_at: string | null
           strike: number
           strike_short: number | null
           symbol: string
           target_1_pct: number
           target_2_pct: number
           thesis: string | null
+          trade_stage: string
           updated_at: string
         }
         Insert: {
@@ -250,21 +257,28 @@ export type Database = {
           initial_score?: number | null
           is_paper?: boolean
           last_evaluated_at?: string | null
+          last_quote_quality?: string | null
+          last_valid_mark?: number | null
+          last_valid_mark_at?: string | null
           max_hold_days?: number | null
           notes?: string | null
           option_symbol?: string | null
           option_type: string
           owner_key: string
+          quote_history?: Json
           realized_pnl?: number | null
           risk_bucket?: string | null
           source?: string | null
           status?: string
+          stop_confirm_count?: number
+          stop_first_breach_at?: string | null
           strike: number
           strike_short?: number | null
           symbol: string
           target_1_pct?: number
           target_2_pct?: number
           thesis?: string | null
+          trade_stage?: string
           updated_at?: string
         }
         Update: {
@@ -291,24 +305,102 @@ export type Database = {
           initial_score?: number | null
           is_paper?: boolean
           last_evaluated_at?: string | null
+          last_quote_quality?: string | null
+          last_valid_mark?: number | null
+          last_valid_mark_at?: string | null
           max_hold_days?: number | null
           notes?: string | null
           option_symbol?: string | null
           option_type?: string
           owner_key?: string
+          quote_history?: Json
           realized_pnl?: number | null
           risk_bucket?: string | null
           source?: string | null
           status?: string
+          stop_confirm_count?: number
+          stop_first_breach_at?: string | null
           strike?: number
           strike_short?: number | null
           symbol?: string
           target_1_pct?: number
           target_2_pct?: number
           thesis?: string | null
+          trade_stage?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      position_decision_log: {
+        Row: {
+          decision_path: Json
+          evaluated_at: string
+          id: string
+          owner_key: string
+          position_id: string
+          profit_pct: number | null
+          quote_ask: number | null
+          quote_bid: number | null
+          quote_last: number | null
+          quote_mark: number | null
+          quote_quality: string
+          quote_source: string | null
+          reason: string | null
+          recommendation: string
+          stop_confirm_count: number | null
+          trade_stage: string
+          underlying_price: number | null
+          used_mark: number | null
+        }
+        Insert: {
+          decision_path?: Json
+          evaluated_at?: string
+          id?: string
+          owner_key: string
+          position_id: string
+          profit_pct?: number | null
+          quote_ask?: number | null
+          quote_bid?: number | null
+          quote_last?: number | null
+          quote_mark?: number | null
+          quote_quality: string
+          quote_source?: string | null
+          reason?: string | null
+          recommendation: string
+          stop_confirm_count?: number | null
+          trade_stage: string
+          underlying_price?: number | null
+          used_mark?: number | null
+        }
+        Update: {
+          decision_path?: Json
+          evaluated_at?: string
+          id?: string
+          owner_key?: string
+          position_id?: string
+          profit_pct?: number | null
+          quote_ask?: number | null
+          quote_bid?: number | null
+          quote_last?: number | null
+          quote_mark?: number | null
+          quote_quality?: string
+          quote_source?: string | null
+          reason?: string | null
+          recommendation?: string
+          stop_confirm_count?: number | null
+          trade_stage?: string
+          underlying_price?: number | null
+          used_mark?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "position_decision_log_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "portfolio_positions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       strategy_profiles: {
         Row: {

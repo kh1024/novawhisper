@@ -1,13 +1,19 @@
 // portfolio-exit-eval — runs every 5 minutes during market hours. For every
-// OPEN position, fetches the latest underlying quote + estimates the option
-// mid, then writes back current_price, current_profit_pct, exit_recommendation,
-// and exit_reason via the exit-guidance engine.
+// OPEN position:
+//   1. Fetches the underlying spot.
+//   2. Fetches the actual option contract bid/ask via public-options-fetch
+//      (always — not just for DTE ≤ 7), and falls back to BS-lite only when
+//      the chain doesn't include the contract.
+//   3. Runs the quote through a validator (VALID / STALE / MISSING / ANOMALOUS).
+//      • If quality !== VALID, we freeze the previous last_valid_mark for
+//        PnL/stop logic and DO NOT trigger a stop from this tick.
+//   4. Stop-loss confirmation rule: SELL_AT_LOSS only fires when 2 consecutive
+//      VALID marks are below the hard stop, OR a single VALID breach has
+//      persisted ≥ 30 seconds.
+//   5. Writes a row to position_decision_log with the full trace so users can
+//      inspect why a stop / take-profit fired.
 //
-// Hybrid pricing strategy (per spec):
-//   • DTE ≤ 7  → fetch real chain via public-options-fetch
-//   • DTE > 7  → BS-lite estimator from spot + ivRank=50 fallback
-//
-// Idempotent — safe to call manually with { ownerKey?: string } to limit scope.
+// Idempotent — call manually with { ownerKey?: string, force?: boolean }.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
@@ -29,9 +35,15 @@ interface PositionRow {
   target_1_pct: number;
   target_2_pct: number;
   max_hold_days: number | null;
+  trade_stage: string;
+  last_valid_mark: number | null;
+  last_valid_mark_at: string | null;
+  quote_history: Array<{ mark: number; quality: string; ts: string }>;
+  stop_confirm_count: number;
+  stop_first_breach_at: string | null;
 }
 
-// ─── Black-Scholes-lite (mirror of src/lib/premiumEstimator.ts) ─────────────
+// ─── BS-lite fallback ─────────────────────────────────────────────────────
 const R = 0.04;
 function normCdf(x: number): number {
   const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741;
@@ -54,27 +66,153 @@ function bsPrice(spot: number, strike: number, iv: number, dte: number, isCall: 
   return Math.max(intrinsic + 0.01, price);
 }
 
-// ─── Exit engine (mirror of src/lib/exitGuidance.ts) ────────────────────────
-type Rec = "HOLD" | "TRIM_PARTIAL" | "TAKE_PROFIT" | "SELL_AT_LOSS" | "TIME_EXIT" | "NO_SIGNAL";
+// ─── Quote validator (mirror of src/lib/quoteValidator.ts) ────────────────
+type Quality = "VALID" | "STALE" | "MISSING" | "ANOMALOUS";
+interface ClassifiedQuote {
+  bid: number | null; ask: number | null; mark: number | null; last: number | null;
+  updatedAt: string;
+  quality: Quality;
+  reason: string;
+  source: string;
+}
+function classifyQuote(args: {
+  bid: number | null; ask: number | null; mark: number | null; last: number | null;
+  updatedAt: number; underlyingPrice: number | null; source: string;
+}): ClassifiedQuote {
+  const ageMs = Date.now() - args.updatedAt;
+  const base = {
+    bid: args.bid, ask: args.ask, mark: args.mark, last: args.last,
+    updatedAt: new Date(args.updatedAt).toISOString(),
+    source: args.source,
+  };
+  if ((args.bid == null || !Number.isFinite(args.bid)) && (args.ask == null || !Number.isFinite(args.ask))) {
+    return { ...base, quality: "MISSING", reason: "Bid and ask both unavailable." };
+  }
+  if (Number.isFinite(ageMs) && ageMs > 60_000) {
+    return { ...base, quality: "STALE", reason: `Quote ${Math.round(ageMs / 1000)}s old.` };
+  }
+  if (args.mark === 0 || (args.bid === 0 && args.ask === 0)) {
+    return { ...base, quality: "ANOMALOUS", reason: "Mark is 0.00 — closed market or bad print." };
+  }
+  if (args.mark != null && args.mark < 0) {
+    return { ...base, quality: "ANOMALOUS", reason: "Mark negative — invalid." };
+  }
+  if (args.underlyingPrice != null && args.underlyingPrice > 0 && args.mark != null && args.mark > args.underlyingPrice * 0.7) {
+    return { ...base, quality: "ANOMALOUS", reason: `Mark > 70% of underlying — implausible.` };
+  }
+  return { ...base, quality: "VALID", reason: "Bid/ask within sane bounds." };
+}
 
-function decide(p: PositionRow, optionMid: number, dte: number): { recommendation: Rec; reason: string; profitPct: number } {
+// ─── Exit engine with stage + confirmation awareness ──────────────────────
+type Rec = "HOLD" | "TRIM_PARTIAL" | "TAKE_PROFIT" | "SELL_AT_LOSS" | "TIME_EXIT" | "NO_SIGNAL";
+interface Decision {
+  recommendation: Rec;
+  reason: string;
+  profitPct: number;
+  stopConfirmCount: number;
+  firstBreachAt: string | null;
+  /** Free-form trace for the decision log. */
+  path: Record<string, unknown>;
+}
+
+function decide(
+  p: PositionRow,
+  usedMark: number,
+  dte: number,
+  quoteValid: boolean,
+  quoteAgeMs: number | null,
+): Decision {
+  const path: Record<string, unknown> = {
+    quoteValid,
+    quoteAgeMs,
+    hardStopPct: Number(p.hard_stop_pct),
+    target1Pct: Number(p.target_1_pct),
+    target2Pct: Number(p.target_2_pct),
+  };
+
   if (p.entry_premium == null || p.entry_premium <= 0) {
-    return { recommendation: "NO_SIGNAL", reason: "Entry price unknown.", profitPct: 0 };
+    return {
+      recommendation: "NO_SIGNAL",
+      reason: "Entry price unknown — cannot compute P&L.",
+      profitPct: 0,
+      stopConfirmCount: p.stop_confirm_count,
+      firstBreachAt: p.stop_first_breach_at,
+      path: { ...path, branch: "no_entry" },
+    };
   }
-  const profitPct = ((optionMid - Number(p.entry_premium)) / Number(p.entry_premium)) * 100;
-  if (profitPct <= Number(p.hard_stop_pct)) {
-    return { recommendation: "SELL_AT_LOSS", reason: `Premium down ${profitPct.toFixed(1)}% vs entry; below ${p.hard_stop_pct}% hard stop. Cut loss and preserve capital.`, profitPct };
+
+  const profitPct = ((usedMark - Number(p.entry_premium)) / Number(p.entry_premium)) * 100;
+  path.profitPct = profitPct;
+
+  // Take-profit + trim only fire on VALID quotes (don't lock in profits from a stale tick).
+  if (quoteValid && profitPct >= Number(p.target_2_pct)) {
+    return {
+      recommendation: "TAKE_PROFIT",
+      reason: `Premium up ${profitPct.toFixed(1)}%, above target_2 (${p.target_2_pct}%). Lock in full profits.`,
+      profitPct, stopConfirmCount: 0, firstBreachAt: null,
+      path: { ...path, branch: "take_profit" },
+    };
   }
-  if (profitPct >= Number(p.target_2_pct)) {
-    return { recommendation: "TAKE_PROFIT", reason: `Premium up ${profitPct.toFixed(1)}%, above target_2 (${p.target_2_pct}%). Lock in full profits.`, profitPct };
+  if (quoteValid && profitPct >= Number(p.target_1_pct)) {
+    return {
+      recommendation: "TRIM_PARTIAL",
+      reason: `Premium up ${profitPct.toFixed(1)}%, above target_1 (${p.target_1_pct}%). Take partial profits, move stop to breakeven.`,
+      profitPct, stopConfirmCount: 0, firstBreachAt: null,
+      path: { ...path, branch: "trim" },
+    };
   }
-  if (profitPct >= Number(p.target_1_pct)) {
-    return { recommendation: "TRIM_PARTIAL", reason: `Premium up ${profitPct.toFixed(1)}%, above target_1 (${p.target_1_pct}%). Take partial profits, move stop to breakeven.`, profitPct };
+
+  // Hard stop with confirmation rule.
+  const breach = profitPct <= Number(p.hard_stop_pct);
+  path.breach = breach;
+  if (breach && quoteValid) {
+    const newCount = (p.stop_confirm_count ?? 0) + 1;
+    const firstBreachAt = p.stop_first_breach_at ?? new Date().toISOString();
+    const persistMs = Date.parse(firstBreachAt) ? Date.now() - Date.parse(firstBreachAt) : 0;
+    const confirmedByCount = newCount >= 2;
+    const confirmedByPersist = persistMs >= 30_000;
+    path.stopConfirmCount = newCount;
+    path.persistMs = persistMs;
+    path.confirmedByCount = confirmedByCount;
+    path.confirmedByPersist = confirmedByPersist;
+    if (confirmedByCount || confirmedByPersist) {
+      return {
+        recommendation: "SELL_AT_LOSS",
+        reason: `Hard stop confirmed — ${profitPct.toFixed(1)}% (≤ ${p.hard_stop_pct}%) on ${newCount} consecutive valid quote(s). Cut loss.`,
+        profitPct, stopConfirmCount: newCount, firstBreachAt,
+        path: { ...path, branch: "stop_confirmed" },
+      };
+    }
+    // Unconfirmed — stay HOLD but remember the breach.
+    return {
+      recommendation: "HOLD",
+      reason: `Stop zone touched (${profitPct.toFixed(1)}%) — awaiting confirmation (${newCount}/2 valid breaches).`,
+      profitPct, stopConfirmCount: newCount, firstBreachAt,
+      path: { ...path, branch: "stop_unconfirmed" },
+    };
   }
-  if (p.max_hold_days != null && dte <= 1) {
-    return { recommendation: "TIME_EXIT", reason: "Option is near expiration with limited time value left. Flatten risk before last-day decay.", profitPct };
+
+  // Time exit only on VALID (avoid expiring a position based on a missing quote).
+  if (quoteValid && p.max_hold_days != null && dte <= 1) {
+    return {
+      recommendation: "TIME_EXIT",
+      reason: "Option is near expiration with limited time value left. Flatten risk.",
+      profitPct, stopConfirmCount: 0, firstBreachAt: null,
+      path: { ...path, branch: "time_exit" },
+    };
   }
-  return { recommendation: "HOLD", reason: "Position within risk parameters; trend and volume not broken. Hold and re-evaluate intraday.", profitPct };
+
+  // Default HOLD — reset breach trackers if not breaching.
+  return {
+    recommendation: "HOLD",
+    reason: quoteValid
+      ? "Position within risk parameters. Hold and re-evaluate intraday."
+      : "Quote unavailable — using last valid mark; no exit action this tick.",
+    profitPct,
+    stopConfirmCount: breach ? p.stop_confirm_count : 0,
+    firstBreachAt: breach ? p.stop_first_breach_at : null,
+    path: { ...path, branch: quoteValid ? "hold" : "hold_quote_invalid" },
+  };
 }
 
 function dteFromExpiry(expiry: string): number {
@@ -83,7 +221,6 @@ function dteFromExpiry(expiry: string): number {
 }
 
 function isMarketHoursET(): boolean {
-  // Convert "now" into ET wall-clock minutes.
   const now = new Date();
   const fmt = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
@@ -118,8 +255,9 @@ Deno.serve(async (req: Request) => {
 
   let q = supabase
     .from("portfolio_positions")
-    .select("id, owner_key, symbol, option_type, direction, strike, expiry, contracts, entry_premium, hard_stop_pct, target_1_pct, target_2_pct, max_hold_days")
-    .eq("status", "open");
+    .select("id, owner_key, symbol, option_type, direction, strike, expiry, contracts, entry_premium, hard_stop_pct, target_1_pct, target_2_pct, max_hold_days, trade_stage, last_valid_mark, last_valid_mark_at, quote_history, stop_confirm_count, stop_first_breach_at")
+    .eq("status", "open")
+    .in("trade_stage", ["OPEN_POSITION", "EXIT_MANAGEMENT"]);
   if (body.ownerKey) q = q.eq("owner_key", body.ownerKey);
 
   const { data: positions, error: selErr } = await q;
@@ -136,33 +274,32 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  // Fetch quotes in one batch via the existing quotes-fetch function.
+  // Underlying quotes in one batch.
   const symbols = Array.from(new Set(rows.map((r) => r.symbol)));
   const quoteMap = new Map<string, number>();
   try {
-    const { data: qd } = await supabase.functions.invoke("quotes-fetch", {
-      body: { symbols },
-    });
+    const { data: qd } = await supabase.functions.invoke("quotes-fetch", { body: { symbols } });
     const quotes = (qd?.quotes ?? []) as Array<{ symbol: string; price: number }>;
     for (const q of quotes) if (Number.isFinite(q.price)) quoteMap.set(q.symbol, Number(q.price));
   } catch (e) {
     console.warn("quotes-fetch failed", e);
   }
 
-  // For short-DTE positions, attempt to fetch real chain mids via public-options-fetch.
-  const shortDteSymbols = Array.from(new Set(rows.filter((r) => dteFromExpiry(r.expiry) <= 7).map((r) => r.symbol)));
-  const realMids = new Map<string, number>(); // key: SYMBOL|TYPE|STRIKE|EXPIRY
-  for (const sym of shortDteSymbols) {
+  // Real chains for ALL symbols (not just DTE≤7) — we need bid/ask to validate.
+  type ChainEntry = { mid?: number; bid?: number; ask?: number; last?: number; updatedAt?: string };
+  const realChain = new Map<string, ChainEntry>(); // SYMBOL|TYPE|STRIKE|EXPIRY
+  const chainFetchedAt = new Map<string, number>();
+  for (const sym of symbols) {
     try {
       const { data } = await supabase.functions.invoke("public-options-fetch", { body: { symbol: sym } });
+      const fetchedAt = data?.fetchedAt ? Date.parse(data.fetchedAt) : Date.now();
+      chainFetchedAt.set(sym, fetchedAt);
       const contracts = (data?.contracts ?? []) as Array<{
-        symbol: string; type: string; strike: number; expiry: string; mid?: number; ask?: number; bid?: number;
+        type: string; strike: number; expiry: string; mid?: number; bid?: number; ask?: number; last?: number;
       }>;
       for (const c of contracts) {
-        const mid = c.mid ?? ((c.bid != null && c.ask != null) ? (Number(c.bid) + Number(c.ask)) / 2 : null);
-        if (mid == null) continue;
         const key = `${sym}|${(c.type ?? "").toLowerCase()}|${Number(c.strike)}|${c.expiry}`;
-        realMids.set(key, Number(mid));
+        realChain.set(key, { mid: c.mid, bid: c.bid, ask: c.ask, last: c.last });
       }
     } catch (e) {
       console.warn(`public-options-fetch failed for ${sym}`, e);
@@ -172,40 +309,142 @@ Deno.serve(async (req: Request) => {
   let evaluated = 0;
   let stops = 0;
   let profits = 0;
+  let frozen = 0;
   for (const p of rows) {
-    const spot = quoteMap.get(p.symbol);
-    if (spot == null) continue;
+    const spot = quoteMap.get(p.symbol) ?? null;
     const isCall = p.option_type.toLowerCase().includes("call");
     const dte = dteFromExpiry(p.expiry);
+    const key = `${p.symbol}|${isCall ? "call" : "put"}|${Number(p.strike)}|${p.expiry}`;
+    const chainEntry = realChain.get(key);
+    const fetchedAt = chainFetchedAt.get(p.symbol) ?? Date.now();
 
-    let mid: number | null = null;
-    if (dte <= 7) {
-      const key = `${p.symbol}|${isCall ? "call" : "put"}|${Number(p.strike)}|${p.expiry}`;
-      mid = realMids.get(key) ?? null;
-    }
-    if (mid == null) {
-      // Fallback to BS-lite (iv=0.55 ≈ ivRank 50).
-      mid = bsPrice(spot, Number(p.strike), 0.55, dte, isCall);
+    let classified: ClassifiedQuote;
+    if (chainEntry) {
+      const bid = chainEntry.bid ?? null;
+      const ask = chainEntry.ask ?? null;
+      const mark = chainEntry.mid ?? (bid != null && ask != null ? (bid + ask) / 2 : null);
+      classified = classifyQuote({
+        bid, ask, mark, last: chainEntry.last ?? null,
+        updatedAt: fetchedAt,
+        underlyingPrice: spot,
+        source: "massive-chain",
+      });
+    } else {
+      // No real quote at all — synthesize via BS-lite and mark MISSING so the
+      // exit engine treats it as quote-unavailable (no stops fire).
+      const bsMid = spot != null ? bsPrice(spot, Number(p.strike), 0.55, dte, isCall) : null;
+      classified = {
+        bid: null, ask: null, mark: bsMid, last: null,
+        updatedAt: new Date().toISOString(),
+        quality: "MISSING",
+        reason: "Contract not found in chain — using BS-lite estimate (no stop action).",
+        source: "bs-lite",
+      };
     }
 
-    const dec = decide(p, mid, dte);
+    // Pick which mark to feed into the exit engine.
+    //   • VALID quote → use it, update last_valid_mark.
+    //   • Anything else → freeze the previous last_valid_mark; if we have none,
+    //     fall back to entry_premium so profitPct = 0 and no stop fires.
+    let usedMark: number;
+    let frozenFlag = false;
+    if (classified.quality === "VALID" && classified.mark != null) {
+      usedMark = classified.mark;
+    } else if (p.last_valid_mark != null) {
+      usedMark = Number(p.last_valid_mark);
+      frozenFlag = true;
+    } else if (p.entry_premium != null) {
+      usedMark = Number(p.entry_premium);
+      frozenFlag = true;
+    } else {
+      usedMark = classified.mark ?? 0;
+      frozenFlag = true;
+    }
+    if (frozenFlag) frozen++;
+
+    const dec = decide(
+      p,
+      usedMark,
+      dte,
+      classified.quality === "VALID",
+      Number.isFinite(Date.now() - Date.parse(classified.updatedAt))
+        ? Date.now() - Date.parse(classified.updatedAt)
+        : null,
+    );
+
     if (dec.recommendation === "SELL_AT_LOSS" || dec.recommendation === "TIME_EXIT") stops++;
     if (dec.recommendation === "TAKE_PROFIT" || dec.recommendation === "TRIM_PARTIAL") profits++;
+
+    // Update rolling quote history (last 10).
+    const newHistory = Array.isArray(p.quote_history) ? [...p.quote_history] : [];
+    newHistory.push({
+      mark: classified.mark ?? 0,
+      quality: classified.quality,
+      ts: classified.updatedAt,
+    });
+    while (newHistory.length > 10) newHistory.shift();
+
+    // trade_stage transition: OPEN_POSITION → EXIT_MANAGEMENT once any
+    // non-HOLD recommendation appears (stop-zone touched, target hit, etc).
+    let nextStage = p.trade_stage;
+    if (
+      (dec.recommendation !== "HOLD" || dec.stopConfirmCount > 0) &&
+      p.trade_stage === "OPEN_POSITION"
+    ) {
+      nextStage = "EXIT_MANAGEMENT";
+    }
 
     await supabase
       .from("portfolio_positions")
       .update({
-        current_price: +mid.toFixed(2),
+        current_price: classified.mark != null ? +classified.mark.toFixed(4) : null,
         current_profit_pct: +dec.profitPct.toFixed(2),
         exit_recommendation: dec.recommendation,
         exit_reason: dec.reason,
         last_evaluated_at: new Date().toISOString(),
+        last_quote_quality: classified.quality,
+        last_valid_mark: classified.quality === "VALID" && classified.mark != null
+          ? +classified.mark.toFixed(4)
+          : p.last_valid_mark,
+        last_valid_mark_at: classified.quality === "VALID"
+          ? new Date().toISOString()
+          : p.last_valid_mark_at,
+        quote_history: newHistory,
+        stop_confirm_count: dec.stopConfirmCount,
+        stop_first_breach_at: dec.firstBreachAt,
+        trade_stage: nextStage,
       })
       .eq("id", p.id);
+
+    // Decision log row — powers the /portfolio Debug "Decision Trace" drawer.
+    await supabase.from("position_decision_log").insert({
+      position_id: p.id,
+      owner_key: p.owner_key,
+      trade_stage: nextStage,
+      quote_bid: classified.bid,
+      quote_ask: classified.ask,
+      quote_mark: classified.mark,
+      quote_last: classified.last,
+      quote_quality: classified.quality,
+      quote_source: classified.source,
+      underlying_price: spot,
+      used_mark: +usedMark.toFixed(4),
+      profit_pct: +dec.profitPct.toFixed(2),
+      recommendation: dec.recommendation,
+      reason: dec.reason,
+      stop_confirm_count: dec.stopConfirmCount,
+      decision_path: {
+        ...dec.path,
+        quoteQualityReason: classified.reason,
+        frozen: frozenFlag,
+        chainKey: key,
+      },
+    });
+
     evaluated++;
   }
 
-  return new Response(JSON.stringify({ ok: true, evaluated, stops, profits }), {
+  return new Response(JSON.stringify({ ok: true, evaluated, stops, profits, frozen }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 });

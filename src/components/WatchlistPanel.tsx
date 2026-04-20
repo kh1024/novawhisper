@@ -59,6 +59,13 @@ function toPseudoPosition(w: WatchlistItem): PortfolioPosition {
     exit_time: null,
     realized_pnl: null,
     last_evaluated_at: null,
+    trade_stage: "WATCH_ONLY" as never,
+    last_quote_quality: null,
+    last_valid_mark: null,
+    last_valid_mark_at: null,
+    quote_history: [],
+    stop_confirm_count: 0,
+    stop_first_breach_at: null,
     created_at: w.created_at,
     updated_at: w.updated_at,
   };

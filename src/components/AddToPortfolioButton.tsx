@@ -18,6 +18,7 @@ import { estimatePremium, ivRankToIv } from "@/lib/premiumEstimator";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ApprovedPick } from "@/lib/useScannerPicks";
+import { canAddToPortfolio, type TradeStage } from "@/lib/tradeStage";
 
 /** Generic shape any pick surface can supply. */
 export interface PickSpec {
@@ -41,6 +42,8 @@ export interface PickSpec {
   thesis?: string | null;
   /** Source surface — "scanner" / "watchlist" / "top-opportunities" etc. */
   source?: string;
+  /** Trade stage — only ENTRY_CONFIRMED / OPEN_POSITION may add. */
+  tradeStage?: TradeStage;
 }
 
 interface Props {
@@ -79,6 +82,7 @@ function specFromPick(pick: ApprovedPick): PickSpec {
       budget: pick.tradeStatus.budget,
       liquidity: pick.tradeStatus.liquidity,
       tradeStatus: pick.tradeStatus.tradeStatus,
+      tradeStage: pick.tradeStage,
     },
   };
 }
@@ -130,6 +134,10 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
   const [notes, setNotes] = useState("");
 
   if (!resolved) return null;
+
+  // Stage gate — only ENTRY_CONFIRMED ideas (or already-OPEN positions) may add.
+  const stage = pick?.tradeStage ?? spec ? (pick?.tradeStage ?? "ENTRY_CONFIRMED") : "ENTRY_CONFIRMED";
+  const stageAllowsAdd = canAddToPortfolio(stage as TradeStage) || held.held;
 
   const numContracts = Math.max(1, Math.floor(Number(contracts) || 1));
   const numEntry = Number(entryPrice) || 0;
@@ -200,6 +208,28 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
       },
     );
   };
+
+  // Stage gate UI — when not eligible, render a disabled "Wait for Confirmation" pill
+  // instead of the dialog trigger so the user can never accidentally enter a non-confirmed trade.
+  if (!stageAllowsAdd) {
+    return (
+      <Button
+        size="sm"
+        variant="outline"
+        disabled
+        className={cn(
+          size === "xs" ? "h-6 px-2 text-[10px]" : size === "default" ? "h-9 px-3" : "h-7 px-2 text-[11px]",
+          "border-warning/40 bg-warning/5 text-warning cursor-not-allowed",
+          className,
+        )}
+        onClick={(e) => e.stopPropagation()}
+        title="Add to Portfolio unlocks once direction, volume, gap and liquidity are all confirmed."
+      >
+        <Briefcase className={cn("h-3 w-3", !iconOnly && "mr-1")} />
+        {!iconOnly && "Wait — not confirmed"}
+      </Button>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
