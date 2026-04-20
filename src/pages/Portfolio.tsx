@@ -257,9 +257,10 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
   const isCall = p.option_type.toLowerCase().includes("call");
   const dte = dteFromExpiry(p.expiry);
   const isOpen = p.status === "open";
-  // Only run live exit-decision preview for OPEN positions. Closed/expired
-  // positions must reflect their realized exit price + P&L, never live spot.
-  const dec = isOpen ? previewExitDecision(p, spot ?? null) : null;
+  const quoteUnavailable = isOpen && p.last_quote_quality != null && p.last_quote_quality !== "VALID";
+  // Only run live exit-decision preview for OPEN positions with a valid quote.
+  // Invalid/stale/missing quotes must use the persisted frozen mark from the exit engine.
+  const dec = isOpen && !quoteUnavailable ? previewExitDecision(p, spot ?? null) : null;
   const recommendation = (dec?.recommendation ?? p.exit_recommendation) as ExitRecommendation;
   const reason = dec?.reason ?? p.exit_reason ?? "Awaiting first evaluation tick.";
   const realizedPct = (!isOpen && p.entry_premium != null && p.close_premium != null && Number(p.entry_premium) > 0)
