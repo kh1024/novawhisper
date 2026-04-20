@@ -8,9 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { useScannerPicks } from "@/lib/useScannerPicks";
+import { useEffect, useMemo, useState } from "react";
+import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
+import { TRADE_STATUS_CLASSES, TRADE_STATUS_LABEL } from "@/lib/tradeStatus";
+import { Hint } from "@/components/Hint";
 import { cn } from "@/lib/utils";
 
 const BUCKET_TABS: ActiveBucket[] = ["All", "Conservative", "Moderate", "Aggressive", "Lottery"];
@@ -37,7 +39,21 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
     );
   };
 
-  const totalApproved = picks.approved.length;
+  // TradeStatus middleware filter — only TradeReady picks are surfaced.
+  // During pre-market every pick is WatchlistOnly, so we fall back to those
+  // so the widget isn't blank but flag it as "Watchlist preview".
+  const tradeReady = useMemo(
+    () => picks.approved.filter((p) => p.tradeStatus.tradeStatus === "TradeReady"),
+    [picks.approved],
+  );
+  const watchlistFallback = useMemo(
+    () => picks.approved.filter((p) => p.tradeStatus.tradeStatus === "WatchlistOnly"),
+    [picks.approved],
+  );
+  const display: ApprovedPick[] = tradeReady.length > 0 ? tradeReady : watchlistFallback;
+  const usingFallback = tradeReady.length === 0 && watchlistFallback.length > 0;
+
+  const totalApproved = display.length;
   const totalBlocked = picks.budgetBlocked.length + picks.safetyBlocked.length;
   const everythingEmpty = totalApproved === 0 && totalBlocked === 0;
 
@@ -91,7 +107,12 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
       {/* Approved picks — top N as compact cards */}
       {totalApproved > 0 && (
         <div className="space-y-2">
-          {picks.approved.map((p) => {
+          {usingFallback && (
+            <div className="text-[11px] text-warning bg-warning/5 border border-warning/30 rounded px-2 py-1.5">
+              👀 Watchlist preview — pre-market window. Real Trade-Ready picks unlock at 9:30 AM ET after intraday confirmation.
+            </div>
+          )}
+          {display.map((p) => {
             const isCall = p.contract.optionType === "call";
             return (
               <button
@@ -116,6 +137,23 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                     <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
                       {bucketEmoji(p.bucket)} {p.bucket}
                     </span>
+                    <Hint text={p.tradeStatus.reason}>
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded border",
+                        TRADE_STATUS_CLASSES[p.tradeStatus.tradeStatus],
+                      )}>
+                        {TRADE_STATUS_LABEL[p.tradeStatus.tradeStatus]}
+                      </span>
+                    </Hint>
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[9px] text-muted-foreground">
+                    <span>Dir: <span className="text-foreground">{p.tradeStatus.direction}</span></span>
+                    <span>·</span>
+                    <span>Vol: <span className="text-foreground">{p.tradeStatus.volume}</span></span>
+                    <span>·</span>
+                    <span>Gap: <span className="text-foreground">{p.tradeStatus.gap}</span></span>
+                    <span>·</span>
+                    <span>Liq: <span className="text-foreground">{p.tradeStatus.liquidity}</span></span>
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate mt-0.5">
                     {p.verdict?.reason ?? p.row.crl?.reason ?? `Setup ${p.row.setupScore} · ${p.row.bias}`}
