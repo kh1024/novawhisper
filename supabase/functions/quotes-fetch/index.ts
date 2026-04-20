@@ -696,14 +696,25 @@ function verify(
   const order: SourceName[] = ["yahoo", "stockdata", "finnhub", "massive", "cnbc", "google", "stooq", "alpha-vantage"];
   const chosen = order.map((n) => eligible.find((s) => s.source === n)).find(Boolean) ?? eligible[0];
   const status: VerifiedQuote["status"] = diff < 0.25 ? "verified" : diff < 1 ? "close" : "mismatch";
+  // ── EXTENDED-HOURS OVERRIDE ───────────────────────────────────────────
+  // When the market isn't in regular session, surface the freshest extended
+  // price as the primary `price` so EVERY consumer (Market page, Scanner,
+  // ticker tape, etc.) shows what's actually trading right now. The regular
+  // close stays available via `sources.yahoo`/`sources.cnbc`.
+  const useExt = session !== "regular" && ext.price != null && ext.price > 0;
+  const primaryPrice = useExt ? ext.price! : chosen.price;
+  const primaryPct = useExt ? (ext.pct ?? 0) : chosen.changePct;
+  const primaryChange = useExt && chosen.price > 0
+    ? +(primaryPrice - chosen.price).toFixed(4)         // ext vs regular close
+    : chosen.change;
   return {
     symbol,
-    price: chosen.price,
-    change: chosen.change,
-    changePct: chosen.changePct,
+    price: primaryPrice,
+    change: primaryChange,
+    changePct: primaryPct,
     volume: Math.max(...live.map((s) => s.volume ?? 0)),
     sources,
-    consensusSource: chosen.source,
+    consensusSource: useExt ? "yahoo" : chosen.source,
     status,
     diffPct: +diff.toFixed(4),
     updatedAt: new Date(chosen.ts || Date.now()).toISOString(),
