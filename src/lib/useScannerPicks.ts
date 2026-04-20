@@ -41,9 +41,13 @@ import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
 import { tradeStageFromStatus, type TradeStage } from "@/lib/tradeStage";
 import {
-  classifyPickTier, MIN_BUY_NOW_PER_BUCKET, tierRank,
+  classifyPickTier, tierRank,
   type PickTier, type TierResult,
 } from "@/lib/pickTier";
+import {
+  evaluateExecutionState, resolveCta, tradeStateRank,
+  type TradeState, type TradeStateResult, type CtaPlan,
+} from "@/lib/tradeState";
 import { currentMarketMode } from "@/lib/marketHours";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -85,6 +89,12 @@ export interface ApprovedPick {
   tierCaveat: string | null;
   /** Tier penalties for the debug drawer. */
   tierPenalties: TierResult["penalties"];
+  /** Trade State Machine — drives ALL UI labels & CTA buttons. */
+  tradeState: TradeState;
+  /** Full TradeState evaluation result (blockers, trigger language, etc.). */
+  tradeStateResult: TradeStateResult;
+  /** Pre-resolved CTA plan — UI must read this, never derive its own. */
+  cta: CtaPlan;
 }
 
 export interface BlockedPick {
@@ -119,7 +129,12 @@ export interface PipelineCounts {
   safetyPassingCount: number;
   budgetPassingCount: number;     // soft-band inside cap
   scoredCount: number;            // got a score (not hard-dropped)
-  tradeReadyCount: number;        // tier === CLEAN
+  tradeReadyCount: number;        // tradeState === TRADE_READY
+  /** New TradeState counts. */
+  nearLimitConfirmedCount: number;
+  watchlistOnlyCount: number;
+  excludedCount: number;
+  /** Legacy tier counts kept for back-compat. */
   cleanCount: number;
   nearLimitCount: number;
   bestOfWaitCount: number;
@@ -128,6 +143,10 @@ export interface PipelineCounts {
 
 export interface ScannerPicksResult {
   approved: ApprovedPick[];
+  /** WATCHLIST_ONLY picks — interesting setups not yet tradable. */
+  watchlistOnly: ApprovedPick[];
+  /** Top WATCHLIST_ONLY picks shown when there are 0 trade-ready (max 3). */
+  bestPending: ApprovedPick[];
   budgetBlocked: BlockedPick[];
   safetyBlocked: BlockedPick[];
   counts: PipelineCounts;
@@ -300,6 +319,30 @@ export function bucketPicks(args: {
       continue;
     }
 
+    // ── TradeState evaluation — the new authoritative state machine ────────
+    // Quote validity proxies: contract/premium present and not flagged suspect.
+    const quoteValid = Number.isFinite(pick.candidate.premium) && pick.candidate.premium > 0;
+    const quoteFresh = !pick.candidate.suspect; // upstream flags suspect/stale premiums
+    const ratio = pick.candidate.contractCost / Math.max(1, args.cap);
+    const budgetNearLimit = ratio > 1 && ratio <= 1 + 0.5;
+    const ivpNearLimit = (r.ivRank ?? 0) > 75 && (r.ivRank ?? 0) <= 90;
+
+    const tradeStateResult = evaluateExecutionState({
+      row: r,
+      rank: rankResult,
+      tradeStatus,
+      tier,
+      quoteValid,
+      quoteFresh,
+      preMarket,
+      // Strategy profile opt-ins: default false (per chosen spec).
+      allowsEarnings: false,
+      allowsDeepItm: false,
+      budgetNearLimit,
+      ivpNearLimit,
+    });
+    const cta = resolveCta(tradeStateResult.state, tradeStateResult);
+
     approved.push({
       key,
       row: r,
@@ -318,13 +361,18 @@ export function bucketPicks(args: {
       adjustedScore: tier.adjustedScore,
       tierCaveat: tier.caveat,
       tierPenalties: tier.penalties,
+      tradeState: tradeStateResult.state,
+      tradeStateResult,
+      cta,
     });
   }
 
-  // Sort: tier rank DESC (CLEAN > NEAR-LIMIT > BEST-OF-WAIT), then
-  // adjustedScore DESC, then setup score. Ensures CLEAN picks always
-  // surface first while NEAR-LIMIT/BEST-OF-WAIT fill the bucket below.
+  // Sort: TradeState rank DESC (TRADE_READY > NEAR_LIMIT > WATCHLIST > EXCLUDED),
+  // then adjustedScore DESC, then setup score. The new state machine drives
+  // ordering so the UI never has to re-sort.
   approved.sort((a, b) => {
+    const sDelta = tradeStateRank(b.tradeState) - tradeStateRank(a.tradeState);
+    if (sDelta !== 0) return sDelta;
     const tDelta = tierRank(b.pickTier) - tierRank(a.pickTier);
     if (tDelta !== 0) return tDelta;
     if (b.adjustedScore !== a.adjustedScore) return b.adjustedScore - a.adjustedScore;
@@ -474,19 +522,27 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     });
   }, [rows, pipelineQ.data, profile, overrides, cap, bucketFilter]);
 
-  // ── Fail-soft selector ──────────────────────────────────────────────────
-  // When viewing a single bucket, ensure at least MIN_BUY_NOW_PER_BUCKET
-  // ranked ideas appear by allowing NEAR-LIMIT then BEST-OF-WAIT to fill.
-  // bucketPicks already includes them in `approved` (sorted by tier), so
-  // here we just trim to maxResults — but we floor at MIN_BUY_NOW_PER_BUCKET
-  // when the user supplied a stricter maxResults.
-  const minPicks = MIN_BUY_NOW_PER_BUCKET;
-  const effectiveMax = opts.maxResults != null
-    ? Math.max(opts.maxResults, minPicks)
-    : undefined;
-  const approvedFinal = effectiveMax != null
-    ? bucketed.approved.slice(0, effectiveMax)
-    : bucketed.approved;
+  // ── NO FORCE-FILL ───────────────────────────────────────────────────────
+  // Per the new spec ("zero forced trades"): if there are 0 TRADE_READY
+  // candidates, we surface 0 — not pad the list with weak NEAR-LIMIT or
+  // BEST-OF-WAIT entries. The selector now only honors maxResults as a hard
+  // ceiling, never a floor. Watchlist-only picks are surfaced separately.
+  const tradeReadyOrConfirmed = bucketed.approved.filter(
+    (p) => p.tradeState === "TRADE_READY" || p.tradeState === "NEAR_LIMIT_CONFIRMED",
+  );
+  const watchlistOnly = bucketed.approved.filter((p) => p.tradeState === "WATCHLIST_ONLY");
+  const excluded = bucketed.approved.filter((p) => p.tradeState === "EXCLUDED");
+
+  const approvedFinal = opts.maxResults != null
+    ? tradeReadyOrConfirmed.slice(0, opts.maxResults)
+    : tradeReadyOrConfirmed;
+
+  // "Best pending" preview row: when there are 0 trade-ready picks, surface
+  // the highest-scoring WATCHLIST_ONLY name so the user can see what's brewing
+  // (per chosen empty-state policy).
+  const bestPending = approvedFinal.length === 0 && watchlistOnly.length > 0
+    ? watchlistOnly.slice(0, 3)
+    : [];
 
   const filterChipParts: string[] = [];
   if (bucketed.profileFilteredCount > 0) {
@@ -501,15 +557,22 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     [bucketed.budgetBlocked],
   );
 
-  // Funnel metrics for the debug panel.
+  // Funnel metrics for the debug panel — both legacy tier counts AND new
+  // trade-state counts so any consumer can pick its vocabulary.
   const cleanCount = bucketed.approved.filter((p) => p.pickTier === "CLEAN").length;
   const nearLimitCount = bucketed.approved.filter((p) => p.pickTier === "NEAR-LIMIT").length;
   const bestOfWaitCount = bucketed.approved.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
+  const tradeReadyStateCount = bucketed.approved.filter((p) => p.tradeState === "TRADE_READY").length;
+  const nearLimitConfirmedCount = bucketed.approved.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED").length;
+  const watchlistOnlyCount = watchlistOnly.length;
+  const excludedCount = excluded.length;
   const safetyPassingCount = bucketed.approved.length;
   const budgetPassingCount = bucketed.approved.filter((p) => p.estCost <= cap).length;
 
   return {
     approved: approvedFinal,
+    watchlistOnly,
+    bestPending,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
     safetyBlocked: opts.includeSafetyBlocked === false ? [] : bucketed.safetyBlocked,
     counts: {
@@ -522,7 +585,10 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
       safetyPassingCount,
       budgetPassingCount,
       scoredCount: bucketed.approved.length,
-      tradeReadyCount: cleanCount,
+      tradeReadyCount: tradeReadyStateCount,
+      nearLimitConfirmedCount,
+      watchlistOnlyCount,
+      excludedCount,
       cleanCount,
       nearLimitCount,
       bestOfWaitCount,
