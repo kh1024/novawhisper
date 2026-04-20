@@ -41,7 +41,7 @@ import { isPreMarketWindow } from "@/lib/preMarketGenerator";
 import { computeTradeStatus, type TradeStatusResult } from "@/lib/tradeStatus";
 import { tradeStageFromStatus, type TradeStage } from "@/lib/tradeStage";
 import {
-  classifyPickTier, BUDGET_SOFT_BAND_PCT, tierRank,
+  classifyPickTier, tierRank,
   type PickTier, type TierResult,
 } from "@/lib/pickTier";
 import {
