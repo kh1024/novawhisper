@@ -39,11 +39,8 @@ function release() {
  * will leak slots — `throttledMassive(fn)` is the safe wrapper.
  */
 export function acquireMassiveToken(): Promise<void> {
-  if (active < MAX_CONCURRENCY) {
-    active += 1;
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => waiters.push(resolve));
+  active += 1;
+  return Promise.resolve();
 }
 
 /** Pair with `acquireMassiveToken()` when not using `throttledMassive(fn)`. */
