@@ -225,15 +225,27 @@ export default function Scanner() {
   );
   useSnapshotUploader(snapshotInputs);
 
-  // Re-sort rows by Final Rank desc; ties broken by Setup Score.
-  const sortedRows = useMemo(
-    () => [...rows].sort((a, b) => {
-      const ra = rankMap.get(a.symbol)?.rank.finalRank ?? 0;
-      const rb = rankMap.get(b.symbol)?.rank.finalRank ?? 0;
-      return rb - ra || b.setupScore - a.setupScore;
-    }),
-    [rows, rankMap],
-  );
+  // Sortable columns. Default = Final Rank desc (with Setup tiebreaker).
+  type SortKey = "symbol" | "price" | "changePct" | "relVol" | "ivRank" | "rsi" | "atrPct" | "optionsLiquidity" | "setupScore" | "finalRank";
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "finalRank", dir: "desc" });
+  const toggleSort = (key: SortKey) =>
+    setSort((s) => s.key === key ? { ...s, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "symbol" ? "asc" : "desc" });
+
+  const sortedRows = useMemo(() => {
+    const getVal = (r: SetupRow): number | string => {
+      if (sort.key === "symbol") return r.symbol;
+      if (sort.key === "finalRank") return rankMap.get(r.symbol)?.rank.finalRank ?? 0;
+      return (r as any)[sort.key] ?? 0;
+    };
+    return [...rows].sort((a, b) => {
+      const va = getVal(a), vb = getVal(b);
+      let cmp = typeof va === "string" || typeof vb === "string"
+        ? String(va).localeCompare(String(vb))
+        : (va as number) - (vb as number);
+      if (cmp === 0 && sort.key !== "setupScore") cmp = b.setupScore - a.setupScore;
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+  }, [rows, rankMap, sort]);
 
   // ── Pick Expiration Engine ────────────────────────────────────────────
   // Track first-seen price/time for every scanner row. Force WAIT when RSI > 75.
