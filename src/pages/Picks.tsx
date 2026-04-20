@@ -135,8 +135,9 @@ function PickRow({ pick, kind, onSelect, selected, live }: {
   );
 }
 
-function PicksTable({ rows, kind, selectedIdx, onSelect }: {
+function PicksTable({ rows, kind, selectedIdx, onSelect, liveMap }: {
   rows: Pick[]; kind: "call" | "put"; selectedIdx: number | null; onSelect: (i: number) => void;
+  liveMap: Map<string, { price: number; chg: number }>;
 }) {
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
@@ -165,6 +166,7 @@ function PicksTable({ rows, kind, selectedIdx, onSelect }: {
                 kind={kind}
                 selected={selectedIdx === i}
                 onSelect={() => onSelect(i)}
+                live={liveMap.get(p.ticker) ?? null}
               />
             ))}
           </TableBody>
