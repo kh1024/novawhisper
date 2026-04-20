@@ -256,21 +256,31 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
 
   const isCall = p.option_type.toLowerCase().includes("call");
   const dte = dteFromExpiry(p.expiry);
-  const dec = previewExitDecision(p, spot ?? null);
+  const isOpen = p.status === "open";
+  // Only run live exit-decision preview for OPEN positions. Closed/expired
+  // positions must reflect their realized exit price + P&L, never live spot.
+  const dec = isOpen ? previewExitDecision(p, spot ?? null) : null;
   const recommendation = (dec?.recommendation ?? p.exit_recommendation) as ExitRecommendation;
   const reason = dec?.reason ?? p.exit_reason ?? "Awaiting first evaluation tick.";
-  const profitPct = dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null);
+  const realizedPct = (!isOpen && p.entry_premium != null && p.close_premium != null && Number(p.entry_premium) > 0)
+    ? ((Number(p.close_premium) - Number(p.entry_premium)) / Number(p.entry_premium)) * 100
+    : null;
+  const profitPct = isOpen
+    ? (dec?.profitPct ?? (p.current_profit_pct != null ? Number(p.current_profit_pct) : null))
+    : realizedPct;
 
-  // Estimated current per-share premium for the UI display.
+  // Estimated current per-share premium for OPEN positions only.
   let currentMid: number | null = null;
-  if (spot != null && p.entry_premium != null) {
-    currentMid = estimatePremium({
-      spot, strike: Number(p.strike), iv: ivRankToIv(50),
-      dte: Math.max(1, dte),
-      optionType: isCall ? "call" : "put",
-    }).perShare;
-  } else if (p.current_price != null) {
-    currentMid = Number(p.current_price);
+  if (isOpen) {
+    if (spot != null && p.entry_premium != null) {
+      currentMid = estimatePremium({
+        spot, strike: Number(p.strike), iv: ivRankToIv(50),
+        dte: Math.max(1, dte),
+        optionType: isCall ? "call" : "put",
+      }).perShare;
+    } else if (p.current_price != null) {
+      currentMid = Number(p.current_price);
+    }
   }
 
   const initialGates = (p.initial_gates ?? {}) as Record<string, string>;
