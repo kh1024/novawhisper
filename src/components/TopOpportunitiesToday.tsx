@@ -1,20 +1,28 @@
-// Top Opportunities Today — Dashboard widget that is a DERIVED VIEW of the
-// /scanner pipeline. Shares useScannerPicks() with /scanner so counts and
-// pick IDs always match. Cards deep-link to /scanner with auto-scroll +
-// flash-highlight via ?symbol=&strike=&expiry=&highlight=true.
+// Top Opportunities Today — Dashboard widget. Now driven entirely by the
+// TradeState machine (src/lib/tradeState.ts) so badges, helper text, and
+// CTAs ALWAYS agree. No more "Watchlist Only + BUY" contradictions.
+//
+// Three exclusive sections (per spec):
+//   1. Trade Ready Now           — TRADE_READY only, full-size BUY CTA
+//   2. Confirmed but Near Limit  — NEAR_LIMIT_CONFIRMED only, reduced-size BUY
+//   3. Setups to Watch           — WATCHLIST_ONLY, NO buy buttons
+//
+// When there are 0 TRADE_READY + 0 NEAR_LIMIT_CONFIRMED, the widget shows a
+// clean empty state plus a "best pending" preview row (top 3 watchlist names
+// with explicit "waiting for X" trigger language). No forced picks.
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2 } from "lucide-react";
+import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2, Eye, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
-import { TRADE_STATUS_CLASSES, TRADE_STATUS_LABEL } from "@/lib/tradeStatus";
-import { TIER_CLASSES, TIER_LABEL, MIN_BUY_NOW_PER_BUCKET } from "@/lib/pickTier";
+import { TRADE_STATE_LABEL, TRADE_STATE_CLASSES } from "@/lib/tradeState";
 import { Hint } from "@/components/Hint";
 import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
+import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { cn } from "@/lib/utils";
 
 const BUCKET_TABS: ActiveBucket[] = ["All", "Conservative", "Moderate", "Aggressive", "Lottery"];
@@ -25,7 +33,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
   const navigate = useNavigate();
 
   // Manual refresh countdown for the truly-empty state.
-  const [tick, setTick] = useState(0);
+  const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
@@ -41,18 +49,16 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
     );
   };
 
-  // Tier-based selector — never empty when CLEAN/NEAR-LIMIT/BEST-OF-WAIT
-  // candidates exist. Picks are already sorted by tier in useScannerPicks.
-  // Floor display at MIN_BUY_NOW_PER_BUCKET so users always see ≥3 ideas
-  // when the universe has them.
-  const minShown = Math.max(MIN_BUY_NOW_PER_BUCKET, maxResults);
-  const display: ApprovedPick[] = picks.approved.slice(0, minShown);
-  const hasOnlyRelaxed = display.length > 0 && display.every((p) => p.pickTier !== "CLEAN");
-  const inPreview = picks.counts.marketMode === "PREVIEW";
+  // Split approved picks by trade state. The selector already removed force-fill
+  // so `approved` holds only TRADE_READY + NEAR_LIMIT_CONFIRMED (sorted).
+  const tradeReady = picks.approved.filter((p) => p.tradeState === "TRADE_READY");
+  const nearLimit = picks.approved.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED");
+  const watchlist = picks.watchlistOnly.slice(0, maxResults);
 
-  const totalApproved = display.length;
+  const inPreview = picks.counts.marketMode === "PREVIEW";
+  const totalActionable = tradeReady.length + nearLimit.length;
   const totalBlocked = picks.budgetBlocked.length + picks.safetyBlocked.length;
-  const everythingEmpty = totalApproved === 0 && totalBlocked === 0;
+  const everythingEmpty = totalActionable === 0 && watchlist.length === 0 && totalBlocked === 0;
 
   return (
     <Card className="glass-card p-5 lg:col-span-2">
@@ -81,147 +87,89 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       </div>
 
-      {/* Loading state — show while quotes are still arriving OR universe hasn't
-          materialized yet. The /scanner page may already be rendering picks via
-          its own cached pipeline; we treat universe===0 as "still loading" so
-          users don't see a misleading "warming up" while /scanner has data. */}
-      {(picks.isLoading || picks.counts.universe === 0) && totalApproved === 0 && totalBlocked === 0 && (
+      {/* Loading state */}
+      {(picks.isLoading || picks.counts.universe === 0) && everythingEmpty && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="h-4 w-4 animate-spin" /> Scanning universe…
         </div>
       )}
 
-      {/* Empty state — universe loaded, but every gate-passing pick was blocked. */}
-      {!picks.isLoading && picks.counts.universe > 0 && everythingEmpty && (
-        <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-6 text-center space-y-2">
-          <div className="text-sm font-semibold">Scanner is still warming up</div>
-          <div className="text-xs text-muted-foreground">
-            Universe of <span className="mono text-foreground">{picks.counts.universe}</span> scanned · next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span>
+      {/* Pre-market banner */}
+      {inPreview && totalActionable > 0 && (
+        <div className="text-[11px] text-warning bg-warning/5 border border-warning/30 rounded px-2 py-1.5 mb-3">
+          👀 Pre-market preview — markets open at 9:30 AM ET. Picks shown for planning; trade states activate at the open.
+        </div>
+      )}
+
+      {/* Section 1: Trade Ready Now */}
+      {tradeReady.length > 0 && (
+        <Section
+          title="Trade Ready Now"
+          icon={<CheckCircle2 className="h-4 w-4 text-bullish" />}
+          tone="bullish"
+          count={tradeReady.length}
+        >
+          {tradeReady.map((p) => (
+            <PickCard key={p.key} pick={p} onOpen={open} inPreview={inPreview} />
+          ))}
+        </Section>
+      )}
+
+      {/* Section 2: Confirmed but Near Limit */}
+      {nearLimit.length > 0 && (
+        <Section
+          title="Confirmed — Reduce Size"
+          icon={<AlertTriangle className="h-4 w-4 text-warning" />}
+          tone="warning"
+          count={nearLimit.length}
+        >
+          {nearLimit.map((p) => (
+            <PickCard key={p.key} pick={p} onOpen={open} inPreview={inPreview} />
+          ))}
+        </Section>
+      )}
+
+      {/* Empty trade-ready state with best-pending preview */}
+      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && (
+        <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-4 mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <Eye className="h-4 w-4 text-muted-foreground" />
+            <div className="text-sm font-semibold">No trade-ready setups right now</div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => picks.refetch()} className="mt-2 gap-1.5">
-            <RefreshCw className="h-3 w-3" /> Refresh now
-          </Button>
+          <div className="text-[11px] text-muted-foreground">
+            {picks.bestPending.length > 0
+              ? "Best current names are on watchlist pending confirmation — see below."
+              : <>Universe of <span className="mono text-foreground">{picks.counts.universe}</span> scanned · next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span></>
+            }
+          </div>
+          {picks.bestPending.length > 0 && (
+            <div className="mt-3 space-y-1.5">
+              {picks.bestPending.map((p) => (
+                <PendingPreviewRow key={p.key} pick={p} onOpen={open} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Approved picks — top N as compact cards */}
-      {totalApproved > 0 && (
-        <div className="space-y-2">
-          {inPreview && (
-            <div className="text-[11px] text-warning bg-warning/5 border border-warning/30 rounded px-2 py-1.5">
-              👀 Pre-market preview — markets open at 9:30 AM ET. Picks shown for planning; live tier badges activate at the open.
-            </div>
-          )}
-          {!inPreview && hasOnlyRelaxed && (
-            <div className="text-[11px] text-primary bg-primary/5 border border-primary/30 rounded px-2 py-1.5">
-              ⚠️ No <strong>Clean Pass</strong> setups right now — surfacing best <strong>Near-limit</strong> / <strong>Best-of-WAIT</strong> ideas so you can still see the top of the funnel. Reduce size on these.
-            </div>
-          )}
-          {display.map((p) => {
-            const isCall = p.contract.optionType === "call";
-            return (
-              <div
-                key={p.key}
-                className="w-full rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all"
-              >
-                <button
-                  onClick={() => open(p)}
-                  className="w-full flex items-center gap-3 p-3 text-left"
-                >
-                  <div className={cn(
-                    "h-10 w-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold",
-                    isCall ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish",
-                  )}>
-                    {p.row.symbol.slice(0, 4)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{p.row.symbol}</span>
-                      <span className="mono text-[11px] text-muted-foreground">${p.row.price.toFixed(2)}</span>
-                      <Badge variant="outline" className="h-5 text-[10px]">
-                        ${p.contract.strike}{isCall ? "C" : "P"}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground">exp {p.contract.expiry}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
-                        {bucketEmoji(p.bucket)} {p.bucket}
-                      </span>
-                      <Hint
-                        label={p.tierCaveat ?? `${TIER_LABEL[p.pickTier]} · score ${p.adjustedScore}`}
-                        asChild={false}
-                      >
-                        <span className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
-                          TIER_CLASSES[p.pickTier],
-                        )}>
-                          {TIER_LABEL[p.pickTier]}
-                        </span>
-                      </Hint>
-                      <Hint label={p.tradeStatus.reason} asChild={false}>
-                        <span className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
-                          TRADE_STATUS_CLASSES[p.tradeStatus.tradeStatus],
-                        )}>
-                          {TRADE_STATUS_LABEL[p.tradeStatus.tradeStatus]}
-                        </span>
-                      </Hint>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap text-[9px] text-muted-foreground">
-                      <span>Dir: <span className="text-foreground">{p.tradeStatus.direction}</span></span>
-                      <span>·</span>
-                      <span>Vol: <span className="text-foreground">{p.tradeStatus.volume}</span></span>
-                      <span>·</span>
-                      <span>Gap: <span className="text-foreground">{p.tradeStatus.gap}</span></span>
-                      <span>·</span>
-                      <span>Liq: <span className="text-foreground">{p.tradeStatus.liquidity}</span></span>
-                    </div>
-                    <div className="text-[11px] text-muted-foreground truncate mt-0.5">
-                      {p.verdict?.reason ?? p.row.crl?.reason ?? `Setup ${p.row.setupScore} · ${p.row.bias}`}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="mono text-lg font-semibold text-bullish">{p.rank?.finalRank ?? p.row.setupScore}</div>
-                    <div className="text-[10px] text-muted-foreground">est ${p.estCost.toLocaleString()}</div>
-                  </div>
-                  <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                </button>
-                <div className="flex items-center gap-2 px-3 pb-3 flex-wrap">
-                  {(p.pickTier === "CLEAN" || p.pickTier === "NEAR-LIMIT") && !inPreview ? (
-                    <Button
-                      size="sm"
-                      className="h-7 text-[11px]"
-                      onClick={(e) => { e.stopPropagation(); open(p); }}
-                    >
-                      {p.pickTier === "CLEAN" ? "BUY NOW →" : "BUY (REDUCE SIZE) →"}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled
-                      className="h-7 text-[11px] border-warning/40 text-warning bg-warning/5"
-                    >
-                      ⏳ {inPreview ? "OPENS 9:30 ET" : "WATCH"}
-                    </Button>
-                  )}
-                  <AddToPortfolioButton pick={p} />
-                  <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
-                    {p.pickTier === "CLEAN"
-                      ? "Clean pass — full size OK per your risk profile."
-                      : p.pickTier === "NEAR-LIMIT"
-                      ? "Near limits — reduce size; we'll alert on exit."
-                      : "Best of WAIT — track speculatively; one rule relaxed."}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Section 3: Setups to Watch — only show when actionable picks exist
+          (otherwise the bestPending preview above already represents them). */}
+      {totalActionable > 0 && watchlist.length > 0 && (
+        <Section
+          title="Setups to Watch"
+          icon={<Eye className="h-4 w-4 text-primary" />}
+          tone="primary"
+          count={watchlist.length}
+        >
+          {watchlist.map((p) => (
+            <WatchlistRow key={p.key} pick={p} onOpen={open} />
+          ))}
+        </Section>
       )}
 
-      {/* Blocked-Picks Preview — same treatment as Scanner. Only when no
-          approved picks are available so we never bury wins. */}
-      {totalApproved === 0 && totalBlocked > 0 && !picks.isLoading && (
-        <div className="space-y-2">
+      {/* Blocked Picks Preview — only when nothing actionable AND no pending. */}
+      {totalActionable === 0 && picks.bestPending.length === 0 && totalBlocked > 0 && !picks.isLoading && (
+        <div className="space-y-2 mt-3">
           {picks.budgetBlocked.length > 0 && (
             <BlockedSummaryRow
               icon={<DollarSign className="h-4 w-4" />}
@@ -240,45 +188,21 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
               suffix="blocked by safety gates"
             />
           )}
-          {/* Inline previews of the first 3 blocked items so the user can act. */}
-          <div className="space-y-1.5 pt-1">
-            {[...picks.budgetBlocked, ...picks.safetyBlocked].slice(0, 3).map((b) => {
-              const isCall = b.contract.optionType === "call";
-              return (
-                <button
-                  key={b.key}
-                  onClick={() => open(b)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-2.5 py-1.5 rounded border text-[11px] transition-colors text-left",
-                    b.kind === "budget"
-                      ? "border-warning/40 bg-warning/5 hover:bg-warning/10"
-                      : "border-bearish/40 bg-bearish/5 hover:bg-bearish/10",
-                  )}
-                >
-                  <span className="font-mono font-semibold text-foreground w-12">{b.row.symbol}</span>
-                  <span className={cn("mono text-[11px]", isCall ? "text-bullish" : "text-bearish")}>
-                    ${b.contract.strike}{isCall ? "C" : "P"}
-                  </span>
-                  <span className="text-muted-foreground flex-1 truncate">{b.reason}</span>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                </button>
-              );
-            })}
-          </div>
         </div>
       )}
 
+      {/* Funnel footer — both vocabularies. */}
       <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
         <div className="flex items-center gap-3 flex-wrap">
           <span><span className="mono text-foreground">{picks.counts.universe}</span> universe</span>
           <span>·</span>
-          <span><span className="mono text-bullish">{picks.counts.cleanCount}</span> clean</span>
+          <span><span className="mono text-bullish">{picks.counts.tradeReadyCount}</span> trade-ready</span>
           <span>·</span>
-          <span><span className="mono text-warning">{picks.counts.nearLimitCount}</span> near-limit</span>
+          <span><span className="mono text-warning">{picks.counts.nearLimitConfirmedCount}</span> near-limit</span>
           <span>·</span>
-          <span><span className="mono text-primary">{picks.counts.bestOfWaitCount}</span> best-of-WAIT</span>
+          <span><span className="mono text-primary">{picks.counts.watchlistOnlyCount}</span> watchlist</span>
           <span>·</span>
-          <span><span className="mono text-warning">{picks.counts.budgetBlocked}</span> budget-drop</span>
+          <span><span className="mono text-warning">{picks.counts.budgetBlocked}</span> budget</span>
           <span>·</span>
           <span><span className="mono text-bearish">{picks.counts.gateBlocked}</span> safety</span>
           <span>·</span>
@@ -289,6 +213,206 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </Link>
       </div>
     </Card>
+  );
+}
+
+// ── Section header ──────────────────────────────────────────────────────────
+function Section({
+  title, icon, tone, count, children,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  tone: "bullish" | "warning" | "primary";
+  count: number;
+  children: React.ReactNode;
+}) {
+  const toneCls =
+    tone === "bullish" ? "text-bullish" :
+    tone === "warning" ? "text-warning" : "text-primary";
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-2">
+        {icon}
+        <h3 className={cn("text-xs font-semibold uppercase tracking-wider", toneCls)}>{title}</h3>
+        <Badge variant="outline" className="h-4 text-[10px] px-1.5">{count}</Badge>
+      </div>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+// ── Trade-ready / Near-limit pick card (has Buy CTA driven by tradeState) ──
+function PickCard({
+  pick: p, onOpen, inPreview,
+}: {
+  pick: ApprovedPick;
+  onOpen: (p: ApprovedPick) => void;
+  inPreview: boolean;
+}) {
+  const isCall = p.contract.optionType === "call";
+  const cta = p.cta;
+  const buyDisabled = inPreview;
+
+  return (
+    <div className="w-full rounded-lg border border-border bg-surface/30 hover:border-primary/40 hover:bg-surface transition-all">
+      <button
+        onClick={() => onOpen(p)}
+        className="w-full flex items-center gap-3 p-3 text-left"
+      >
+        <div className={cn(
+          "h-10 w-10 rounded-lg flex items-center justify-center font-mono text-xs font-bold",
+          isCall ? "bg-bullish/15 text-bullish" : "bg-bearish/15 text-bearish",
+        )}>
+          {p.row.symbol.slice(0, 4)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-sm">{p.row.symbol}</span>
+            <span className="mono text-[11px] text-muted-foreground">${p.row.price.toFixed(2)}</span>
+            <Badge variant="outline" className="h-5 text-[10px]">
+              ${p.contract.strike}{isCall ? "C" : "P"}
+            </Badge>
+            <span className="text-[10px] text-muted-foreground">exp {p.contract.expiry}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
+              {bucketEmoji(p.bucket)} {p.bucket}
+            </span>
+            <Hint label={p.tradeStateResult.reason} asChild={false}>
+              <span className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
+                TRADE_STATE_CLASSES[p.tradeState],
+              )}>
+                {TRADE_STATE_LABEL[p.tradeState]}
+              </span>
+            </Hint>
+          </div>
+          <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+            {p.tradeStateResult.reason}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="mono text-lg font-semibold text-bullish">{p.rank?.finalRank ?? p.row.setupScore}</div>
+          <div className="text-[10px] text-muted-foreground">est ${p.estCost.toLocaleString()}</div>
+        </div>
+        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      </button>
+      <div className="flex items-center gap-2 px-3 pb-3 flex-wrap">
+        {/* CTA strictly from cta.primary — never from score or tier. */}
+        {cta.primary === "BUY_NOW" && (
+          <Button
+            size="sm"
+            className="h-7 text-[11px]"
+            disabled={buyDisabled}
+            onClick={(e) => { e.stopPropagation(); onOpen(p); }}
+          >
+            {buyDisabled ? "⏳ OPENS 9:30 ET" : "BUY NOW →"}
+          </Button>
+        )}
+        {cta.primary === "BUY_REDUCED" && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] border-warning/40 text-warning bg-warning/5 hover:bg-warning/10"
+            disabled={buyDisabled}
+            onClick={(e) => { e.stopPropagation(); onOpen(p); }}
+          >
+            {buyDisabled ? "⏳ OPENS 9:30 ET" : "BUY (REDUCE SIZE) →"}
+          </Button>
+        )}
+        {cta.showAddToPortfolio && <AddToPortfolioButton pick={p} />}
+        <span className="text-[10px] text-muted-foreground hidden md:inline ml-auto">
+          {cta.helper}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Watchlist-only row (NO Buy CTA, ever — explicit trigger language) ───────
+function WatchlistRow({
+  pick: p, onOpen,
+}: {
+  pick: ApprovedPick;
+  onOpen: (p: ApprovedPick) => void;
+}) {
+  const isCall = p.contract.optionType === "call";
+  return (
+    <div className="w-full rounded-lg border border-primary/20 bg-primary/[0.03] hover:bg-primary/5 transition-colors">
+      <button onClick={() => onOpen(p)} className="w-full flex items-center gap-3 p-3 text-left">
+        <div className={cn(
+          "h-9 w-9 rounded-lg flex items-center justify-center font-mono text-[10px] font-bold opacity-80",
+          isCall ? "bg-bullish/10 text-bullish" : "bg-bearish/10 text-bearish",
+        )}>
+          {p.row.symbol.slice(0, 4)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-semibold text-sm">{p.row.symbol}</span>
+            <span className="mono text-[11px] text-muted-foreground">${p.row.price.toFixed(2)}</span>
+            <Badge variant="outline" className="h-5 text-[10px]">
+              ${p.contract.strike}{isCall ? "C" : "P"}
+            </Badge>
+            <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
+              👀 Watchlist Only
+            </span>
+          </div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            {p.tradeStateResult.triggerNeeded ?? p.tradeStateResult.reason}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="mono text-sm font-semibold text-muted-foreground">{p.rank?.finalRank ?? p.row.setupScore}</div>
+        </div>
+      </button>
+      <div className="flex items-center gap-2 px-3 pb-2.5">
+        <SaveToWatchlistButton
+          size="sm"
+          symbol={p.row.symbol}
+          direction={isCall ? "long_call" : "long_put"}
+          optionType={p.contract.optionType}
+          strike={p.contract.strike}
+          expiry={p.contract.expiry}
+          bias={p.row.bias}
+          tier={p.row.readiness}
+          entryPrice={p.row.price}
+          thesis={p.tradeStateResult.triggerNeeded ?? p.tradeStateResult.reason}
+          source="top-opportunities-watch"
+          meta={{ setupScore: p.row.setupScore, tradeState: p.tradeState }}
+        />
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 text-[11px] text-muted-foreground"
+          onClick={(e) => { e.stopPropagation(); onOpen(p); }}
+        >
+          View Trigger →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── "Best pending" preview row in the empty state (compact, no Buy) ────────
+function PendingPreviewRow({
+  pick: p, onOpen,
+}: {
+  pick: ApprovedPick;
+  onOpen: (p: ApprovedPick) => void;
+}) {
+  const isCall = p.contract.optionType === "call";
+  return (
+    <button
+      onClick={() => onOpen(p)}
+      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded border border-primary/30 bg-primary/5 hover:bg-primary/10 text-[11px] text-left transition-colors"
+    >
+      <span className="font-mono font-semibold text-foreground w-12">{p.row.symbol}</span>
+      <span className={cn("mono text-[11px]", isCall ? "text-bullish" : "text-bearish")}>
+        ${p.contract.strike}{isCall ? "C" : "P"}
+      </span>
+      <span className="text-muted-foreground flex-1 truncate">
+        Pending: {p.tradeStateResult.triggerNeeded ?? "waiting for trigger"}
+      </span>
+      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+    </button>
   );
 }
 
