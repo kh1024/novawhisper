@@ -13,6 +13,7 @@ import {
   Search, LayoutGrid, Table2, SlidersHorizontal, RefreshCw, Loader2,
   TrendingUp, TrendingDown, Minus, AlertTriangle, ShieldAlert, Activity,
   Gauge, Zap, Clock, Newspaper, Scale, RotateCcw, CandlestickChart, ExternalLink,
+  ArrowUp, ArrowDown, ArrowUpDown,
 } from "lucide-react";
 import { useLiveQuotes } from "@/lib/liveData";
 import { TICKER_UNIVERSE } from "@/lib/mockData";
