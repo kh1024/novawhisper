@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-// supabase client not needed; using direct fetch with anon key for query params
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import {
+  Zap, RefreshCw, TrendingUp, TrendingDown, Sparkles, AlertTriangle,
+  Target, Activity, Droplets, Flame, Calendar, ArrowUpRight, ArrowDownRight,
+} from "lucide-react";
 
 interface Pick {
   ticker: string;
@@ -27,209 +39,293 @@ interface PicksResponse {
 }
 
 const REFRESH_MS = 5 * 60_000;
+type GradeFilter = "All" | "A" | "B" | "C";
 
-const PALETTE = {
-  bg: "#0d0f14",
-  card: "#13161e",
-  cardAlt: "#1a1e28",
-  border: "#252a36",
-  text: "#e8eaf0",
-  muted: "#8b93a8",
-  accent: "#00d4aa",
-  callHeader: "#1b5e20",
-  putHeader: "#bf360c",
-  gradeA: "#00c076",
-  gradeB: "#1565c0",
-  gradeC: "#e65100",
-  gradeD: "#7e57c2",
-  gradeF: "#546e7a",
-  callRowA: "#0d1f0f",
-  putRowA: "#1f0d0d",
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace",
-};
-
-function GradePill({ g }: { g: Pick["grade"] }) {
-  const bg =
-    g === "A" ? PALETTE.gradeA :
-    g === "B" ? PALETTE.gradeB :
-    g === "C" ? PALETTE.gradeC :
-    g === "D" ? PALETTE.gradeD : PALETTE.gradeF;
-  return (
-    <span
-      style={{
-        ...mono,
-        background: bg,
-        color: "#fff",
-        padding: "2px 10px",
-        borderRadius: 999,
-        fontWeight: 700,
-        fontSize: 12,
-        display: "inline-block",
-        minWidth: 24,
-        textAlign: "center",
-      }}
-    >
-      {g}
-    </span>
-  );
+function gradeClasses(g: Pick["grade"]) {
+  switch (g) {
+    case "A": return "bg-bullish/15 text-bullish border-bullish/40";
+    case "B": return "bg-primary/15 text-primary border-primary/40";
+    case "C": return "bg-warning/15 text-warning border-warning/40";
+    case "D": return "bg-muted text-muted-foreground border-border";
+    default:  return "bg-muted/50 text-muted-foreground border-border";
+  }
 }
 
-function fmtMoney(n: number | null | undefined, dash = "—") {
-  if (n == null || !Number.isFinite(n)) return dash;
+function ivTone(ivPct: number) {
+  if (ivPct < 60) return "text-bullish";
+  if (ivPct <= 100) return "text-warning";
+  return "text-bearish";
+}
+
+function fmt$(n: number | null | undefined) {
+  if (n == null || !Number.isFinite(n)) return "—";
   return `$${n.toFixed(2)}`;
 }
 
-function ivColor(ivPct: number) {
-  if (ivPct < 60) return "#00c076";
-  if (ivPct <= 100) return "#f5b041";
-  return "#ef5350";
+/** Compute the next session this batch is intended for (for daily next-day picks). */
+function nextSessionLabel(generatedAt: string | undefined): string {
+  if (!generatedAt) return "Next session";
+  const d = new Date(generatedAt);
+  // If generated after 4pm ET, target the *next* US trading day.
+  // Simple heuristic: add 1 day, skip Sat/Sun.
+  const next = new Date(d);
+  next.setDate(next.getDate() + 1);
+  while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
+  return next.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 }
 
-function Skeleton({ w, h = 14 }: { w: number | string; h?: number }) {
+function reasonChips(reasons: string): string[] {
+  if (!reasons) return [];
+  return reasons.split("|").map((s) => s.trim()).filter(Boolean);
+}
+
+function PickRow({ pick, kind, onSelect, selected }: {
+  pick: Pick; kind: "call" | "put"; onSelect: () => void; selected: boolean;
+}) {
+  const ivPct = pick.iv * 100;
+  const chgPositive = pick.chg >= 0;
+  const ChgIcon = chgPositive ? ArrowUpRight : ArrowDownRight;
+  const tintRow = pick.grade === "A"
+    ? (kind === "call" ? "bg-bullish/[0.04]" : "bg-bearish/[0.04]")
+    : "";
   return (
-    <div
-      style={{
-        width: w,
-        height: h,
-        background: "linear-gradient(90deg,#1a1e28,#252a36,#1a1e28)",
-        backgroundSize: "200% 100%",
-        animation: "picksShimmer 1.4s infinite",
-        borderRadius: 4,
-      }}
-    />
+    <TableRow
+      className={cn(
+        "cursor-pointer transition-colors",
+        tintRow,
+        selected && "bg-accent/40",
+      )}
+      onClick={onSelect}
+    >
+      <TableCell className="py-3">
+        <Badge variant="outline" className={cn("font-mono font-bold w-7 h-6 justify-center px-0", gradeClasses(pick.grade))}>
+          {pick.grade}
+        </Badge>
+      </TableCell>
+      <TableCell className="font-mono font-bold text-primary py-3 sticky left-0 bg-card">
+        {pick.ticker}
+      </TableCell>
+      <TableCell className="font-mono font-semibold text-primary py-3">{pick.score}</TableCell>
+      <TableCell className="font-mono py-3">{fmt$(pick.price)}</TableCell>
+      <TableCell className={cn("font-mono py-3 inline-flex items-center gap-0.5", chgPositive ? "text-bullish" : "text-bearish")}>
+        <ChgIcon className="h-3 w-3" />
+        {Math.abs(pick.chg).toFixed(1)}%
+      </TableCell>
+      <TableCell className="font-mono text-muted-foreground py-3">{pick.expiry}</TableCell>
+      <TableCell className="font-mono py-3">${pick.strike}</TableCell>
+      <TableCell className="font-mono py-3">{fmt$(pick.last)}</TableCell>
+      <TableCell className="font-mono py-3 text-primary font-medium">{pick.oi.toLocaleString()}</TableCell>
+      <TableCell className={cn("font-mono py-3 font-medium", ivTone(ivPct))}>{ivPct.toFixed(1)}%</TableCell>
+      <TableCell className="font-mono py-3">{fmt$(pick.analystTarget)}</TableCell>
+      <TableCell className={cn("font-mono py-3", pick.upsideToTarget == null ? "text-muted-foreground" : pick.upsideToTarget >= 0 ? "text-bullish" : "text-bearish")}>
+        {pick.upsideToTarget == null ? "—" : `${pick.upsideToTarget >= 0 ? "+" : ""}${pick.upsideToTarget.toFixed(1)}%`}
+      </TableCell>
+    </TableRow>
   );
 }
 
-function PicksTable({ rows, kind }: { rows: Pick[]; kind: "call" | "put" }) {
-  const tintRow = kind === "call" ? PALETTE.callRowA : PALETTE.putRowA;
+function PicksTable({ rows, kind, selectedIdx, onSelect }: {
+  rows: Pick[]; kind: "call" | "put"; selectedIdx: number | null; onSelect: (i: number) => void;
+}) {
   return (
-    <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 8 }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", color: PALETTE.text, fontSize: 13 }}>
-        <thead>
-          <tr style={{ background: PALETTE.card, color: PALETTE.muted, textAlign: "left" }}>
-            {[
-              "Grade","Ticker","Score","Price","1D Chg%","Expiry","Strike","Last","Bid","Ask","OI","IV%","Analyst Target","Upside%","Why This Pick",
-            ].map((h, i) => (
-              <th
-                key={h}
-                style={{
-                  padding: "10px 12px",
-                  fontWeight: 600,
-                  fontSize: 11,
-                  letterSpacing: 0.5,
-                  textTransform: "uppercase",
-                  position: i === 1 ? "sticky" : undefined,
-                  left: i === 1 ? 0 : undefined,
-                  background: i === 1 ? PALETTE.card : undefined,
-                  zIndex: i === 1 ? 2 : undefined,
-                }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, idx) => {
-            const base = idx % 2 === 0 ? PALETTE.card : PALETTE.cardAlt;
-            const bg = r.grade === "A" ? tintRow : base;
-            const ivPct = r.iv * 100;
-            return (
-              <tr
-                key={`${r.ticker}-${r.expiry}-${r.strike}-${idx}`}
-                style={{ background: bg, transition: "background 150ms" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#202533")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = bg)}
-              >
-                <td style={{ padding: "10px 12px" }}><GradePill g={r.grade} /></td>
-                <td style={{ ...mono, padding: "10px 12px", fontWeight: 700, color: PALETTE.accent, position: "sticky", left: 0, background: bg, zIndex: 1 }}>{r.ticker}</td>
-                <td style={{ padding: "10px 12px", color: PALETTE.accent, fontWeight: 700 }}>{r.score}</td>
-                <td style={{ ...mono, padding: "10px 12px" }}>{fmtMoney(r.price)}</td>
-                <td style={{ ...mono, padding: "10px 12px", color: r.chg >= 0 ? "#00c076" : "#ef5350", fontWeight: 600 }}>
-                  {r.chg >= 0 ? "↑" : "↓"} {Math.abs(r.chg).toFixed(1)}%
-                </td>
-                <td style={{ ...mono, padding: "10px 12px", color: PALETTE.muted }}>{r.expiry}</td>
-                <td style={{ ...mono, padding: "10px 12px" }}>${r.strike}</td>
-                <td style={{ ...mono, padding: "10px 12px" }}>{fmtMoney(r.last)}</td>
-                <td style={{ ...mono, padding: "10px 12px", color: PALETTE.muted }}>{fmtMoney(r.bid)}</td>
-                <td style={{ ...mono, padding: "10px 12px", color: PALETTE.muted }}>{fmtMoney(r.ask)}</td>
-                <td style={{ ...mono, padding: "10px 12px", color: "#64b5f6", fontWeight: 600 }}>{r.oi.toLocaleString()}</td>
-                <td style={{ ...mono, padding: "10px 12px", color: ivColor(ivPct), fontWeight: 600 }}>{ivPct.toFixed(1)}%</td>
-                <td style={{ ...mono, padding: "10px 12px" }}>{fmtMoney(r.analystTarget)}</td>
-                <td style={{ ...mono, padding: "10px 12px", color: r.upsideToTarget == null ? PALETTE.muted : r.upsideToTarget >= 0 ? "#00c076" : "#ef5350" }}>
-                  {r.upsideToTarget == null ? "—" : `${r.upsideToTarget >= 0 ? "+" : ""}${r.upsideToTarget.toFixed(1)}%`}
-                </td>
-                <td
-                  style={{ padding: "10px 12px", color: PALETTE.muted, fontSize: 12, maxWidth: 280, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                  title={r.reasons}
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <ScrollArea className="w-full">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              {["Grade","Ticker","Score","Price","1D","Expiry","Strike","Last","OI","IV","Target","Upside"].map((h, i) => (
+                <TableHead
+                  key={h}
+                  className={cn(
+                    "text-[10px] uppercase tracking-wider text-muted-foreground/70 h-10",
+                    i === 1 && "sticky left-0 bg-card",
+                  )}
                 >
-                  {r.reasons || "—"}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  {h}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((p, i) => (
+              <PickRow
+                key={`${p.ticker}-${p.expiry}-${p.strike}-${i}`}
+                pick={p}
+                kind={kind}
+                selected={selectedIdx === i}
+                onSelect={() => onSelect(i)}
+              />
+            ))}
+          </TableBody>
+        </Table>
+      </ScrollArea>
     </div>
   );
 }
 
-function Section({
-  title,
-  headerBg,
-  rows,
-  kind,
-}: {
-  title: string;
-  headerBg: string;
-  rows: Pick[];
-  kind: "call" | "put";
-}) {
-  const [filter, setFilter] = useState<"All" | "A" | "B" | "C">("All");
-  const filtered = filter === "All" ? rows : rows.filter((r) => r.grade === filter);
+function PickDetailCard({ pick, kind }: { pick: Pick; kind: "call" | "put" }) {
+  const ivPct = pick.iv * 100;
+  const cost = pick.ask > 0 ? pick.ask * 100 : pick.last > 0 ? pick.last * 100 : null;
+  const chips = reasonChips(pick.reasons);
+  const accent = kind === "call" ? "bullish" : "bearish";
   return (
-    <section style={{ marginTop: 24 }}>
-      <div
-        style={{
-          background: headerBg,
-          color: "#fff",
-          padding: "10px 16px",
-          borderRadius: "8px 8px 0 0",
-          fontWeight: 700,
-          letterSpacing: 1,
-          fontSize: 13,
-        }}
-      >
-        {title}
+    <Card className="overflow-hidden">
+      <div className={cn("h-1 w-full", kind === "call" ? "bg-bullish" : "bg-bearish")} />
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-mono font-bold text-lg text-primary">{pick.ticker}</span>
+              <Badge variant="outline" className={cn("font-mono font-bold", gradeClasses(pick.grade))}>
+                Grade {pick.grade}
+              </Badge>
+              <Badge variant="outline" className={cn(
+                "font-mono",
+                kind === "call" ? "border-bullish/40 text-bullish" : "border-bearish/40 text-bearish",
+              )}>
+                {kind === "call" ? <TrendingUp className="h-3 w-3 mr-1" /> : <TrendingDown className="h-3 w-3 mr-1" />}
+                {kind.toUpperCase()}
+              </Badge>
+            </div>
+            <CardTitle className="text-sm font-mono text-muted-foreground">
+              ${pick.strike} {kind} · exp {pick.expiry}
+            </CardTitle>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Score</div>
+            <div className={cn("font-mono text-2xl font-bold", `text-${accent}`)}>{pick.score}</div>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Stats grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Stat label="Spot" value={fmt$(pick.price)} sub={`${pick.chg >= 0 ? "+" : ""}${pick.chg.toFixed(1)}% 1D`} subTone={pick.chg >= 0 ? "bullish" : "bearish"} />
+          <Stat label="Premium" value={fmt$(pick.ask || pick.last)} sub={cost ? `${fmt$(cost / 100)} × 100 = ${fmt$(cost)}` : "—"} />
+          <Stat label="Open Int" value={pick.oi.toLocaleString()} sub={pick.oi >= 20000 ? "Deep liquidity" : pick.oi >= 5000 ? "Liquid" : "Thin"} />
+          <Stat label="IV" value={`${ivPct.toFixed(1)}%`} sub={ivPct < 60 ? "Sweet spot" : ivPct <= 100 ? "Elevated" : "Crushed risk"} subTone={ivPct < 60 ? "bullish" : ivPct <= 100 ? "warning" : "bearish"} />
+        </div>
+
+        {/* Analyst target */}
+        {pick.analystTarget != null && (
+          <div className="rounded-md border bg-surface/50 p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary" />
+              <span className="text-xs text-muted-foreground">Analyst target</span>
+              <span className="font-mono font-semibold">{fmt$(pick.analystTarget)}</span>
+            </div>
+            {pick.upsideToTarget != null && (
+              <Badge variant="outline" className={cn("font-mono", pick.upsideToTarget >= 0 ? "border-bullish/40 text-bullish" : "border-bearish/40 text-bearish")}>
+                {pick.upsideToTarget >= 0 ? "+" : ""}{pick.upsideToTarget.toFixed(1)}%
+              </Badge>
+            )}
+          </div>
+        )}
+
+        {/* Why this pick chips */}
+        {chips.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+              <Sparkles className="h-3 w-3" /> Why this pick
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {chips.map((c, i) => (
+                <Badge key={i} variant="outline" className="text-[11px] font-normal border-primary/30 bg-primary/5">
+                  {c}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Stat({ label, value, sub, subTone }: {
+  label: string; value: string; sub?: string;
+  subTone?: "bullish" | "bearish" | "warning";
+}) {
+  const subClass = subTone === "bullish" ? "text-bullish" : subTone === "bearish" ? "text-bearish" : subTone === "warning" ? "text-warning" : "text-muted-foreground";
+  return (
+    <div className="rounded-md border bg-surface/40 p-2.5">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="font-mono font-semibold text-sm mt-0.5">{value}</div>
+      {sub && <div className={cn("text-[10px] font-mono mt-0.5", subClass)}>{sub}</div>}
+    </div>
+  );
+}
+
+function SummaryCard({ label, icon: Icon, children }: {
+  label: string; icon: typeof Zap; children: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <Icon className="h-3 w-3" /> {label}
+        </div>
+        <div className="mt-2 flex items-center gap-2">{children}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Section({
+  side, rows, gradeFilter, onGradeFilter,
+}: {
+  side: "call" | "put";
+  rows: Pick[];
+  gradeFilter: GradeFilter;
+  onGradeFilter: (g: GradeFilter) => void;
+}) {
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(rows.length ? 0 : null);
+  const filtered = useMemo(
+    () => gradeFilter === "All" ? rows : rows.filter((r) => r.grade === gradeFilter),
+    [rows, gradeFilter],
+  );
+  useEffect(() => {
+    setSelectedIdx(filtered.length ? 0 : null);
+  }, [filtered.length, side]);
+
+  const accentBg = side === "call" ? "bg-bullish/10 border-bullish/30" : "bg-bearish/10 border-bearish/30";
+  const Icon = side === "call" ? TrendingUp : TrendingDown;
+  const title = side === "call" ? "Top Call Picks" : "Top Put Picks";
+
+  return (
+    <div className="space-y-3">
+      <div className={cn("rounded-lg border px-4 py-2.5 flex items-center justify-between", accentBg)}>
+        <div className="flex items-center gap-2">
+          <Icon className={cn("h-4 w-4", side === "call" ? "text-bullish" : "text-bearish")} />
+          <h2 className="text-sm font-semibold tracking-wide uppercase">{title}</h2>
+          <Badge variant="outline" className="font-mono text-[10px]">{rows.length}</Badge>
+        </div>
+        <Tabs value={gradeFilter} onValueChange={(v) => onGradeFilter(v as GradeFilter)}>
+          <TabsList className="h-7">
+            {(["All","A","B","C"] as const).map((g) => (
+              <TabsTrigger key={g} value={g} className="text-xs h-6 px-2.5">{g}</TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </div>
-      <div style={{ display: "flex", gap: 8, padding: "12px 0" }}>
-        {(["All","A","B","C"] as const).map((f) => {
-          const active = filter === f;
-          return (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                padding: "6px 14px",
-                fontSize: 12,
-                fontWeight: 600,
-                borderRadius: 6,
-                border: `1px solid ${active ? PALETTE.accent : PALETTE.border}`,
-                background: active ? PALETTE.accent : "transparent",
-                color: active ? "#0d0f14" : PALETTE.text,
-                cursor: "pointer",
-              }}
-            >
-              {f}
-            </button>
-          );
-        })}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          {filtered.length === 0 ? (
+            <Card className="p-8 text-center text-sm text-muted-foreground">
+              No picks match the {gradeFilter} filter.
+            </Card>
+          ) : (
+            <PicksTable rows={filtered} kind={side} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
+          )}
+        </div>
+        <div>
+          {selectedIdx != null && filtered[selectedIdx] && (
+            <PickDetailCard pick={filtered[selectedIdx]} kind={side} />
+          )}
+        </div>
       </div>
-      <PicksTable rows={filtered} kind={kind} />
-    </section>
+    </div>
   );
 }
 
@@ -237,11 +333,13 @@ export default function Picks() {
   const [data, setData] = useState<PicksResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [callFilter, setCallFilter] = useState<GradeFilter>("All");
+  const [putFilter, setPutFilter] = useState<GradeFilter>("All");
   const timerRef = useRef<number | null>(null);
 
   const load = useCallback(async (force = false) => {
     setError(null);
-    if (!data) setLoading(true);
+    setLoading((prev) => (data ? prev : true));
     try {
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const anon = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -270,96 +368,125 @@ export default function Picks() {
 
   const summary = useMemo(() => {
     if (!data) return null;
-    const topCall = data.calls[0];
-    const topPut = data.puts[0];
-    const aCalls = data.calls.filter((p) => p.grade === "A").length;
-    const aPuts = data.puts.filter((p) => p.grade === "A").length;
-    return { topCall, topPut, aCalls, aPuts };
+    return {
+      topCall: data.calls[0] ?? null,
+      topPut: data.puts[0] ?? null,
+      aCalls: data.calls.filter((p) => p.grade === "A").length,
+      aPuts: data.puts.filter((p) => p.grade === "A").length,
+    };
   }, [data]);
 
+  const targetSession = nextSessionLabel(data?.generatedAt);
+  const generatedLabel = data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : null;
+
   return (
-    <div
-      style={{
-        background: PALETTE.bg,
-        color: PALETTE.text,
-        minHeight: "100vh",
-        padding: "24px 28px",
-        fontFamily: "Inter, system-ui, -apple-system, sans-serif",
-      }}
-    >
-      <style>{`@keyframes picksShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
-
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>⚡ AI Options Picks</h1>
-          <div style={{ color: PALETTE.muted, fontSize: 13, marginTop: 4 }}>
-            Scored across 38 tickers · 6-signal engine
+    <TooltipProvider>
+      <div className="p-4 md:p-6 space-y-5 max-w-[1600px] mx-auto">
+        {/* Header */}
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-gradient-primary shadow-primary-glow flex items-center justify-center">
+                <Zap className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight">Online Picks</h1>
+              <Badge variant="outline" className="font-mono text-[10px] border-primary/40 text-primary">
+                Daily · 38 tickers · 6-signal
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+              <Calendar className="h-3 w-3" />
+              Picks for <span className="font-medium text-foreground">{targetSession}</span>
+              {data?.cached && <Badge variant="outline" className="text-[10px] ml-1">Cached</Badge>}
+            </p>
           </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ ...mono, color: PALETTE.muted, fontSize: 12 }}>
-            {data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : loading ? <Skeleton w={160} /> : "—"}
+          <div className="flex items-center gap-3">
+            <div className="text-right text-xs">
+              <div className="text-muted-foreground">Generated</div>
+              <div className="font-mono">{generatedLabel ?? (loading ? <Skeleton className="h-3 w-32" /> : "—")}</div>
+            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading} className="gap-1.5">
+                  <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+                  Refresh
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Force a re-scan now (auto-runs daily after close)</TooltipContent>
+            </Tooltip>
           </div>
-          <button
-            onClick={() => load(true)}
-            disabled={loading}
-            style={{
-              background: PALETTE.accent,
-              color: "#0d0f14",
-              border: "none",
-              padding: "8px 16px",
-              borderRadius: 6,
-              fontWeight: 700,
-              fontSize: 13,
-              cursor: loading ? "wait" : "pointer",
-              opacity: loading ? 0.6 : 1,
-            }}
-          >
-            ↻ Refresh
-          </button>
-        </div>
-      </header>
+        </header>
 
-      {error && (
-        <div style={{ marginTop: 16, padding: 12, background: "#3b1d1d", border: "1px solid #ef5350", borderRadius: 8, color: "#ffcdd2" }}>
-          {error} · <button onClick={() => load(true)} style={{ marginLeft: 8, color: PALETTE.accent, background: "transparent", border: "none", cursor: "pointer", fontWeight: 700 }}>Retry</button>
-        </div>
-      )}
+        {error && (
+          <Card className="border-bearish/40 bg-bearish/5 p-3 flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-bearish" />
+            <span className="text-sm text-bearish flex-1">{error}</span>
+            <Button variant="ghost" size="sm" onClick={() => load(true)}>Retry</Button>
+          </Card>
+        )}
 
-      {/* Summary strip */}
-      <div
-        style={{
-          marginTop: 20,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 12,
-        }}
-      >
-        {[
-          { label: "Top Call", value: summary?.topCall ? <><span style={{ ...mono, color: PALETTE.accent, fontWeight: 700, marginRight: 8 }}>{summary.topCall.ticker}</span><GradePill g={summary.topCall.grade} /></> : <Skeleton w={80} /> },
-          { label: "Top Put", value: summary?.topPut ? <><span style={{ ...mono, color: PALETTE.accent, fontWeight: 700, marginRight: 8 }}>{summary.topPut.ticker}</span><GradePill g={summary.topPut.grade} /></> : <Skeleton w={80} /> },
-          { label: "Grade A Calls", value: summary ? <span style={{ ...mono, fontSize: 22, fontWeight: 700, color: PALETTE.accent }}>{summary.aCalls}</span> : <Skeleton w={32} h={22} /> },
-          { label: "Grade A Puts", value: summary ? <span style={{ ...mono, fontSize: 22, fontWeight: 700, color: PALETTE.accent }}>{summary.aPuts}</span> : <Skeleton w={32} h={22} /> },
-        ].map((card) => (
-          <div key={card.label} style={{ background: PALETTE.card, border: `1px solid ${PALETTE.border}`, borderRadius: 8, padding: 14 }}>
-            <div style={{ color: PALETTE.muted, fontSize: 11, textTransform: "uppercase", letterSpacing: 1 }}>{card.label}</div>
-            <div style={{ marginTop: 8, display: "flex", alignItems: "center" }}>{card.value}</div>
+        {/* Summary strip */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <SummaryCard label="Top Call" icon={TrendingUp}>
+            {summary?.topCall ? (
+              <>
+                <span className="font-mono font-bold text-primary">{summary.topCall.ticker}</span>
+                <Badge variant="outline" className={cn("font-mono", gradeClasses(summary.topCall.grade))}>{summary.topCall.grade}</Badge>
+                <span className="font-mono text-xs text-muted-foreground ml-auto">${summary.topCall.strike}</span>
+              </>
+            ) : <Skeleton className="h-5 w-24" />}
+          </SummaryCard>
+          <SummaryCard label="Top Put" icon={TrendingDown}>
+            {summary?.topPut ? (
+              <>
+                <span className="font-mono font-bold text-primary">{summary.topPut.ticker}</span>
+                <Badge variant="outline" className={cn("font-mono", gradeClasses(summary.topPut.grade))}>{summary.topPut.grade}</Badge>
+                <span className="font-mono text-xs text-muted-foreground ml-auto">${summary.topPut.strike}</span>
+              </>
+            ) : <Skeleton className="h-5 w-24" />}
+          </SummaryCard>
+          <SummaryCard label="Grade A Calls" icon={Flame}>
+            {summary ? <span className="font-mono text-xl font-bold text-bullish">{summary.aCalls}</span> : <Skeleton className="h-5 w-8" />}
+          </SummaryCard>
+          <SummaryCard label="Grade A Puts" icon={Droplets}>
+            {summary ? <span className="font-mono text-xl font-bold text-bearish">{summary.aPuts}</span> : <Skeleton className="h-5 w-8" />}
+          </SummaryCard>
+        </div>
+
+        {/* Body: tabs for Calls / Puts so it stays clean on mobile */}
+        {loading && !data ? (
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-64 w-full" />
           </div>
-        ))}
+        ) : data ? (
+          <Tabs defaultValue="calls" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="calls" className="gap-1.5">
+                <TrendingUp className="h-3.5 w-3.5" /> Calls
+                <Badge variant="outline" className="ml-1 font-mono text-[10px]">{data.calls.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="puts" className="gap-1.5">
+                <TrendingDown className="h-3.5 w-3.5" /> Puts
+                <Badge variant="outline" className="ml-1 font-mono text-[10px]">{data.puts.length}</Badge>
+              </TabsTrigger>
+              <TabsTrigger value="both" className="gap-1.5">
+                <Activity className="h-3.5 w-3.5" /> Both
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="calls"><Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} /></TabsContent>
+            <TabsContent value="puts"><Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} /></TabsContent>
+            <TabsContent value="both" className="space-y-6">
+              <Section side="call" rows={data.calls} gradeFilter={callFilter} onGradeFilter={setCallFilter} />
+              <Section side="put" rows={data.puts} gradeFilter={putFilter} onGradeFilter={setPutFilter} />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <Card className="p-12 text-center text-sm text-muted-foreground">
+            No picks yet — click Refresh.
+          </Card>
+        )}
       </div>
-
-      {!loading && data && data.calls.length === 0 && data.puts.length === 0 && (
-        <div style={{ marginTop: 40, textAlign: "center", color: PALETTE.muted }}>
-          No picks available — click Refresh to load.
-        </div>
-      )}
-
-      {data && (
-        <>
-          <Section title="📈 TOP CALL PICKS" headerBg={PALETTE.callHeader} rows={data.calls} kind="call" />
-          <Section title="📉 TOP PUT PICKS" headerBg={PALETTE.putHeader} rows={data.puts} kind="put" />
-        </>
-      )}
-    </div>
+    </TooltipProvider>
   );
 }
