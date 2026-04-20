@@ -13,6 +13,7 @@ import { useSma200 } from "@/lib/sma200";
 import { PickMetaRow, VerdictBadge } from "@/components/PickMetaRow";
 import { computeVerdict } from "@/lib/verdictModel";
 import { useBudget } from "@/lib/budget";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 
 interface Props {
   onOpenSymbol?: (symbol: string) => void;
@@ -194,7 +195,22 @@ export function WatchlistPanel({ onOpenSymbol }: Props) {
                     <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70">Live</span>
                     <VerdictBadge verdict={verdictResult.verdict} reason={verdictResult.reason} />
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-wrap justify-end">
+                    <AddToPortfolioButton
+                      size="xs"
+                      spec={{
+                        symbol: w.symbol,
+                        optionType: (w.option_type === "put" ? "put" : "call"),
+                        strike: Number(w.strike ?? live?.price ?? 0),
+                        expiry: w.expiry ?? new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+                        spot: live?.price ?? (w.entry_price != null ? Number(w.entry_price) : null),
+                        ivRank: 50,
+                        bucket: w.tier ?? undefined,
+                        thesis: w.thesis,
+                        source: "watchlist",
+                        initialGates: { source: "watchlist", verdict: verdictResult.verdict },
+                      }}
+                    />
                     <Hint label="Open research">
                       <Button
                         size="sm"

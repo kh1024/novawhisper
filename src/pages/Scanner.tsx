@@ -32,6 +32,7 @@ import { useSettings } from "@/lib/settings";
 import { useBudget } from "@/lib/budget";
 import { dispatchPickAlerts } from "@/lib/webhook";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { WatchlistPanel } from "@/components/WatchlistPanel";
 import { Hint } from "@/components/Hint";
 import { usePickExpiration, type PickInputs } from "@/lib/pickExpiration";
@@ -1023,7 +1024,21 @@ export default function Scanner() {
                                 source="scanner"
                                 meta={{ setupScore: r.setupScore }}
                               />
-                              
+                              <AddToPortfolioButton
+                                size="xs"
+                                spec={{
+                                  symbol: r.symbol,
+                                  optionType: deriveContractFromRow(r).optionType as "call" | "put",
+                                  strike: deriveContractFromRow(r).strike,
+                                  expiry: deriveContractFromRow(r).expiry,
+                                  spot: r.price,
+                                  ivRank: r.ivRank,
+                                  bucket: rowBucket({ riskBadge: r.crl?.riskBadge, earningsInDays: r.earningsInDays, ivRank: r.ivRank }),
+                                  initialScore: r.setupScore,
+                                  thesis: r.warnings[0] ?? r.trendLabel,
+                                  source: "scanner",
+                                }}
+                              />
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -1263,6 +1278,20 @@ function DetailPanel({ row, decision, rank, onOpen }: {
             source="scanner"
             meta={{ setupScore: row.setupScore }}
           />
+          <AddToPortfolioButton
+            spec={{
+              symbol: row.symbol,
+              optionType: deriveContractFromRow(row).optionType as "call" | "put",
+              strike: deriveContractFromRow(row).strike,
+              expiry: deriveContractFromRow(row).expiry,
+              spot: row.price,
+              ivRank: row.ivRank,
+              bucket: rowBucket({ riskBadge: row.crl?.riskBadge, earningsInDays: row.earningsInDays, ivRank: row.ivRank }),
+              initialScore: row.setupScore,
+              thesis: row.warnings[0] ?? row.trendLabel,
+              source: "scanner",
+            }}
+          />
           
           <Button asChild variant="outline" size="sm" className="gap-1.5 flex-1 sm:flex-none min-w-[120px] sm:min-w-0">
             <a
@@ -1379,6 +1408,21 @@ function SetupCard({ row, rank, closes, onOpen }: { row: SetupRow; rank: RankRes
           thesis={row.warnings[0] ?? row.trendLabel}
           source="scanner"
           meta={{ setupScore: row.setupScore }}
+        />
+        <AddToPortfolioButton
+          size="xs"
+          spec={{
+            symbol: row.symbol,
+            optionType: deriveContractFromRow(row).optionType as "call" | "put",
+            strike: deriveContractFromRow(row).strike,
+            expiry: deriveContractFromRow(row).expiry,
+            spot: row.price,
+            ivRank: row.ivRank,
+            bucket: rowBucket({ riskBadge: row.crl?.riskBadge, earningsInDays: row.earningsInDays, ivRank: row.ivRank }),
+            initialScore: row.setupScore,
+            thesis: row.warnings[0] ?? row.trendLabel,
+            source: "scanner",
+          }}
         />
         
       </div>

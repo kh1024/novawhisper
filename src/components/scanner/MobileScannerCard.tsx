@@ -13,6 +13,8 @@ import { VerdictBadge } from "@/components/PickMetaRow";
 import { BudgetImpactPill } from "@/components/BudgetImpactPill";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
+import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
+import { rowBucket } from "@/lib/scannerBucket";
 import type { SetupRow, Bias } from "@/lib/setupScore";
 import type { VerdictResult } from "@/lib/verdictModel";
 import type { ValidationResult } from "@/lib/gates";
@@ -128,10 +130,10 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, onO
         </AccordionItem>
       </Accordion>
 
-      <div className="flex items-center gap-2 pt-1">
+      <div className="flex items-center gap-2 pt-1 flex-wrap">
         <Button
           onClick={() => onOpen(row.symbol)}
-          className="flex-1 h-11 text-sm font-semibold"
+          className="flex-1 min-w-[120px] h-11 text-sm font-semibold"
           size="sm"
         >
           Open {row.symbol}
@@ -149,6 +151,21 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, onO
           thesis={row.warnings[0] ?? row.trendLabel}
           source="scanner"
           meta={{ setupScore: row.setupScore }}
+        />
+        <AddToPortfolioButton
+          size="sm"
+          spec={{
+            symbol: row.symbol,
+            optionType: contract.optionType,
+            strike: contract.strike,
+            expiry: contract.expiry,
+            spot: row.price,
+            ivRank: row.ivRank,
+            bucket: rowBucket({ riskBadge: row.crl?.riskBadge, earningsInDays: row.earningsInDays, ivRank: row.ivRank }),
+            initialScore: row.setupScore,
+            thesis: row.warnings[0] ?? row.trendLabel,
+            source: "scanner-mobile",
+          }}
         />
       </div>
     </Card>

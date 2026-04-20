@@ -1,8 +1,9 @@
-// Add to Portfolio — light "trade ticket" dialog that snapshots gates +
-// risk parameters into a new portfolio_positions row. Paired with the
-// existing BUY NOW broker CTA on every TradeReady pick.
-import { useState } from "react";
-import { Briefcase, Check } from "lucide-react";
+// Add to Portfolio — light "trade ticket" dialog. Accepts EITHER a full
+// ApprovedPick (Scanner / Top Opportunities) or a generic PickSpec (Watchlist,
+// SetupCard, MobileScannerCard) so the button is usable everywhere.
+import { useMemo, useState } from "react";
+import { Briefcase, Check, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -10,18 +11,47 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { useAddPosition } from "@/lib/portfolio";
+import { useAddPosition, useIsHeld } from "@/lib/portfolio";
 import { defaultMaxHoldDays } from "@/lib/exitGuidance";
 import { useSettings } from "@/lib/settings";
+import { estimatePremium, ivRankToIv } from "@/lib/premiumEstimator";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { ApprovedPick } from "@/lib/useScannerPicks";
 
+/** Generic shape any pick surface can supply. */
+export interface PickSpec {
+  symbol: string;
+  optionType: "call" | "put";
+  strike: number;
+  expiry: string;
+  /** Live underlying price (optional — used for BS-lite premium prefill if no premium given). */
+  spot?: number | null;
+  /** Per-share option premium if already known (e.g. from the strike ladder). */
+  premium?: number | null;
+  /** Used to seed BS-lite if premium is missing. Defaults to 50. */
+  ivRank?: number | null;
+  /** Risk bucket label (Conservative / Moderate / Aggressive / Lottery). */
+  bucket?: string;
+  /** Snapshot of gates / status flags at entry — saved into initial_gates. */
+  initialGates?: Record<string, unknown>;
+  /** Score at entry. */
+  initialScore?: number | null;
+  /** Plain-language thesis. */
+  thesis?: string | null;
+  /** Source surface — "scanner" / "watchlist" / "top-opportunities" etc. */
+  source?: string;
+}
+
 interface Props {
-  pick: ApprovedPick;
-  /** "Add to Portfolio" / "Saved" label changes after success. */
+  /** Either pass the rich ApprovedPick or a generic PickSpec. */
+  pick?: ApprovedPick;
+  spec?: PickSpec;
   size?: "sm" | "xs" | "default";
   className?: string;
   variant?: "default" | "outline" | "secondary";
+  /** When true, render only an icon (mobile / dense rows). */
+  iconOnly?: boolean;
 }
 
 function dteFromExpiry(expiry: string): number {
@@ -29,78 +59,163 @@ function dteFromExpiry(expiry: string): number {
   return Math.max(1, Math.round((t - Date.now()) / 86_400_000));
 }
 
-export function AddToPortfolioButton({ pick, size = "sm", className, variant = "outline" }: Props) {
+function specFromPick(pick: ApprovedPick): PickSpec {
+  return {
+    symbol: pick.row.symbol,
+    optionType: pick.contract.optionType,
+    strike: pick.contract.strike,
+    expiry: pick.contract.expiry,
+    spot: pick.row.price,
+    premium: pick.premium,
+    ivRank: pick.row.ivRank,
+    bucket: pick.bucket,
+    initialScore: pick.rank?.finalRank ?? pick.row.setupScore,
+    thesis: pick.verdict?.reason ?? pick.row.crl?.reason ?? `Setup ${pick.row.setupScore} · ${pick.row.bias}`,
+    source: "scanner",
+    initialGates: {
+      direction: pick.tradeStatus.direction,
+      volume: pick.tradeStatus.volume,
+      gap: pick.tradeStatus.gap,
+      budget: pick.tradeStatus.budget,
+      liquidity: pick.tradeStatus.liquidity,
+      tradeStatus: pick.tradeStatus.tradeStatus,
+    },
+  };
+}
+
+export function AddToPortfolioButton({ pick, spec, size = "sm", className, variant = "outline", iconOnly = false }: Props) {
+  const resolved: PickSpec | null = useMemo(() => {
+    if (spec) return spec;
+    if (pick) return specFromPick(pick);
+    return null;
+  }, [pick, spec]);
+
   const [settings] = useSettings();
   const add = useAddPosition();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [saved, setSaved] = useState(false);
 
-  const dte = dteFromExpiry(pick.contract.expiry);
+  // Already-held detection — keeps users from double-adding the same contract.
+  const held = useIsHeld(
+    resolved?.symbol ?? "",
+    resolved?.optionType ?? "call",
+    resolved?.strike ?? 0,
+    resolved?.expiry ?? "",
+  );
+
+  // Prefill premium: explicit > BS-lite (DTE > 7) > spot fallback.
+  const dte = resolved ? dteFromExpiry(resolved.expiry) : 30;
+  const prefilledPremium = useMemo(() => {
+    if (!resolved) return 0;
+    if (resolved.premium != null && resolved.premium > 0) return resolved.premium;
+    if (resolved.spot != null && resolved.spot > 0) {
+      const est = estimatePremium({
+        spot: resolved.spot,
+        strike: resolved.strike,
+        iv: ivRankToIv(resolved.ivRank ?? 50),
+        dte: Math.max(1, dte),
+        optionType: resolved.optionType,
+      });
+      return est.perShare;
+    }
+    return 0;
+  }, [resolved, dte]);
+
   const [contracts, setContracts] = useState("1");
-  const [entryPrice, setEntryPrice] = useState(pick.premium.toFixed(2));
+  const [entryPrice, setEntryPrice] = useState(prefilledPremium > 0 ? prefilledPremium.toFixed(2) : "");
   const [hardStop, setHardStop] = useState("-30");
   const [t1, setT1] = useState("50");
   const [t2, setT2] = useState("100");
   const [maxHold, setMaxHold] = useState(String(defaultMaxHoldDays(dte)));
+  const [notes, setNotes] = useState("");
+
+  if (!resolved) return null;
 
   const numContracts = Math.max(1, Math.floor(Number(contracts) || 1));
   const numEntry = Number(entryPrice) || 0;
   const totalCost = numEntry > 0 ? (numEntry * 100 * numContracts).toFixed(0) : null;
 
+  // Already-held → render a "View in Portfolio" link instead of the dialog.
+  if (held.held && !add.isPending) {
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        className={cn(
+          size === "xs" ? "h-6 px-2 text-[10px]" : size === "default" ? "h-9 px-3" : "h-7 px-2 text-[11px]",
+          "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/15",
+          className,
+        )}
+        onClick={(e) => {
+          e.stopPropagation();
+          navigate(held.id ? `/portfolio#pos-${held.id}` : "/portfolio");
+        }}
+      >
+        <Check className="mr-1 h-3 w-3" />
+        {iconOnly ? "" : "In Portfolio"}
+      </Button>
+    );
+  }
+
   const submit = (e: React.MouseEvent) => {
     e.stopPropagation();
     add.mutate(
       {
-        symbol: pick.row.symbol,
-        optionType: pick.contract.optionType,
+        symbol: resolved.symbol,
+        optionType: resolved.optionType,
         direction: "long",
-        strike: pick.contract.strike,
-        expiry: pick.contract.expiry,
+        strike: resolved.strike,
+        expiry: resolved.expiry,
         contracts: numContracts,
         entryPremium: numEntry > 0 ? numEntry : null,
-        entryUnderlying: pick.row.price,
-        thesis: pick.verdict?.reason ?? pick.row.crl?.reason ?? `Setup ${pick.row.setupScore} · ${pick.row.bias}`,
-        source: "scanner",
+        entryUnderlying: resolved.spot ?? null,
+        thesis: notes.trim() || resolved.thesis || null,
+        source: resolved.source ?? "scanner",
         isPaper: settings.paperMode,
         hardStopPct: Number(hardStop) || -30,
         target1Pct: Number(t1) || 50,
         target2Pct: Number(t2) || 100,
         maxHoldDays: Number(maxHold) || null,
-        riskBucket: pick.bucket,
-        initialScore: pick.rank?.finalRank ?? pick.row.setupScore,
-        initialGates: {
-          direction: pick.tradeStatus.direction,
-          volume: pick.tradeStatus.volume,
-          gap: pick.tradeStatus.gap,
-          budget: pick.tradeStatus.budget,
-          liquidity: pick.tradeStatus.liquidity,
-          tradeStatus: pick.tradeStatus.tradeStatus,
-        },
+        riskBucket: resolved.bucket ?? null,
+        initialScore: resolved.initialScore ?? null,
+        initialGates: resolved.initialGates ?? null,
       },
       {
         onSuccess: () => {
-          setSaved(true);
           setOpen(false);
+          // Custom toast with View-in-Portfolio link
+          toast({
+            title: `${resolved.symbol} $${resolved.strike}${resolved.optionType === "call" ? "C" : "P"} added to Portfolio`,
+            description: "Exit guidance will update every 5 min during market hours.",
+            action: (
+              <button
+                onClick={() => navigate("/portfolio")}
+                className="text-[11px] font-semibold text-primary hover:underline inline-flex items-center gap-1"
+              >
+                View in Portfolio <ExternalLink className="h-3 w-3" />
+              </button>
+            ) as never,
+          });
         },
       },
     );
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !saved && setOpen(o)}>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
           size="sm"
-          variant={saved ? "secondary" : variant}
+          variant={variant}
           className={cn(
             size === "xs" ? "h-6 px-2 text-[10px]" : size === "default" ? "h-9 px-3" : "h-7 px-2 text-[11px]",
             className,
           )}
-          disabled={saved}
           onClick={(e) => e.stopPropagation()}
+          aria-label="Add to Portfolio"
         >
-          {saved ? <Check className="mr-1 h-3 w-3" /> : <Briefcase className="mr-1 h-3 w-3" />}
-          {saved ? "Tracking" : "Add to Portfolio"}
+          <Briefcase className={cn("h-3 w-3", !iconOnly && "mr-1")} />
+          {!iconOnly && "Add to Portfolio"}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
@@ -114,18 +229,22 @@ export function AddToPortfolioButton({ pick, size = "sm", className, variant = "
         <div className="space-y-3 py-1">
           <div className="rounded-md border border-border bg-surface/40 p-3">
             <div className="flex items-center gap-2 flex-wrap text-sm">
-              <span className="font-mono font-semibold">{pick.row.symbol}</span>
+              <span className="font-mono font-semibold">{resolved.symbol}</span>
               <Badge variant="outline" className="h-5 text-[10px]">
-                ${pick.contract.strike}{pick.contract.optionType === "call" ? "C" : "P"}
+                ${resolved.strike}{resolved.optionType === "call" ? "C" : "P"}
               </Badge>
-              <span className="text-[11px] text-muted-foreground">exp {pick.contract.expiry}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5 ml-auto">
-                {pick.bucket}
-              </span>
+              <span className="text-[11px] text-muted-foreground">exp {resolved.expiry}</span>
+              {resolved.bucket && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5 ml-auto">
+                  {resolved.bucket}
+                </span>
+              )}
             </div>
-            <div className="mt-1 text-[10px] text-muted-foreground">
-              Spot ${pick.row.price.toFixed(2)} · {dte} DTE · {pick.rung} rung
-            </div>
+            {resolved.spot != null && (
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                Spot ${resolved.spot.toFixed(2)} · {dte} DTE
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -135,7 +254,8 @@ export function AddToPortfolioButton({ pick, size = "sm", className, variant = "
             </Field>
             <Field label="Entry $/contract">
               <Input type="number" min={0} step="0.01" value={entryPrice}
-                onChange={(e) => setEntryPrice(e.target.value)} className="h-8 text-xs" />
+                onChange={(e) => setEntryPrice(e.target.value)} className="h-8 text-xs"
+                placeholder="0.00" />
             </Field>
           </div>
 
@@ -157,6 +277,12 @@ export function AddToPortfolioButton({ pick, size = "sm", className, variant = "
           <Field label="Max hold (days)">
             <Input type="number" min={1} step={1} value={maxHold}
               onChange={(e) => setMaxHold(e.target.value)} className="h-8 text-xs" />
+          </Field>
+
+          <Field label="Notes (optional)">
+            <Input value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder={resolved.thesis ?? "Why this trade…"}
+              className="h-8 text-xs" />
           </Field>
 
           {totalCost && (
