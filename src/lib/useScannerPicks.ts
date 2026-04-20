@@ -89,6 +89,12 @@ export interface ApprovedPick {
   tierCaveat: string | null;
   /** Tier penalties for the debug drawer. */
   tierPenalties: TierResult["penalties"];
+  /** Trade State Machine — drives ALL UI labels & CTA buttons. */
+  tradeState: TradeState;
+  /** Full TradeState evaluation result (blockers, trigger language, etc.). */
+  tradeStateResult: TradeStateResult;
+  /** Pre-resolved CTA plan — UI must read this, never derive its own. */
+  cta: CtaPlan;
 }
 
 export interface BlockedPick {
