@@ -513,19 +513,27 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     });
   }, [rows, pipelineQ.data, profile, overrides, cap, bucketFilter]);
 
-  // ── Fail-soft selector ──────────────────────────────────────────────────
-  // When viewing a single bucket, ensure at least MIN_BUY_NOW_PER_BUCKET
-  // ranked ideas appear by allowing NEAR-LIMIT then BEST-OF-WAIT to fill.
-  // bucketPicks already includes them in `approved` (sorted by tier), so
-  // here we just trim to maxResults — but we floor at MIN_BUY_NOW_PER_BUCKET
-  // when the user supplied a stricter maxResults.
-  const minPicks = MIN_BUY_NOW_PER_BUCKET;
-  const effectiveMax = opts.maxResults != null
-    ? Math.max(opts.maxResults, minPicks)
-    : undefined;
-  const approvedFinal = effectiveMax != null
-    ? bucketed.approved.slice(0, effectiveMax)
-    : bucketed.approved;
+  // ── NO FORCE-FILL ───────────────────────────────────────────────────────
+  // Per the new spec ("zero forced trades"): if there are 0 TRADE_READY
+  // candidates, we surface 0 — not pad the list with weak NEAR-LIMIT or
+  // BEST-OF-WAIT entries. The selector now only honors maxResults as a hard
+  // ceiling, never a floor. Watchlist-only picks are surfaced separately.
+  const tradeReadyOrConfirmed = bucketed.approved.filter(
+    (p) => p.tradeState === "TRADE_READY" || p.tradeState === "NEAR_LIMIT_CONFIRMED",
+  );
+  const watchlistOnly = bucketed.approved.filter((p) => p.tradeState === "WATCHLIST_ONLY");
+  const excluded = bucketed.approved.filter((p) => p.tradeState === "EXCLUDED");
+
+  const approvedFinal = opts.maxResults != null
+    ? tradeReadyOrConfirmed.slice(0, opts.maxResults)
+    : tradeReadyOrConfirmed;
+
+  // "Best pending" preview row: when there are 0 trade-ready picks, surface
+  // the highest-scoring WATCHLIST_ONLY name so the user can see what's brewing
+  // (per chosen empty-state policy).
+  const bestPending = approvedFinal.length === 0 && watchlistOnly.length > 0
+    ? watchlistOnly.slice(0, 3)
+    : [];
 
   const filterChipParts: string[] = [];
   if (bucketed.profileFilteredCount > 0) {
@@ -540,15 +548,22 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     [bucketed.budgetBlocked],
   );
 
-  // Funnel metrics for the debug panel.
+  // Funnel metrics for the debug panel — both legacy tier counts AND new
+  // trade-state counts so any consumer can pick its vocabulary.
   const cleanCount = bucketed.approved.filter((p) => p.pickTier === "CLEAN").length;
   const nearLimitCount = bucketed.approved.filter((p) => p.pickTier === "NEAR-LIMIT").length;
   const bestOfWaitCount = bucketed.approved.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
+  const tradeReadyStateCount = bucketed.approved.filter((p) => p.tradeState === "TRADE_READY").length;
+  const nearLimitConfirmedCount = bucketed.approved.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED").length;
+  const watchlistOnlyCount = watchlistOnly.length;
+  const excludedCount = excluded.length;
   const safetyPassingCount = bucketed.approved.length;
   const budgetPassingCount = bucketed.approved.filter((p) => p.estCost <= cap).length;
 
   return {
     approved: approvedFinal,
+    watchlistOnly,
+    bestPending,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
     safetyBlocked: opts.includeSafetyBlocked === false ? [] : bucketed.safetyBlocked,
     counts: {
@@ -561,7 +576,10 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
       safetyPassingCount,
       budgetPassingCount,
       scoredCount: bucketed.approved.length,
-      tradeReadyCount: cleanCount,
+      tradeReadyCount: tradeReadyStateCount,
+      nearLimitConfirmedCount,
+      watchlistOnlyCount,
+      excludedCount,
       cleanCount,
       nearLimitCount,
       bestOfWaitCount,
