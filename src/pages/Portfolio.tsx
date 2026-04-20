@@ -405,6 +405,25 @@ function PositionCard({ p, spot, nowTier }: { p: PortfolioPosition; spot?: numbe
                 Entry tier: {p.risk_bucket}
               </span>
             )}
+            {nowTier && (
+              <span
+                className={cn(
+                  "text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-wide",
+                  TIER_CLASSES[nowTier.tier],
+                )}
+                title={
+                  `Live scanner tier right now: ${nowTier.tier}` +
+                  (nowTier.score != null ? ` (score ${nowTier.score})` : "") +
+                  (nowTier.caveat ? ` — ${nowTier.caveat}` : "") +
+                  (nowTier.source === "not_in_scan"
+                    ? " · Symbol not in current scanner universe."
+                    : "")
+                }
+              >
+                Now: {nowTier.tier === "EXCLUDED" ? "OUT" : nowTier.tier}
+                {nowTier.score != null && ` · ${nowTier.score}`}
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-muted-foreground">
             Entry ${p.entry_premium != null ? Number(p.entry_premium).toFixed(2) : "—"}
