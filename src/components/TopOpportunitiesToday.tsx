@@ -145,6 +145,17 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-primary/30 text-primary bg-primary/5">
                         {bucketEmoji(p.bucket)} {p.bucket}
                       </span>
+                      <Hint
+                        label={p.tierCaveat ?? `${TIER_LABEL[p.pickTier]} · score ${p.adjustedScore}`}
+                        asChild={false}
+                      >
+                        <span className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
+                          TIER_CLASSES[p.pickTier],
+                        )}>
+                          {TIER_LABEL[p.pickTier]}
+                        </span>
+                      </Hint>
                       <Hint label={p.tradeStatus.reason} asChild={false}>
                         <span className={cn(
                           "text-[10px] px-1.5 py-0.5 rounded border cursor-help",
