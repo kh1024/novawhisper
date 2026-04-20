@@ -22,6 +22,8 @@ import {
   type PortfolioPosition,
 } from "@/lib/portfolio";
 import { useLiveQuotes, type VerifiedQuote } from "@/lib/liveData";
+import { useNowTier, type NowTierEntry } from "@/lib/useNowTier";
+import { TIER_CLASSES } from "@/lib/pickTier";
 import { estimatePremium, ivRankToIv } from "@/lib/premiumEstimator";
 import {
   getExitRecommendation, EXIT_LABEL, EXIT_CLASSES, type ExitRecommendation,
@@ -113,6 +115,13 @@ export default function Portfolio() {
     () => new Map<string, VerifiedQuote>((quotes as VerifiedQuote[]).map((q) => [q.symbol, q])),
     [quotes],
   );
+  // Live re-evaluation of scanner tier for open positions only — closed
+  // trades don't need the comparison.
+  const openSymbols = useMemo(
+    () => Array.from(new Set(positions.filter((p) => p.status === "open").map((p) => p.symbol))),
+    [positions],
+  );
+  const { bySymbol: nowTierMap } = useNowTier(openSymbols);
 
   const filtered = useMemo(() => {
     let rows = positions;
@@ -227,7 +236,12 @@ export default function Portfolio() {
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {filtered.map((p) => (
-                <PositionCard key={p.id} p={p} spot={quoteMap.get(p.symbol)?.price} />
+                <PositionCard
+                  key={p.id}
+                  p={p}
+                  spot={quoteMap.get(p.symbol)?.price}
+                  nowTier={p.status === "open" ? nowTierMap.get(p.symbol.toUpperCase()) ?? null : null}
+                />
               ))}
             </div>
           )}
@@ -250,7 +264,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "bu
   );
 }
 
-function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
+function PositionCard({ p, spot, nowTier }: { p: PortfolioPosition; spot?: number; nowTier?: NowTierEntry | null }) {
   const close = useClosePosition();
   const del = useDeletePosition();
   const updateTargets = useUpdatePositionTargets();
@@ -389,6 +403,25 @@ function PositionCard({ p, spot }: { p: PortfolioPosition; spot?: number }) {
                 title={`Scanner tier at entry: ${p.risk_bucket}. This is historical context, NOT a live signal — see the recommendation chip on the right for the current call.`}
               >
                 Entry tier: {p.risk_bucket}
+              </span>
+            )}
+            {nowTier && (
+              <span
+                className={cn(
+                  "text-[9px] px-1.5 py-0.5 rounded border uppercase tracking-wide",
+                  TIER_CLASSES[nowTier.tier],
+                )}
+                title={
+                  `Live scanner tier right now: ${nowTier.tier}` +
+                  (nowTier.score != null ? ` (score ${nowTier.score})` : "") +
+                  (nowTier.caveat ? ` — ${nowTier.caveat}` : "") +
+                  (nowTier.source === "not_in_scan"
+                    ? " · Symbol not in current scanner universe."
+                    : "")
+                }
+              >
+                Now: {nowTier.tier === "EXCLUDED" ? "OUT" : nowTier.tier}
+                {nowTier.score != null && ` · ${nowTier.score}`}
               </span>
             )}
           </div>
