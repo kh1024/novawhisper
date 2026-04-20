@@ -75,25 +75,28 @@ async function firecrawlSearch(query: string, limit: number, tbs: string): Promi
       Authorization: `Bearer ${FIRECRAWL_KEY}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      query,
-      limit,
-      tbs,
-    }),
+    body: JSON.stringify({ query, limit, tbs }),
   });
   if (!r.ok) {
     const t = await r.text();
-    console.error("[firecrawl search]", r.status, t);
+    console.error("[firecrawl search]", r.status, query.slice(0, 60), t.slice(0, 200));
     return [];
   }
   const data = await r.json();
-  // v2 may return { web: { results: [...] } } or { data: [...] }
+  // v2 returns { success, data: { web: [...], news: [...] } } most commonly,
+  // but older shapes used data.web.results / web.results. Try them all and
+  // also fall back to data.news for news vertical results.
   const arr =
     (data?.data?.web?.results as SearchHit[] | undefined) ??
+    (data?.data?.web as SearchHit[] | undefined) ??
+    (data?.data?.news as SearchHit[] | undefined) ??
     (data?.web?.results as SearchHit[] | undefined) ??
     (data?.data as SearchHit[] | undefined) ??
     (data?.results as SearchHit[] | undefined) ??
     [];
+  if (!Array.isArray(arr) || arr.length === 0) {
+    console.log("[firecrawl search] empty", query.slice(0, 60), "shape:", Object.keys(data ?? {}), "data keys:", Object.keys(data?.data ?? {}));
+  }
   return Array.isArray(arr) ? arr : [];
 }
 
