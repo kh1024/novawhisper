@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
 import { TRADE_STATUS_CLASSES, TRADE_STATUS_LABEL } from "@/lib/tradeStatus";
@@ -268,16 +268,21 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       )}
 
-      {/* Footer — counts mirror Scanner exactly. */}
-      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
-        <div className="flex items-center gap-3">
-          <span><span className="mono text-foreground">{picks.counts.universe}</span> in universe</span>
+      <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span><span className="mono text-foreground">{picks.counts.universe}</span> universe</span>
           <span>·</span>
-          <span><span className="mono text-foreground">{picks.counts.gatePassing}</span> gate-passing</span>
+          <span><span className="mono text-bullish">{picks.counts.cleanCount}</span> clean</span>
           <span>·</span>
-          <span><span className="mono text-warning">{picks.counts.budgetBlocked}</span> budget</span>
+          <span><span className="mono text-warning">{picks.counts.nearLimitCount}</span> near-limit</span>
+          <span>·</span>
+          <span><span className="mono text-primary">{picks.counts.bestOfWaitCount}</span> best-of-WAIT</span>
+          <span>·</span>
+          <span><span className="mono text-warning">{picks.counts.budgetBlocked}</span> budget-drop</span>
           <span>·</span>
           <span><span className="mono text-bearish">{picks.counts.gateBlocked}</span> safety</span>
+          <span>·</span>
+          <span className="text-[10px]">Mode: <span className="mono text-foreground">{picks.counts.marketMode}</span></span>
         </div>
         <Link to="/scanner" className="text-primary hover:underline underline-offset-2 inline-flex items-center gap-1">
           View in Scanner <ExternalLink className="h-3 w-3" />
