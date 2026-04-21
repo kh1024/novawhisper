@@ -19,7 +19,6 @@ import { SortableList } from "@/components/SortableList";
 import { useHiddenSections } from "@/lib/dashboardSections";
 import { NovaStatusStrip } from "@/components/NovaStatusStrip";
 import { NovaModeBadge } from "@/components/NovaModeBadge";
-import { NovaFilterBar } from "@/components/NovaFilterBar";
 import { TopOpportunitiesToday } from "@/components/TopOpportunitiesToday";
 
 const RIGHT_COL_STORAGE_KEY = "nova_dashboard_right_col_order";
@@ -70,7 +69,6 @@ export default function Dashboard() {
         items={[
           ...(currentSessionET() === "regular" ? [] : [{ id: "futures", node: <PreMarketFutures /> }]),
           { id: "nova-status", node: <NovaStatusStrip /> },
-          { id: "nova-filter", node: <NovaFilterBar /> },
           { id: "hero", node: <MarketHeroCards /> },
           { id: "watchlist", node: <WatchlistPanel onOpenSymbol={setOpenSymbol} /> },
           { id: "opportunities-grid", node: (
