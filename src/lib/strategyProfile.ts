@@ -96,6 +96,9 @@ export interface StrategyProfile {
   // GATE OVERRIDES
   gateOverrides: GateOverrides;
 
+  // COMMUNITY SIGNAL ENGINE v2
+  signalEngineOverrides: SignalEngineOverrides;
+
   // SCANNER BEHAVIOR
   tickerUniverse: TickerUniverse;
   customTickers: string[];
