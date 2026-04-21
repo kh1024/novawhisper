@@ -49,6 +49,14 @@ import {
   type TradeState, type TradeStateResult, type CtaPlan,
 } from "@/lib/tradeState";
 import { currentMarketMode } from "@/lib/marketHours";
+import {
+  scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
+  generateOptionsSignal, STRATEGY_RANK,
+  type SpxPutSpreadResult, type VixRegimeResult, type SpyIcResult, type ExitModeResult,
+  type OptionsSignal, type SignalStrategy,
+} from "@/lib/signals/redditSignalEngine";
+import { isEventDay, getEventWarning } from "@/lib/signals/eventCalendar";
+import { useVix, useIvRank } from "@/lib/vix";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
