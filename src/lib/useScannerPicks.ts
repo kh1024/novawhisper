@@ -120,6 +120,12 @@ export interface ApprovedPick {
   eventWarning: string | null;
   /** Today's open gap vs yesterday's close, decimal. */
   gapPct: number;
+  /** Live VIX level used for this scan cycle (shared across all picks). */
+  currentVix: number;
+  /** IV Rank actually used for signal evaluation (real or IVP fallback). */
+  ivRankUsed: number;
+  /** True when ivRankUsed came from real 52w iv_history; false = IVP proxy. */
+  ivRankIsReal: boolean;
 }
 
 export interface BlockedPick {
@@ -399,6 +405,9 @@ export function bucketPicks(args: {
       isEventDay: false,
       eventWarning: null,
       gapPct: 0,
+      currentVix: 15,
+      ivRankUsed: r.ivRank ?? 0,
+      ivRankIsReal: false,
     });
   }
 
@@ -620,6 +629,9 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         isEventDay: eventDayFlag,
         eventWarning,
         gapPct,
+        currentVix: vix,
+        ivRankUsed: ivRank,
+        ivRankIsReal: trueIvRank != null,
       };
     });
   }, [bucketed.approved, ivRankMap, vix, closesBySymbol, seo, today, eventDayFlag, eventWarning]);

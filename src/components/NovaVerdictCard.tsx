@@ -35,6 +35,12 @@ export interface NovaCard {
    * Set by the caller from ValidationResult.previewMode.
    */
   preview_mode?: boolean;
+  /** Optional live VIX level — when present, renders a tiny "VIX 18.4" chip. */
+  vix?: number | null;
+  /** Optional IV Rank to display as a chip with "est." flag when proxy. */
+  iv_rank?: number | null;
+  /** True when iv_rank came from real 52w history; false = IVP proxy. */
+  iv_rank_is_real?: boolean;
 }
 
 const ACTION_STYLES: Record<NovaCard["action"], { bg: string; text: string; ring: string; emoji: string }> = {
@@ -174,7 +180,7 @@ export function NovaVerdictCard({
       )}
 
       {/* Compact meta chips */}
-      <div className="mt-4 flex flex-wrap gap-1.5">
+      <div className="mt-4 flex flex-wrap gap-1.5 items-center">
         <span className={`pill ${card.data_quality === "PASS" ? "pill-bullish" : card.data_quality === "PARTIAL" ? "pill-neutral" : "pill-bearish"}`}>
           {DATA_ICON[card.data_quality]}
           Data {card.data_quality}
@@ -183,6 +189,22 @@ export function NovaVerdictCard({
         <span className={`pill ${card.confidence === "High" ? "pill-bullish" : card.confidence === "Medium" ? "pill-neutral" : "pill-bearish"}`}>
           Confidence {card.confidence}
         </span>
+        {card.iv_rank != null && Number.isFinite(card.iv_rank) && (
+          <span
+            className="pill pill-neutral"
+            title={card.iv_rank_is_real ? "True 52-week IV Rank from history" : "IVP proxy — not enough iv_history yet"}
+          >
+            IVR {Math.round(card.iv_rank)}%
+            {!card.iv_rank_is_real && (
+              <span className="ml-1 text-[10px] text-muted-foreground">est.</span>
+            )}
+          </span>
+        )}
+        {card.vix != null && Number.isFinite(card.vix) && (
+          <span className="text-[10px] text-muted-foreground font-mono ml-auto" title="Live VIX level">
+            VIX {card.vix.toFixed(1)}
+          </span>
+        )}
       </div>
 
       {/* Footer actions: Chain jump + toggle full analysis */}

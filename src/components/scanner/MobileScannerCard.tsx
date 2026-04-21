@@ -40,15 +40,23 @@ interface Props {
     strike: number;
     expiry: string;
   };
+  /** Live VIX level — renders a tiny chip in the header when present. */
+  vix?: number | null;
+  /** Real 52w IV Rank when available — overrides row.ivRank in the IVR stat. */
+  ivRankUsed?: number | null;
+  /** True when ivRankUsed came from real 52w history; false = IVP proxy ("est."). */
+  ivRankIsReal?: boolean;
   onOpen: (symbol: string) => void;
 }
 
-function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, onOpen }: Props) {
+function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, vix, ivRankUsed, ivRankIsReal, onOpen }: Props) {
   const [open, setOpen] = useState(false);
   const { cls: bcls, Icon: BIcon } = biasMeta(row.bias);
   const isCall = contract.optionType === "call";
 
   const status = verdict?.verdict ?? "Wait";
+  const ivrDisplay = ivRankUsed != null && Number.isFinite(ivRankUsed) ? ivRankUsed : row.ivRank;
+  const ivrIsReal = ivRankIsReal === true;
 
   return (
     <Card
@@ -72,7 +80,14 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, onO
           </div>
           <div className="text-[10px] text-muted-foreground truncate">{row.name}</div>
         </button>
-        {verdict && <VerdictBadge verdict={verdict.verdict} reason={verdict.reason} />}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {vix != null && Number.isFinite(vix) && (
+            <span className="text-[10px] text-muted-foreground font-mono" title="Live VIX level">
+              VIX {vix.toFixed(1)}
+            </span>
+          )}
+          {verdict && <VerdictBadge verdict={verdict.verdict} reason={verdict.reason} />}
+        </div>
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">
@@ -108,7 +123,11 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, onO
           <AccordionContent className="pt-2 pb-0 space-y-2">
             <div className="grid grid-cols-4 gap-2 text-[10px]">
               <Stat label="RSI" value={row.rsi.toFixed(0)} />
-              <Stat label="IVR" value={row.ivRank.toFixed(0)} />
+              <Stat
+                label="IVR"
+                value={ivrDisplay.toFixed(0)}
+                suffix={!ivrIsReal ? "est." : undefined}
+              />
               <Stat label="ATR%" value={`${row.atrPct.toFixed(1)}%`} />
               <Stat label="Liq" value={row.optionsLiquidity.toFixed(0)} />
             </div>
@@ -172,11 +191,14 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, onO
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, suffix }: { label: string; value: string; suffix?: string }) {
   return (
     <div className="text-center rounded border border-border/50 py-1">
       <div className="text-muted-foreground">{label}</div>
-      <div className="mono font-semibold text-foreground text-[11px]">{value}</div>
+      <div className="mono font-semibold text-foreground text-[11px]">
+        {value}
+        {suffix && <span className="ml-1 text-[9px] font-normal text-muted-foreground">{suffix}</span>}
+      </div>
     </div>
   );
 }
