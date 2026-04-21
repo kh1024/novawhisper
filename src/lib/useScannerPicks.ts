@@ -48,7 +48,7 @@ import {
   evaluateExecutionState, resolveCta, tradeStateRank,
   type TradeState, type TradeStateResult, type CtaPlan,
 } from "@/lib/tradeState";
-import { currentMarketMode } from "@/lib/marketHours";
+import { currentMarketMode, getMarketState } from "@/lib/marketHours";
 import {
   scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
   generateOptionsSignal, STRATEGY_RANK,
@@ -242,6 +242,7 @@ export function bucketPicks(args: {
   let profileFilteredCount = 0;
   let universeFilteredCount = 0;
   const preMarket = isPreMarketWindow();
+  const currentMarketState = getMarketState();
 
   for (const r of args.rows) {
     if (args.overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
