@@ -233,6 +233,13 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   const blockers: string[] = [];
   const blockerCodes: string[] = [];
 
+  // ── Resolve runtime-overridable thresholds (StrategyProfile.scoringOverrides) ─
+  const o = input.scoringOverrides;
+  const tradeReadyMin = o?.tradeReadyMinScore ?? TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE;
+  const watchlistMin  = o?.watchlistMinScore  ?? TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE;
+  const maxSoftFails  = o?.maxSoftFailures    ?? TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS;
+  const requireAllTrig = o?.triggerRequireAll ?? TRADE_STATE_CONFIG.TRIGGER_REQUIRE_ALL;
+
   // ── Hard EXCLUDED conditions (no override possible) ────────────────────────
   // 1. Tier classifier said safety failed or hard-dropped.
   if (!tier) {
@@ -257,11 +264,11 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   }
   // 2. Score below the watch floor → EXCLUDED.
   const score = rank?.finalRank ?? row.setupScore;
-  if (score < TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE) {
+  if (score < watchlistMin) {
     return {
       state: "EXCLUDED",
       blockers: ["below-watch-floor"],
-      reason: `Score ${score} below watch floor (${TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE}).`,
+      reason: `Score ${score} below watch floor (${watchlistMin}).`,
       triggerNeeded: null,
       capped: false,
       blockerCodes: [],
@@ -273,7 +280,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   if (!quoteValid) blockers.push("quote-invalid");
   if (!quoteFresh) blockers.push("quote-stale");
 
-  const triggerOk = isTriggerConfirmed(row, rank);
+  const triggerOk = isTriggerConfirmed(row, rank, requireAllTrig);
   if (!triggerOk) blockers.push("trigger-not-confirmed");
 
   // State-blocking penalties from finalRank.
