@@ -489,7 +489,11 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
   );
 
   const profileCap = maxPerTradeDollars(profile);
-  const cap = overrides.perTradeCapOverride > 0 ? overrides.perTradeCapOverride : profileCap;
+  // The user's Settings/Nova budget slider (portfolio × risk%) acts as a
+  // hard ceiling — Scanner must respect it even when the strategy profile's
+  // implied cap is larger. An explicit perTradeCapOverride still wins.
+  const derivedCap = Math.min(profileCap, budget > 0 ? budget : profileCap);
+  const cap = overrides.perTradeCapOverride > 0 ? overrides.perTradeCapOverride : derivedCap;
 
   // Build rank + verdict maps (the heavy stage). Cached via react-query so
   // multiple consumers reuse the same computation.
