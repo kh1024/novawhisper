@@ -386,7 +386,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
     blockers,
     reason: triggerNeeded ?? `Setup worth watching at score ${score}; not yet ready.`,
     triggerNeeded,
-    capped: score >= TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE && hasExecutionBlocker,
+    capped: score >= tradeReadyMin && hasExecutionBlocker,
     blockerCodes,
   };
 }
