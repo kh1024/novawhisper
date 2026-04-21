@@ -67,6 +67,7 @@ import { useScannerOverrides } from "@/lib/scannerOverrides";
 import { usePreMarketStatus } from "@/lib/preMarketPreview";
 import { isConservativeCheapTicker } from "@/lib/bucketing";
 import { BudgetMismatchCard } from "@/components/BudgetMismatchCard";
+import { TomorrowsGamePlan } from "@/components/TomorrowsGamePlan";
 import { buildStrikeLadder, pickBestRung } from "@/lib/strikeLadder";
 import { findCheapestAlternative } from "@/lib/useScannerPicks";
 import { Sparkles } from "lucide-react";
@@ -843,6 +844,9 @@ export default function Scanner() {
             </div>
           );
         })()}
+
+        {/* 🌙 Tomorrow's Game Plan — only renders when market is not OPEN. */}
+        <TomorrowsGamePlan />
 
         <StrategyEditDrawer open={strategyDrawerOpen} onOpenChange={setStrategyDrawerOpen} />
 
