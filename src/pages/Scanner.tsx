@@ -844,6 +844,9 @@ export default function Scanner() {
           );
         })()}
 
+        {/* 🌙 Tomorrow's Game Plan — only renders when market is not OPEN. */}
+        <TomorrowsGamePlan />
+
         <StrategyEditDrawer open={strategyDrawerOpen} onOpenChange={setStrategyDrawerOpen} />
 
         <WatchlistPanel onOpenSymbol={setOpenSymbol} />
