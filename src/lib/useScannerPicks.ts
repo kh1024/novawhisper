@@ -371,6 +371,8 @@ export function bucketPicks(args: {
       allowsDeepItm: false,
       budgetNearLimit,
       ivpNearLimit,
+      // Runtime-tunable scoring thresholds (Strategy → Advanced).
+      scoringOverrides: args.profile.scoringOverrides,
     });
     const cta = resolveCta(tradeStateResult.state, tradeStateResult);
 
