@@ -40,6 +40,12 @@ interface Props {
     strike: number;
     expiry: string;
   };
+  /** Live VIX level — renders a tiny chip in the header when present. */
+  vix?: number | null;
+  /** Real 52w IV Rank when available — overrides row.ivRank in the IVR stat. */
+  ivRankUsed?: number | null;
+  /** True when ivRankUsed came from real 52w history; false = IVP proxy ("est."). */
+  ivRankIsReal?: boolean;
   onOpen: (symbol: string) => void;
 }
 
