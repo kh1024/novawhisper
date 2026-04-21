@@ -48,14 +48,14 @@ export type TradeState =
   | "WATCHLIST_ONLY"
   | "EXCLUDED";
 
-// ── Configurable thresholds (centralized) ───────────────────────────────────
+// ── Configurable thresholds (centralized; runtime-overridable per profile) ──
 export const TRADE_STATE_CONFIG = {
   /** Minimum final score to qualify as TRADE_READY. */
-  TRADE_READY_MIN_SCORE: 75,
+  TRADE_READY_MIN_SCORE: 70,
   /** Minimum final score to qualify as NEAR_LIMIT_CONFIRMED. */
-  NEAR_LIMIT_MIN_SCORE: 68,
+  NEAR_LIMIT_MIN_SCORE: 65,
   /** Minimum final score to be worth watching at all. Below this → EXCLUDED. */
-  WATCHLIST_MIN_SCORE: 55,
+  WATCHLIST_MIN_SCORE: 50,
   /** Trigger sub-score floor (out of 30, from finalRank.readinessBreakdown). */
   TRIGGER_MIN_SUBSCORE: 25,
   /** RelVol floor for trigger confirmation. */
@@ -66,9 +66,19 @@ export const TRADE_STATE_CONFIG = {
   TRADE_READY_MAX_SOFT_FAILS: 0,
   /** Max soft failures allowed at NEAR_LIMIT_CONFIRMED. */
   NEAR_LIMIT_MAX_SOFT_FAILS: 1,
-  /** Max soft failures allowed at WATCHLIST_ONLY. */
-  WATCHLIST_MAX_SOFT_FAILS: 2,
+  /** Max soft failures allowed at WATCHLIST_ONLY (default; overridable). */
+  WATCHLIST_MAX_SOFT_FAILS: 3,
+  /** Default trigger mode — false = relaxed (2-of-3), true = strict (all 3). */
+  TRIGGER_REQUIRE_ALL: false,
 } as const;
+
+/** Per-evaluation override knobs read from the active StrategyProfile. */
+export interface ScoringOverrides {
+  tradeReadyMinScore?: number;
+  watchlistMinScore?: number;
+  maxSoftFailures?: number;
+  triggerRequireAll?: boolean;
+}
 
 // ── Penalty codes that CAP the trade state instead of just deducting points ──
 const STATE_BLOCKING_PENALTIES = new Set([
