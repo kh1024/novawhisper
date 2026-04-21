@@ -122,6 +122,9 @@ export interface StrategyProfile {
   // GATE OVERRIDES
   gateOverrides: GateOverrides;
 
+  // SCORING THRESHOLDS (runtime-configurable; replace tradeState.ts constants)
+  scoringOverrides: ScoringOverrides;
+
   // COMMUNITY SIGNAL ENGINE v2
   signalEngineOverrides: SignalEngineOverrides;
 
