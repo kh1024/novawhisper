@@ -16,8 +16,8 @@ export type PickTier = "CLEAN" | "NEAR-LIMIT" | "BEST-OF-WAIT" | "EXCLUDED";
 export const MIN_BUY_NOW_PER_BUCKET = 3;
 /** Soft budget band — picks within ±50% of cap incur only a small penalty. */
 export const BUDGET_SOFT_BAND_PCT = 0.5;
-/** Hard cap — anything above 10× the per-trade target is auto-dropped. */
-export const BUDGET_HARD_DROP_MULT = 10;
+/** Hard cap — anything above 20× the per-trade target is auto-dropped. */
+export const BUDGET_HARD_DROP_MULT = 20;
 
 export interface TierInputs {
   /** Final 0-100 score from rankSetup. */
