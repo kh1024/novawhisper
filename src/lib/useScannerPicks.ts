@@ -103,6 +103,23 @@ export interface ApprovedPick {
   tradeStateResult: TradeStateResult;
   /** Pre-resolved CTA plan — UI must read this, never derive its own. */
   cta: CtaPlan;
+  // ── Community Signal Engine v2 (advisory overlays) ──────────────────────
+  /** Top-level orchestrator pick (highest WR strategy that fits). */
+  optionsSignal: OptionsSignal;
+  /** SPX 1DTE put spread evaluation — eligible only for SPX/SPXW. */
+  spxPutSpreadSignal: SpxPutSpreadResult;
+  /** Live VIX regime classification — always present. */
+  vixRegime: VixRegimeResult;
+  /** SPY/QQQ/IWM Iron Condor scale-in eligibility (null for other tickers). */
+  spyIcSignal: SpyIcResult | null;
+  /** Recommended exit mode per Hold-to-Expiry research. */
+  exitMode: ExitModeResult;
+  /** True on FOMC / NFP / CPI / extended-weekend Fridays. */
+  isEventDay: boolean;
+  /** Human-readable event warning string, or null. */
+  eventWarning: string | null;
+  /** Today's open gap vs yesterday's close, decimal. */
+  gapPct: number;
 }
 
 export interface BlockedPick {
