@@ -138,6 +138,7 @@ export const DEFAULT_PROFILE: StrategyProfile = {
     trendGateEnabled: true,
     preMarketPreviewEnabled: true,
   },
+  signalEngineOverrides: { ...DEFAULT_SIGNAL_ENGINE_OVERRIDES },
   tickerUniverse: "All",
   customTickers: [],
   minOptionsLiquidity: 60,
