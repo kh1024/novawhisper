@@ -389,6 +389,16 @@ export function bucketPicks(args: {
       tradeState: tradeStateResult.state,
       tradeStateResult,
       cta,
+      // Signal-engine fields are populated by the hook (uses live VIX + IV Rank).
+      // Default placeholders keep the type satisfied for any pure-function caller.
+      optionsSignal: { strategy: "NONE", score: 0, confidence: 0, signal: null, rationale: "Pending live signal computation" },
+      spxPutSpreadSignal: { eligible: false, score: 0, spread: null, hardBlocked: false, blockReason: null, rationale: "Pending" },
+      vixRegime: { zone: "MID", strategy: "IRON_CONDOR", deltaTarget: 0.20, legDescription: "", rationale: "Pending live VIX" },
+      spyIcSignal: null,
+      exitMode: { mode: "PROFIT_TARGET", profitTargetPct: 0.50, stopLossPct: 1.00, rationale: "Pending" },
+      isEventDay: false,
+      eventWarning: null,
+      gapPct: 0,
     });
   }
 
