@@ -318,7 +318,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
 
   // Soft failure count.
   const softFails = countSoftFailures(input);
-  if (softFails > TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS) {
+  if (softFails > maxSoftFails) {
     return {
       state: "EXCLUDED",
       blockers: [...blockers, "too-many-soft-failures"],
@@ -336,7 +336,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
 
   // ── TRADE_READY check (strict) ─────────────────────────────────────────────
   const couldBeTradeReady =
-    score >= TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE &&
+    score >= tradeReadyMin &&
     !hasExecutionBlocker &&
     !input.budgetNearLimit &&
     !input.ivpNearLimit &&
