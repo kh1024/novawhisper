@@ -537,8 +537,7 @@ export default function Scanner() {
           </div>
         </div>
 
-        {/* NOVA AI filter — natural-language pick filter */}
-        <NovaFilterBar />
+
 
         {/* Weekend / closed-market banner — kills false "Buy Now" expectations. */}
         {!marketOpen && (
