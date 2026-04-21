@@ -108,6 +108,8 @@ export interface TradeStateInput {
   budgetNearLimit?: boolean;
   /** Set when IVP is elevated (75-90) but not extreme. */
   ivpNearLimit?: boolean;
+  /** Runtime threshold overrides from the user's StrategyProfile. */
+  scoringOverrides?: ScoringOverrides;
 }
 
 // ── Output ───────────────────────────────────────────────────────────────────
@@ -125,23 +127,30 @@ export interface TradeStateResult {
   blockerCodes: string[];
 }
 
-// ── Trigger confirmation (BOTH must pass per user spec) ──────────────────────
-function isTriggerConfirmed(row: SetupRow, rank: RankResult | null): boolean {
+// ── Trigger confirmation ─────────────────────────────────────────────────────
+// Default mode (TRIGGER_REQUIRE_ALL=false): relaxed — any 2-of-3 of
+//   { trigger sub-score ≥ 25, relVol ≥ 1.5, bias-aligned move > 0.4% } pass.
+// Strict mode (TRIGGER_REQUIRE_ALL=true): legacy — ALL three required.
+// This loosening lets quiet mid-day tickers with strong setup scores qualify
+// when volume hasn't spiked yet but direction + trigger sub-score still align.
+function isTriggerConfirmed(
+  row: SetupRow,
+  rank: RankResult | null,
+  requireAll: boolean,
+): boolean {
   if (!rank) return false;
-  const trig = rank.readinessBreakdown.trigger;
-  if (trig < TRADE_STATE_CONFIG.TRIGGER_MIN_SUBSCORE) return false;
-
+  const trigOk = rank.readinessBreakdown.trigger >= TRADE_STATE_CONFIG.TRIGGER_MIN_SUBSCORE;
   const relVolOk = (row.relVolume ?? 0) >= TRADE_STATE_CONFIG.TRIGGER_MIN_RELVOL;
   const moveAbs = Math.abs(row.changePct);
-  const moveOk = moveAbs > TRADE_STATE_CONFIG.TRIGGER_MIN_MOVE_PCT;
-
-  // Bias-aligned: bullish bias needs upward move, bearish needs downward.
   const aligned =
     (row.bias === "bullish" && row.changePct > 0) ||
     (row.bias === "bearish" && row.changePct < 0) ||
-    row.bias === "reversal"; // reversal accepts either direction
+    row.bias === "reversal";
+  const moveOk = moveAbs > TRADE_STATE_CONFIG.TRIGGER_MIN_MOVE_PCT && aligned;
 
-  return relVolOk && moveOk && aligned;
+  const conds = [trigOk, relVolOk, moveOk];
+  const passing = conds.filter(Boolean).length;
+  return requireAll ? passing === 3 : passing >= 2;
 }
 
 // ── Generate the human "what we're waiting for" string ───────────────────────
