@@ -642,19 +642,16 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
   // candidates, we surface 0 — not pad the list with weak NEAR-LIMIT or
   // BEST-OF-WAIT entries. The selector now only honors maxResults as a hard
   // ceiling, never a floor. Watchlist-only picks are surfaced separately.
-  const tradeReadyOrConfirmed = bucketed.approved.filter(
+  const tradeReadyOrConfirmed = approvedEnriched.filter(
     (p) => p.tradeState === "TRADE_READY" || p.tradeState === "NEAR_LIMIT_CONFIRMED",
   );
-  const watchlistOnly = bucketed.approved.filter((p) => p.tradeState === "WATCHLIST_ONLY");
-  const excluded = bucketed.approved.filter((p) => p.tradeState === "EXCLUDED");
+  const watchlistOnly = approvedEnriched.filter((p) => p.tradeState === "WATCHLIST_ONLY");
+  const excluded = approvedEnriched.filter((p) => p.tradeState === "EXCLUDED");
 
   const approvedFinal = opts.maxResults != null
     ? tradeReadyOrConfirmed.slice(0, opts.maxResults)
     : tradeReadyOrConfirmed;
 
-  // "Best pending" preview row: when there are 0 trade-ready picks, surface
-  // the highest-scoring WATCHLIST_ONLY name so the user can see what's brewing
-  // (per chosen empty-state policy).
   const bestPending = approvedFinal.length === 0 && watchlistOnly.length > 0
     ? watchlistOnly.slice(0, 3)
     : [];
@@ -672,17 +669,15 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     [bucketed.budgetBlocked],
   );
 
-  // Funnel metrics for the debug panel — both legacy tier counts AND new
-  // trade-state counts so any consumer can pick its vocabulary.
-  const cleanCount = bucketed.approved.filter((p) => p.pickTier === "CLEAN").length;
-  const nearLimitCount = bucketed.approved.filter((p) => p.pickTier === "NEAR-LIMIT").length;
-  const bestOfWaitCount = bucketed.approved.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
-  const tradeReadyStateCount = bucketed.approved.filter((p) => p.tradeState === "TRADE_READY").length;
-  const nearLimitConfirmedCount = bucketed.approved.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED").length;
+  const cleanCount = approvedEnriched.filter((p) => p.pickTier === "CLEAN").length;
+  const nearLimitCount = approvedEnriched.filter((p) => p.pickTier === "NEAR-LIMIT").length;
+  const bestOfWaitCount = approvedEnriched.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
+  const tradeReadyStateCount = approvedEnriched.filter((p) => p.tradeState === "TRADE_READY").length;
+  const nearLimitConfirmedCount = approvedEnriched.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED").length;
   const watchlistOnlyCount = watchlistOnly.length;
   const excludedCount = excluded.length;
-  const safetyPassingCount = bucketed.approved.length;
-  const budgetPassingCount = bucketed.approved.filter((p) => p.estCost <= cap).length;
+  const safetyPassingCount = approvedEnriched.length;
+  const budgetPassingCount = approvedEnriched.filter((p) => p.estCost <= cap).length;
 
   return {
     approved: approvedFinal,
