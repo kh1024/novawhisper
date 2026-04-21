@@ -168,6 +168,7 @@ export const DEFAULT_PROFILE: StrategyProfile = {
     preMarketPreviewEnabled: true,
   },
   signalEngineOverrides: { ...DEFAULT_SIGNAL_ENGINE_OVERRIDES },
+  scoringOverrides: { ...DEFAULT_SCORING_OVERRIDES },
   tickerUniverse: "All",
   customTickers: [],
   minOptionsLiquidity: 60,
@@ -300,6 +301,7 @@ export function mergeProfile(base: StrategyProfile, patch: Partial<StrategyProfi
     allowedStructures: { ...base.allowedStructures, ...(patch.allowedStructures ?? {}) },
     gateOverrides: { ...base.gateOverrides, ...(patch.gateOverrides ?? {}) },
     signalEngineOverrides: { ...base.signalEngineOverrides, ...(patch.signalEngineOverrides ?? {}) },
+    scoringOverrides: { ...base.scoringOverrides, ...(patch.scoringOverrides ?? {}) },
     customTickers: patch.customTickers ?? base.customTickers,
   };
 }
