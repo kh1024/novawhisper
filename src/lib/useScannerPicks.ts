@@ -405,6 +405,9 @@ export function bucketPicks(args: {
       isEventDay: false,
       eventWarning: null,
       gapPct: 0,
+      currentVix: 15,
+      ivRankUsed: r.ivRank ?? 0,
+      ivRankIsReal: false,
     });
   }
 
@@ -626,6 +629,9 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         isEventDay: eventDayFlag,
         eventWarning,
         gapPct,
+        currentVix: vix,
+        ivRankUsed: ivRank,
+        ivRankIsReal: trueIvRank != null,
       };
     });
   }, [bucketed.approved, ivRankMap, vix, closesBySymbol, seo, today, eventDayFlag, eventWarning]);
