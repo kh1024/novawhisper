@@ -29,6 +29,38 @@ export interface AllowedStructures {
   putDebitSpread: boolean;
 }
 
+/**
+ * Community Signal Engine v2 overrides — control the four backtested
+ * r/options strategies. Defaults shipped with each profile via mergeProfile.
+ */
+export interface SignalEngineOverrides {
+  /** SPX 1DTE Put Spread — IV Rank hard cap (default 20). */
+  spxIvRankMax: number;
+  /** SPX 1DTE Put Spread — enforce -0.4% gap filter (default true). */
+  spxGapFilterEnabled: boolean;
+  /** VIX Low/Mid zone boundary (default 19). */
+  vixLowMidBoundary: number;
+  /** VIX Mid/High zone boundary (default 25). */
+  vixMidHighBoundary: number;
+  /** SPY/QQQ/IWM IC scale-in window toggles. */
+  icWindow1Enabled: boolean;
+  icWindow2Enabled: boolean;
+  icWindow3Enabled: boolean;
+  /** Tail-day avoidance for short vol exits (default true — strongly recommended). */
+  tailDayAvoidanceEnabled: boolean;
+}
+
+export const DEFAULT_SIGNAL_ENGINE_OVERRIDES: SignalEngineOverrides = {
+  spxIvRankMax: 20,
+  spxGapFilterEnabled: true,
+  vixLowMidBoundary: 19,
+  vixMidHighBoundary: 25,
+  icWindow1Enabled: true,
+  icWindow2Enabled: true,
+  icWindow3Enabled: true,
+  tailDayAvoidanceEnabled: true,
+};
+
 export interface GateOverrides {
   orbLockEnabled: boolean;
   ivpMaxThreshold: number;     // Gate 6 (default 80)
@@ -63,6 +95,9 @@ export interface StrategyProfile {
 
   // GATE OVERRIDES
   gateOverrides: GateOverrides;
+
+  // COMMUNITY SIGNAL ENGINE v2
+  signalEngineOverrides: SignalEngineOverrides;
 
   // SCANNER BEHAVIOR
   tickerUniverse: TickerUniverse;
@@ -103,6 +138,7 @@ export const DEFAULT_PROFILE: StrategyProfile = {
     trendGateEnabled: true,
     preMarketPreviewEnabled: true,
   },
+  signalEngineOverrides: { ...DEFAULT_SIGNAL_ENGINE_OVERRIDES },
   tickerUniverse: "All",
   customTickers: [],
   minOptionsLiquidity: 60,
@@ -234,6 +270,7 @@ export function mergeProfile(base: StrategyProfile, patch: Partial<StrategyProfi
     ...patch,
     allowedStructures: { ...base.allowedStructures, ...(patch.allowedStructures ?? {}) },
     gateOverrides: { ...base.gateOverrides, ...(patch.gateOverrides ?? {}) },
+    signalEngineOverrides: { ...base.signalEngineOverrides, ...(patch.signalEngineOverrides ?? {}) },
     customTickers: patch.customTickers ?? base.customTickers,
   };
 }

@@ -49,6 +49,14 @@ import {
   type TradeState, type TradeStateResult, type CtaPlan,
 } from "@/lib/tradeState";
 import { currentMarketMode } from "@/lib/marketHours";
+import {
+  scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
+  generateOptionsSignal, STRATEGY_RANK,
+  type SpxPutSpreadResult, type VixRegimeResult, type SpyIcResult, type ExitModeResult,
+  type OptionsSignal, type SignalStrategy,
+} from "@/lib/signals/redditSignalEngine";
+import { isEventDay, getEventWarning } from "@/lib/signals/eventCalendar";
+import { useVix, useIvRank } from "@/lib/vix";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -95,6 +103,23 @@ export interface ApprovedPick {
   tradeStateResult: TradeStateResult;
   /** Pre-resolved CTA plan — UI must read this, never derive its own. */
   cta: CtaPlan;
+  // ── Community Signal Engine v2 (advisory overlays) ──────────────────────
+  /** Top-level orchestrator pick (highest WR strategy that fits). */
+  optionsSignal: OptionsSignal;
+  /** SPX 1DTE put spread evaluation — eligible only for SPX/SPXW. */
+  spxPutSpreadSignal: SpxPutSpreadResult;
+  /** Live VIX regime classification — always present. */
+  vixRegime: VixRegimeResult;
+  /** SPY/QQQ/IWM Iron Condor scale-in eligibility (null for other tickers). */
+  spyIcSignal: SpyIcResult | null;
+  /** Recommended exit mode per Hold-to-Expiry research. */
+  exitMode: ExitModeResult;
+  /** True on FOMC / NFP / CPI / extended-weekend Fridays. */
+  isEventDay: boolean;
+  /** Human-readable event warning string, or null. */
+  eventWarning: string | null;
+  /** Today's open gap vs yesterday's close, decimal. */
+  gapPct: number;
 }
 
 export interface BlockedPick {
@@ -364,6 +389,16 @@ export function bucketPicks(args: {
       tradeState: tradeStateResult.state,
       tradeStateResult,
       cta,
+      // Signal-engine fields are populated by the hook (uses live VIX + IV Rank).
+      // Default placeholders keep the type satisfied for any pure-function caller.
+      optionsSignal: { strategy: "NONE", score: 0, confidence: 0, signal: null, rationale: "Pending live signal computation" },
+      spxPutSpreadSignal: { eligible: false, score: 0, spread: null, hardBlocked: false, blockReason: null, rationale: "Pending" },
+      vixRegime: { zone: "MID", strategy: "IRON_CONDOR", deltaTarget: 0.20, legDescription: "", rationale: "Pending live VIX" },
+      spyIcSignal: null,
+      exitMode: { mode: "PROFIT_TARGET", profitTargetPct: 0.50, stopLossPct: 1.00, rationale: "Pending" },
+      isEventDay: false,
+      eventWarning: null,
+      gapPct: 0,
     });
   }
 
@@ -522,24 +557,101 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     });
   }, [rows, pipelineQ.data, profile, overrides, cap, bucketFilter]);
 
+  // ── Community Signal Engine v2 — enrich every approved pick with the four
+  //    new advisory signals using LIVE VIX + true 52-week IV Rank. Falls back
+  //    to row.ivRank / VIX=15 when iv_history / VIX feed are still loading.
+  const symbols = useMemo(() => bucketed.approved.map((p) => p.row.symbol), [bucketed.approved]);
+  const { vix } = useVix();
+  const { map: ivRankMap } = useIvRank(symbols);
+  const seo = profile.signalEngineOverrides;
+  const today = useMemo(() => new Date(), [dataUpdatedAt]);
+  const eventDayFlag = isEventDay(today);
+  const eventWarning = getEventWarning(today);
+
+  const enrichedApproved = useMemo(() => {
+    return bucketed.approved.map((p) => {
+      const sym = p.row.symbol.toUpperCase();
+      const trueIvRank = ivRankMap.get(sym);
+      const ivRank = trueIvRank != null ? trueIvRank : (p.row.ivRank ?? 0);
+      const closes = closesBySymbol.get(sym);
+      const yClose = closes && closes.length >= 2 ? closes[closes.length - 2] : null;
+      const livePrice = p.row.price;
+      const gapPct = yClose && yClose > 0 ? (livePrice - yClose) / yClose : 0;
+
+      const optionsSignal = generateOptionsSignal({
+        ticker: sym, ivRank, gapPct, currentTime: today, underlyingPrice: livePrice, vix,
+        spxIvRankMax: seo.spxIvRankMax,
+        spxGapFilterEnabled: seo.spxGapFilterEnabled,
+        vixLowMidBoundary: seo.vixLowMidBoundary,
+        vixMidHighBoundary: seo.vixMidHighBoundary,
+      });
+      const spxPutSpreadSignal = scoreSpxPutSpread({
+        ivRank, gapPct, currentTime: today, underlyingPrice: livePrice,
+        maxIvRankOverride: seo.spxIvRankMax,
+        gapFilterEnabled: seo.spxGapFilterEnabled,
+      });
+      const vixRegime = classifyVixRegime(vix, {
+        lowMidBoundary: seo.vixLowMidBoundary,
+        midHighBoundary: seo.vixMidHighBoundary,
+      });
+      const isIcTicker = sym === "SPY" || sym === "QQQ" || sym === "IWM";
+      const spyIcSignal = isIcTicker ? scoreSPYIronCondor({
+        ticker: sym as "SPY" | "QQQ" | "IWM",
+        currentTime: today, underlyingPrice: livePrice, vix, isEventDay: eventDayFlag,
+        windowEnabled: { 1: seo.icWindow1Enabled, 2: seo.icWindow2Enabled, 3: seo.icWindow3Enabled },
+        vixMidHighBoundary: seo.vixMidHighBoundary,
+      }) : null;
+      const isShortVol: boolean = (["THETA","VIX_REGIME_IC","VIX_REGIME_DIAGONAL","SPX_PUT_SPREAD_1DTE"] as SignalStrategy[])
+        .includes(optionsSignal.strategy);
+      const isLongVol = optionsSignal.strategy === "ORB";
+      const exitMode = selectExitMode({
+        isShortVol, isLongVol,
+        dte: 1, currentPnlPct: 0, isNearTailDay: eventDayFlag,
+        tailDayAvoidanceEnabled: seo.tailDayAvoidanceEnabled,
+      });
+
+      return {
+        ...p,
+        optionsSignal,
+        spxPutSpreadSignal,
+        vixRegime,
+        spyIcSignal,
+        exitMode,
+        isEventDay: eventDayFlag,
+        eventWarning,
+        gapPct,
+      };
+    });
+  }, [bucketed.approved, ivRankMap, vix, closesBySymbol, seo, today, eventDayFlag, eventWarning]);
+
+  // Stable sort: bump picks whose advisory signal is higher-WR (SPX > IC > Theta > ORB).
+  const enrichedSorted = useMemo(() => {
+    return [...enrichedApproved].sort((a, b) => {
+      const ra = STRATEGY_RANK[a.optionsSignal.strategy] ?? 0;
+      const rb = STRATEGY_RANK[b.optionsSignal.strategy] ?? 0;
+      return rb - ra;
+    });
+  }, [enrichedApproved]);
+
+  // Replace bucketed.approved with the enriched + signal-sorted version for
+  // all downstream consumers (filters, counts, watchlist split).
+  const approvedEnriched = enrichedSorted;
+
   // ── NO FORCE-FILL ───────────────────────────────────────────────────────
   // Per the new spec ("zero forced trades"): if there are 0 TRADE_READY
   // candidates, we surface 0 — not pad the list with weak NEAR-LIMIT or
   // BEST-OF-WAIT entries. The selector now only honors maxResults as a hard
   // ceiling, never a floor. Watchlist-only picks are surfaced separately.
-  const tradeReadyOrConfirmed = bucketed.approved.filter(
+  const tradeReadyOrConfirmed = approvedEnriched.filter(
     (p) => p.tradeState === "TRADE_READY" || p.tradeState === "NEAR_LIMIT_CONFIRMED",
   );
-  const watchlistOnly = bucketed.approved.filter((p) => p.tradeState === "WATCHLIST_ONLY");
-  const excluded = bucketed.approved.filter((p) => p.tradeState === "EXCLUDED");
+  const watchlistOnly = approvedEnriched.filter((p) => p.tradeState === "WATCHLIST_ONLY");
+  const excluded = approvedEnriched.filter((p) => p.tradeState === "EXCLUDED");
 
   const approvedFinal = opts.maxResults != null
     ? tradeReadyOrConfirmed.slice(0, opts.maxResults)
     : tradeReadyOrConfirmed;
 
-  // "Best pending" preview row: when there are 0 trade-ready picks, surface
-  // the highest-scoring WATCHLIST_ONLY name so the user can see what's brewing
-  // (per chosen empty-state policy).
   const bestPending = approvedFinal.length === 0 && watchlistOnly.length > 0
     ? watchlistOnly.slice(0, 3)
     : [];
@@ -557,17 +669,15 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     [bucketed.budgetBlocked],
   );
 
-  // Funnel metrics for the debug panel — both legacy tier counts AND new
-  // trade-state counts so any consumer can pick its vocabulary.
-  const cleanCount = bucketed.approved.filter((p) => p.pickTier === "CLEAN").length;
-  const nearLimitCount = bucketed.approved.filter((p) => p.pickTier === "NEAR-LIMIT").length;
-  const bestOfWaitCount = bucketed.approved.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
-  const tradeReadyStateCount = bucketed.approved.filter((p) => p.tradeState === "TRADE_READY").length;
-  const nearLimitConfirmedCount = bucketed.approved.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED").length;
+  const cleanCount = approvedEnriched.filter((p) => p.pickTier === "CLEAN").length;
+  const nearLimitCount = approvedEnriched.filter((p) => p.pickTier === "NEAR-LIMIT").length;
+  const bestOfWaitCount = approvedEnriched.filter((p) => p.pickTier === "BEST-OF-WAIT").length;
+  const tradeReadyStateCount = approvedEnriched.filter((p) => p.tradeState === "TRADE_READY").length;
+  const nearLimitConfirmedCount = approvedEnriched.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED").length;
   const watchlistOnlyCount = watchlistOnly.length;
   const excludedCount = excluded.length;
-  const safetyPassingCount = bucketed.approved.length;
-  const budgetPassingCount = bucketed.approved.filter((p) => p.estCost <= cap).length;
+  const safetyPassingCount = approvedEnriched.length;
+  const budgetPassingCount = approvedEnriched.filter((p) => p.estCost <= cap).length;
 
   return {
     approved: approvedFinal,
@@ -577,14 +687,14 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     safetyBlocked: opts.includeSafetyBlocked === false ? [] : bucketed.safetyBlocked,
     counts: {
       universe: rows.length,
-      gatePassing: bucketed.approved.length + bucketed.budgetBlocked.length,
+      gatePassing: approvedEnriched.length + bucketed.budgetBlocked.length,
       gateBlocked: bucketed.safetyBlocked.length,
       budgetBlocked: bucketed.budgetBlocked.length,
       shown: approvedFinal.length,
       filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
       safetyPassingCount,
       budgetPassingCount,
-      scoredCount: bucketed.approved.length,
+      scoredCount: approvedEnriched.length,
       tradeReadyCount: tradeReadyStateCount,
       nearLimitConfirmedCount,
       watchlistOnlyCount,
