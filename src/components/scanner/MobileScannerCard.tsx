@@ -191,11 +191,14 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, vix
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, suffix }: { label: string; value: string; suffix?: string }) {
   return (
     <div className="text-center rounded border border-border/50 py-1">
       <div className="text-muted-foreground">{label}</div>
-      <div className="mono font-semibold text-foreground text-[11px]">{value}</div>
+      <div className="mono font-semibold text-foreground text-[11px]">
+        {value}
+        {suffix && <span className="ml-1 text-[9px] font-normal text-muted-foreground">{suffix}</span>}
+      </div>
     </div>
   );
 }
