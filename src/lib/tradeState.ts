@@ -52,7 +52,7 @@ export type TradeState =
 // ── Configurable thresholds (centralized; runtime-overridable per profile) ──
 export const TRADE_STATE_CONFIG = {
   /** Minimum final score to qualify as TRADE_READY. */
-  TRADE_READY_MIN_SCORE: 70,
+  TRADE_READY_MIN_SCORE: 63,
   /** Minimum final score to qualify as NEAR_LIMIT_CONFIRMED. */
   NEAR_LIMIT_MIN_SCORE: 65,
   /** Minimum final score to be worth watching at all. Below this → EXCLUDED. */

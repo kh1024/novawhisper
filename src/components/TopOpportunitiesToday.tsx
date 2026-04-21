@@ -129,8 +129,25 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </Section>
       )}
 
-      {/* Empty trade-ready state with best-pending preview */}
-      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && (
+      {/* Empty trade-ready state — promote top 3 watchlist picks to featured */}
+      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && watchlist.length > 0 && (
+        <Section
+          title="Top Setups — Pending Trigger"
+          icon={<Eye className="h-4 w-4 text-primary" />}
+          tone="primary"
+          count={Math.min(3, watchlist.length)}
+        >
+          <div className="text-[11px] text-muted-foreground -mt-1 mb-1">
+            No trade-ready setups right now — these are the strongest watchlist names with the missing condition called out.
+          </div>
+          {watchlist.slice(0, 3).map((p) => (
+            <WatchlistRow key={p.key} pick={p} onOpen={open} />
+          ))}
+        </Section>
+      )}
+
+      {/* Truly empty (no watchlist either) — keep the lightweight pending preview */}
+      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && watchlist.length === 0 && (
         <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-4 mb-4">
           <div className="flex items-center gap-2 mb-1">
             <Eye className="h-4 w-4 text-muted-foreground" />
@@ -138,7 +155,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
           </div>
           <div className="text-[11px] text-muted-foreground">
             {picks.bestPending.length > 0
-              ? "Best current names are on watchlist pending confirmation — see below."
+              ? "Best current names are pending confirmation — see below."
               : <>Universe of <span className="mono text-foreground">{picks.counts.universe}</span> scanned · next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span></>
             }
           </div>
@@ -153,7 +170,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
       )}
 
       {/* Section 3: Setups to Watch — only show when actionable picks exist
-          (otherwise the bestPending preview above already represents them). */}
+          (otherwise the promoted section above already represents them). */}
       {totalActionable > 0 && watchlist.length > 0 && (
         <Section
           title="Setups to Watch"

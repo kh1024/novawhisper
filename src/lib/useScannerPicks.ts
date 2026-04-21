@@ -329,12 +329,12 @@ export function bucketPicks(args: {
       ivRank: r.ivRank,
     });
 
-    // Hard drop: cost > 10× cap → still report as budget-blocked (visible).
+    // Hard drop: cost > 20× cap → still report as budget-blocked (visible).
     if (tier.hardDrop) {
       const overBy = pick.candidate.contractCost - args.cap;
       budgetBlocked.push({
         key, row: r, contract, bucket: rowB, kind: "budget",
-        reason: `Cost $${pick.candidate.contractCost.toLocaleString()} > 10× cap $${args.cap.toLocaleString()}`,
+        reason: `Cost $${pick.candidate.contractCost.toLocaleString()} > 20× cap $${args.cap.toLocaleString()}`,
         detail:
           `Per-trade cap $${args.cap.toLocaleString()}. Cheapest rung ` +
           `${pick.cheapest.rung} ${pick.cheapest.optionType} $${pick.cheapest.strike} ` +
@@ -346,7 +346,7 @@ export function bucketPicks(args: {
         suspect: pick.cheapest.suspect,
         preMarket,
         cheaperAlternative: null,
-        dropReasons: ["budget_hard_drop_10x"],
+        dropReasons: ["budget_hard_drop_20x"],
       });
       continue;
     }
