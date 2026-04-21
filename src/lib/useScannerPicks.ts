@@ -120,6 +120,12 @@ export interface ApprovedPick {
   eventWarning: string | null;
   /** Today's open gap vs yesterday's close, decimal. */
   gapPct: number;
+  /** Live VIX level used for this scan cycle (shared across all picks). */
+  currentVix: number;
+  /** IV Rank actually used for signal evaluation (real or IVP fallback). */
+  ivRankUsed: number;
+  /** True when ivRankUsed came from real 52w iv_history; false = IVP proxy. */
+  ivRankIsReal: boolean;
 }
 
 export interface BlockedPick {
