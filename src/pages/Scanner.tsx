@@ -576,7 +576,9 @@ export default function Scanner() {
         {/* ──── Strategy Context Bar + bucketed picks (approved/budget/safety) ──── */}
         {(() => {
           const profileCap = maxPerTradeDollars(strategyProfile);
-          const cap = overrides.perTradeCapOverride > 0 ? overrides.perTradeCapOverride : profileCap;
+          // Honor the user's Settings/Nova budget slider as a hard ceiling.
+          const derivedCap = Math.min(profileCap, maxLossBudget > 0 ? maxLossBudget : profileCap);
+          const cap = overrides.perTradeCapOverride > 0 ? overrides.perTradeCapOverride : derivedCap;
           const approvedRows: SetupRow[] = [];
           const budgetBlocked: BlockedPickInfo[] = [];
           const safetyBlocked: BlockedPickInfo[] = [];
