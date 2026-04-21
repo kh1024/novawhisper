@@ -40,6 +40,7 @@ import type { SetupRow } from "./setupScore";
 import type { RankResult } from "./finalRank";
 import type { TradeStatusResult } from "./tradeStatus";
 import type { TierResult } from "./pickTier";
+import { getMarketState } from "./marketHours";
 
 // ── State enum ──────────────────────────────────────────────────────────────
 export type TradeState =
@@ -280,7 +281,13 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   if (!quoteValid) blockers.push("quote-invalid");
   if (!quoteFresh) blockers.push("quote-stale");
 
-  const triggerOk = isTriggerConfirmed(row, rank, requireAllTrig);
+  // After-hours / closed market: relVolume can never spike and changePct is
+  // frozen, so trigger confirmation on EOD data is meaningless. Skip the
+  // requirement entirely outside the regular session — score + safety alone
+  // determine state. Reactivates automatically at 9:30 AM ET.
+  const marketStateNow = getMarketState();
+  const requireTrigger = marketStateNow === "OPEN";
+  const triggerOk = !requireTrigger || isTriggerConfirmed(row, rank, requireAllTrig);
   if (!triggerOk) blockers.push("trigger-not-confirmed");
 
   // State-blocking penalties from finalRank.
