@@ -270,6 +270,7 @@ export function mergeProfile(base: StrategyProfile, patch: Partial<StrategyProfi
     ...patch,
     allowedStructures: { ...base.allowedStructures, ...(patch.allowedStructures ?? {}) },
     gateOverrides: { ...base.gateOverrides, ...(patch.gateOverrides ?? {}) },
+    signalEngineOverrides: { ...base.signalEngineOverrides, ...(patch.signalEngineOverrides ?? {}) },
     customTickers: patch.customTickers ?? base.customTickers,
   };
 }
