@@ -14,9 +14,9 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2, Eye, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Flame, ExternalLink, ShieldAlert, DollarSign, RefreshCw, Loader2, Eye, CheckCircle2, AlertTriangle, Moon } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { useActiveBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
 import { TRADE_STATE_LABEL, TRADE_STATE_CLASSES } from "@/lib/tradeState";
@@ -24,6 +24,8 @@ import { Hint } from "@/components/Hint";
 import { AddToPortfolioButton } from "@/components/AddToPortfolioButton";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { cn } from "@/lib/utils";
+import { getMarketState } from "@/lib/marketHours";
+import { getGamePlanPicks } from "@/lib/gamePlan";
 
 const BUCKET_TABS: ActiveBucket[] = ["All", "Conservative", "Moderate", "Aggressive", "Lottery"];
 
@@ -31,13 +33,14 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
   const [bucket, setBucket] = useActiveBucket();
   const picks = useScannerPicks({ maxResults });
   const navigate = useNavigate();
+  const marketState = getMarketState();
 
-  // Manual refresh countdown for the truly-empty state.
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
   const nextRefreshIn = Math.max(
     0,
     Math.ceil((picks.dataUpdatedAt + 60_000 - Date.now()) / 1000),
@@ -49,16 +52,19 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
     );
   };
 
-  // Split approved picks by trade state. The selector already removed force-fill
-  // so `approved` holds only TRADE_READY + NEAR_LIMIT_CONFIRMED (sorted).
   const tradeReady = picks.approved.filter((p) => p.tradeState === "TRADE_READY");
   const nearLimit = picks.approved.filter((p) => p.tradeState === "NEAR_LIMIT_CONFIRMED");
   const watchlist = picks.watchlistOnly.slice(0, maxResults);
-
   const inPreview = picks.counts.marketMode === "PREVIEW";
   const totalActionable = tradeReady.length + nearLimit.length;
   const totalBlocked = picks.budgetBlocked.length + picks.safetyBlocked.length;
-  const everythingEmpty = totalActionable === 0 && watchlist.length === 0 && totalBlocked === 0;
+
+  const gamePlanPreview = useMemo(
+    () => (marketState === "OPEN" ? [] : getGamePlanPicks(picks, 3)),
+    [marketState, picks.approved, picks.watchlistOnly, picks.bestPending, picks.cap],
+  );
+  const hasGamePlanPreview = marketState !== "OPEN" && gamePlanPreview.length > 0;
+  const everythingEmpty = totalActionable === 0 && watchlist.length === 0 && totalBlocked === 0 && !hasGamePlanPreview;
 
   return (
     <Card className="glass-card p-5 lg:col-span-2">
@@ -87,21 +93,34 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       </div>
 
-      {/* Loading state */}
       {(picks.isLoading || picks.counts.universe === 0) && everythingEmpty && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
           <Loader2 className="h-4 w-4 animate-spin" /> Scanning universe…
         </div>
       )}
 
-      {/* Pre-market banner */}
       {inPreview && totalActionable > 0 && (
         <div className="text-[11px] text-warning bg-warning/5 border border-warning/30 rounded px-2 py-1.5 mb-3">
           👀 Pre-market preview — markets open at 9:30 AM ET. Picks shown for planning; trade states activate at the open.
         </div>
       )}
 
-      {/* Section 1: Trade Ready Now */}
+      {hasGamePlanPreview && (
+        <Section
+          title="Tomorrow's Game Plan"
+          icon={<Moon className="h-4 w-4 text-primary" />}
+          tone="primary"
+          count={gamePlanPreview.length}
+        >
+          <div className="text-[11px] text-muted-foreground -mt-1 mb-1">
+            Top 3 budget-qualified setups for the next open.
+          </div>
+          {gamePlanPreview.map((p) => (
+            <PendingPreviewRow key={p.key} pick={p} onOpen={open} label="Tomorrow" />
+          ))}
+        </Section>
+      )}
+
       {tradeReady.length > 0 && (
         <Section
           title="Trade Ready Now"
@@ -115,7 +134,6 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </Section>
       )}
 
-      {/* Section 2: Confirmed but Near Limit */}
       {nearLimit.length > 0 && (
         <Section
           title="Confirmed — Reduce Size"
@@ -129,8 +147,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </Section>
       )}
 
-      {/* Empty trade-ready state — promote top 3 watchlist picks to featured */}
-      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && watchlist.length > 0 && (
+      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && watchlist.length > 0 && !hasGamePlanPreview && (
         <Section
           title="Top Setups — Pending Trigger"
           icon={<Eye className="h-4 w-4 text-primary" />}
@@ -146,8 +163,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </Section>
       )}
 
-      {/* Truly empty (no watchlist either) — keep the lightweight pending preview */}
-      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && watchlist.length === 0 && (
+      {totalActionable === 0 && !picks.isLoading && picks.counts.universe > 0 && watchlist.length === 0 && !hasGamePlanPreview && (
         <div className="rounded-lg border border-dashed border-border/60 bg-surface/30 p-4 mb-4">
           <div className="flex items-center gap-2 mb-1">
             <Eye className="h-4 w-4 text-muted-foreground" />
@@ -156,8 +172,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
           <div className="text-[11px] text-muted-foreground">
             {picks.bestPending.length > 0
               ? "Best current names are pending confirmation — see below."
-              : <>Universe of <span className="mono text-foreground">{picks.counts.universe}</span> scanned · next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span></>
-            }
+              : <>Universe of <span className="mono text-foreground">{picks.counts.universe}</span> scanned · next refresh in <span className="mono text-foreground">{nextRefreshIn}s</span></>}
           </div>
           {picks.bestPending.length > 0 && (
             <div className="mt-3 space-y-1.5">
@@ -169,8 +184,6 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       )}
 
-      {/* Section 3: Setups to Watch — only show when actionable picks exist
-          (otherwise the promoted section above already represents them). */}
       {totalActionable > 0 && watchlist.length > 0 && (
         <Section
           title="Setups to Watch"
@@ -184,8 +197,7 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </Section>
       )}
 
-      {/* Blocked Picks Preview — only when nothing actionable AND no pending. */}
-      {totalActionable === 0 && picks.bestPending.length === 0 && totalBlocked > 0 && !picks.isLoading && (
+      {totalActionable === 0 && picks.bestPending.length === 0 && totalBlocked > 0 && !picks.isLoading && !hasGamePlanPreview && (
         <div className="space-y-2 mt-3">
           {picks.budgetBlocked.length > 0 && (
             <BlockedSummaryRow
@@ -208,7 +220,6 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
         </div>
       )}
 
-      {/* Funnel footer — both vocabularies. */}
       <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground flex-wrap gap-2">
         <div className="flex items-center gap-3 flex-wrap">
           <span><span className="mono text-foreground">{picks.counts.universe}</span> universe</span>
@@ -233,7 +244,6 @@ export function TopOpportunitiesToday({ maxResults = 6 }: { maxResults?: number 
   );
 }
 
-// ── Section header ──────────────────────────────────────────────────────────
 function Section({
   title, icon, tone, count, children,
 }: {
@@ -258,7 +268,6 @@ function Section({
   );
 }
 
-// ── Trade-ready / Near-limit pick card (has Buy CTA driven by tradeState) ──
 function PickCard({
   pick: p, onOpen, inPreview,
 }: {
@@ -313,7 +322,6 @@ function PickCard({
         <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
       </button>
       <div className="flex items-center gap-2 px-3 pb-3 flex-wrap">
-        {/* CTA strictly from cta.primary — never from score or tier. */}
         {cta.primary === "BUY_NOW" && (
           <Button
             size="sm"
@@ -344,7 +352,6 @@ function PickCard({
   );
 }
 
-// ── Watchlist-only row (NO Buy CTA, ever — explicit trigger language) ───────
 function WatchlistRow({
   pick: p, onOpen,
 }: {
@@ -408,12 +415,12 @@ function WatchlistRow({
   );
 }
 
-// ── "Best pending" preview row in the empty state (compact, no Buy) ────────
 function PendingPreviewRow({
-  pick: p, onOpen,
+  pick: p, onOpen, label = "Pending",
 }: {
   pick: ApprovedPick;
   onOpen: (p: ApprovedPick) => void;
+  label?: string;
 }) {
   const isCall = p.contract.optionType === "call";
   return (
@@ -426,7 +433,7 @@ function PendingPreviewRow({
         ${p.contract.strike}{isCall ? "C" : "P"}
       </span>
       <span className="text-muted-foreground flex-1 truncate">
-        Pending: {p.tradeStateResult.triggerNeeded ?? "waiting for trigger"}
+        {label}: {p.tradeStateResult.triggerNeeded ?? "waiting for trigger"}
       </span>
       <ExternalLink className="h-3 w-3 text-muted-foreground" />
     </button>

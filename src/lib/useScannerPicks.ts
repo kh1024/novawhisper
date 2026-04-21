@@ -329,24 +329,30 @@ export function bucketPicks(args: {
       ivRank: r.ivRank,
     });
 
-    // Hard drop: cost > 20× cap → still report as budget-blocked (visible).
-    if (tier.hardDrop) {
-      const overBy = pick.candidate.contractCost - args.cap;
+    const severeBudgetMiss = !pick.fitsCap && pick.candidate.contractCost > args.cap * 1.5;
+
+    // Hard drop: cost > 20× cap OR materially over budget (>50% above cap)
+    // should be surfaced as budget-blocked, not left in the visible approved set.
+    if (tier.hardDrop || severeBudgetMiss) {
+      const blockedCost = pick.candidate.contractCost;
+      const overBy = blockedCost - args.cap;
       budgetBlocked.push({
         key, row: r, contract, bucket: rowB, kind: "budget",
-        reason: `Cost $${pick.candidate.contractCost.toLocaleString()} > 20× cap $${args.cap.toLocaleString()}`,
+        reason: tier.hardDrop
+          ? `Cost $${blockedCost.toLocaleString()} > 20× cap $${args.cap.toLocaleString()}`
+          : `Cost $${blockedCost.toLocaleString()} is ${Math.round(((blockedCost / Math.max(1, args.cap)) - 1) * 100)}% over cap $${args.cap.toLocaleString()}`,
         detail:
           `Per-trade cap $${args.cap.toLocaleString()}. Cheapest rung ` +
           `${pick.cheapest.rung} ${pick.cheapest.optionType} $${pick.cheapest.strike} ` +
           `@ ~$${pick.cheapest.premium.toFixed(2)} = $${pick.cheapest.contractCost.toLocaleString()}.`,
         overBudgetBy: overBy,
         cap: args.cap,
-        cost: pick.candidate.contractCost,
+        cost: blockedCost,
         premium: pick.cheapest.premium,
         suspect: pick.cheapest.suspect,
         preMarket,
         cheaperAlternative: null,
-        dropReasons: ["budget_hard_drop_20x"],
+        dropReasons: [tier.hardDrop ? "budget_hard_drop_20x" : "budget_over_50pct"],
       });
       continue;
     }

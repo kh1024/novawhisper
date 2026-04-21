@@ -15,6 +15,7 @@ import { getEventWarning } from "@/lib/signals/eventCalendar";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { getGamePlanPicks } from "@/lib/gamePlan";
 
 const ALERT_STORAGE_KEY = "nova_price_alerts_v1";
 const PLAN_CACHE_KEY = "nova_game_plan_cache_v1";
@@ -30,28 +31,36 @@ interface SavedAlert {
 function readAlerts(): SavedAlert[] {
   try {
     return JSON.parse(localStorage.getItem(ALERT_STORAGE_KEY) ?? "[]") as SavedAlert[];
-  } catch { return []; }
+  } catch {
+    return [];
+  }
 }
+
 function writeAlerts(arr: SavedAlert[]) {
   localStorage.setItem(ALERT_STORAGE_KEY, JSON.stringify(arr));
 }
 
-// ─── Live countdown to next 9:30 AM ET open ────────────────────────────────
 function MarketOpenCountdown({ compact }: { compact?: boolean }) {
   const [label, setLabel] = useState("");
+
   useEffect(() => {
     const tick = () => {
       const diff = getNextMarketOpen().getTime() - Date.now();
-      if (diff <= 0) { setLabel("Market is open"); return; }
+      if (diff <= 0) {
+        setLabel("Market is open");
+        return;
+      }
       const h = Math.floor(diff / 3_600_000);
       const m = Math.floor((diff % 3_600_000) / 60_000);
       const s = Math.floor((diff % 60_000) / 1000);
       setLabel(compact ? `${h}h ${m}m ${s}s` : `${h}h ${m}m ${s}s until 9:30 AM ET open`);
     };
+
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [compact]);
+
   return (
     <span className="inline-flex items-center gap-1.5 font-mono">
       <Clock className="h-3.5 w-3.5" /> {label}
@@ -59,15 +68,16 @@ function MarketOpenCountdown({ compact }: { compact?: boolean }) {
   );
 }
 
-// ─── Inline alert form ──────────────────────────────────────────────────────
 function AlertForm({ symbol, defaultPrice, onClose }: { symbol: string; defaultPrice: number; onClose: () => void }) {
   const [price, setPrice] = useState<string>(defaultPrice.toFixed(2));
+
   const save = () => {
     const num = Number(price);
     if (!Number.isFinite(num) || num <= 0) {
       toast({ title: "Invalid price", variant: "destructive" });
       return;
     }
+
     const next: SavedAlert = {
       id: crypto.randomUUID(),
       symbol: symbol.toUpperCase(),
@@ -75,10 +85,12 @@ function AlertForm({ symbol, defaultPrice, onClose }: { symbol: string; defaultP
       direction: num >= defaultPrice ? "above" : "below",
       createdAt: new Date().toISOString(),
     };
+
     writeAlerts([...readAlerts(), next]);
     toast({ title: `Alert set for ${symbol} ${next.direction} $${num.toFixed(2)}` });
     onClose();
   };
+
   return (
     <div className="flex items-center gap-2 mt-2">
       <span className="text-[11px] text-muted-foreground">Alert when {symbol} crosses</span>
@@ -95,7 +107,6 @@ function AlertForm({ symbol, defaultPrice, onClose }: { symbol: string; defaultP
   );
 }
 
-// ─── Single Game Plan card ──────────────────────────────────────────────────
 function GamePlanCard({ pick }: { pick: ApprovedPick }) {
   const [showAlert, setShowAlert] = useState(false);
   const r = pick.row;
@@ -106,19 +117,15 @@ function GamePlanCard({ pick }: { pick: ApprovedPick }) {
     pick.bucket === "Aggressive" ? "SWING" :
     pick.bucket === "Conservative" ? "POSITION" : "SWING";
 
-  // What-it-needs checklist
   const gatesPassed = pick.verdict?.verdict !== "Avoid";
   const scoreOk = score >= 63;
   const earningsRisk = (r.earningsInDays ?? 99) < 7;
   const wideSpread = pick.suspect;
   const relVolMissing = (r.relVolume ?? 0) < 1.5;
 
-  // Entry zone ±0.3%
   const lo = (r.price * 0.997).toFixed(2);
   const hi = (r.price * 1.003).toFixed(2);
   const entryMid = r.price;
-
-  // DTE
   const dte = Math.max(1, Math.round((new Date(pick.contract.expiry).getTime() - Date.now()) / 86_400_000));
 
   return (
@@ -207,33 +214,16 @@ function GamePlanCard({ pick }: { pick: ApprovedPick }) {
   );
 }
 
-// ─── Main section ───────────────────────────────────────────────────────────
 export function TomorrowsGamePlan() {
   const marketState = getMarketState();
   const visible = marketState !== "OPEN";
-
-  // Pull the full universe (no maxResults), include none of the blocked sets.
   const scan = useScannerPicks({ bucket: "All" });
 
-  // Top 10 by finalRank/setupScore with score ≥ 50.
-  const liveTop = useMemo(() => {
-    const all = [...scan.approved, ...scan.watchlistOnly, ...scan.bestPending];
-    // Dedupe by key
-    const seen = new Set<string>();
-    const uniq: ApprovedPick[] = [];
-    for (const p of all) {
-      if (seen.has(p.key)) continue;
-      seen.add(p.key);
-      uniq.push(p);
-    }
-    return uniq
-      .filter((p) => (p.rank?.finalRank ?? p.row.setupScore) >= 50)
-      .sort((a, b) => (b.rank?.finalRank ?? b.row.setupScore) - (a.rank?.finalRank ?? a.row.setupScore))
-      .slice(0, 10);
-  }, [scan.approved, scan.watchlistOnly, scan.bestPending]);
+  const liveTop = useMemo(
+    () => getGamePlanPicks(scan, 10),
+    [scan.approved, scan.watchlistOnly, scan.bestPending, scan.cap],
+  );
 
-  // Persist the latest non-empty plan to localStorage so the next morning
-  // load can render instantly while the live scan rehydrates.
   useEffect(() => {
     if (!visible || liveTop.length === 0) return;
     try {
@@ -245,21 +235,21 @@ export function TomorrowsGamePlan() {
         contract: p.contract,
       }));
       localStorage.setItem(PLAN_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), picks: slim }));
-    } catch { /* quota — ignore */ }
+    } catch {
+      // ignore storage quota issues
+    }
   }, [liveTop, visible]);
 
   const tomorrow = getTomorrowET();
   const tomorrowEvent = getEventWarning(tomorrow);
   const buyReadyCount = liveTop.filter((p) => (p.rank?.finalRank ?? p.row.setupScore) >= 63).length;
   const topPick = liveTop[0];
-
   const [open, setOpen] = useState(true);
 
   if (!visible) return null;
 
   return (
     <div className="space-y-3">
-      {/* Always-visible summary strip */}
       <Card className="glass-card p-3 border-primary/30 bg-primary/5">
         <div className="flex flex-col gap-2 text-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -290,7 +280,6 @@ export function TomorrowsGamePlan() {
         </div>
       </Card>
 
-      {/* Collapsible cards */}
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
           <Button variant="outline" className="w-full justify-between" size="sm">
@@ -306,7 +295,7 @@ export function TomorrowsGamePlan() {
         <CollapsibleContent className="mt-3">
           {liveTop.length === 0 ? (
             <Card className="glass-card p-8 text-center text-sm text-muted-foreground">
-              No setups scoring ≥ 50 yet. Plan rebuilds as the scan completes.
+              No budget-qualified setups scoring ≥ 50 yet. Plan rebuilds as the scan completes.
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
