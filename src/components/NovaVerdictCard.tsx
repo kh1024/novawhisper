@@ -107,8 +107,13 @@ export function NovaVerdictCard({
           <span aria-hidden>{style.emoji}</span>
           {card.action}
         </div>
-        <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground">
-          {card.verdict}
+        <div className="mt-1 text-xs uppercase tracking-wider text-muted-foreground flex items-center justify-center gap-2">
+          <span>{card.verdict}</span>
+          {showEodLabel && (
+            <span className="text-[10px] font-mono normal-case tracking-normal text-muted-foreground/80 border border-border/60 rounded px-1.5 py-0.5">
+              EOD data
+            </span>
+          )}
         </div>
         <div className="mt-2 text-sm text-foreground/90 max-w-md mx-auto">
           {card.one_line_reason}
