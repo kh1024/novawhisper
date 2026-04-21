@@ -51,6 +51,7 @@ import {
   computeVerdict, isMarketOpen, isWeekend,
   type VerdictResult, type Verdict,
 } from "@/lib/verdictModel";
+import { getMarketState } from "@/lib/marketHours";
 import { MobileScannerList } from "@/components/scanner/MobileScannerList";
 import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
 import { StrategyContextBar, type PipelineCounts } from "@/components/StrategyContextBar";
@@ -487,9 +488,30 @@ export default function Scanner() {
     ? `${Math.max(0, Math.round((Date.now() - dataUpdatedAt) / 1000))}s ago`
     : "—";
 
+  const marketState = getMarketState();
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="p-3 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-4 sm:space-y-6">
+        {/* Market session banner — explains why scoring may be on EOD data. */}
+        {marketState === "PRE_MARKET" && (
+          <div className="w-full px-4 py-2 rounded border border-warning/40 bg-warning/10 text-warning text-sm flex items-center justify-between gap-3">
+            <span>🌅 Pre-Market — ORB Lock active until 9:30 AM ET open.</span>
+            <Badge variant="outline" className="text-warning border-warning/40 text-xs shrink-0">Pre-Market</Badge>
+          </div>
+        )}
+        {marketState === "AFTER_HOURS" && (
+          <div className="w-full px-4 py-2 rounded border border-primary/40 bg-primary/10 text-primary text-sm flex items-center justify-between gap-3">
+            <span>📊 After Hours — showing picks based on last closing prices. Scores reflect EOD data.</span>
+            <Badge variant="outline" className="text-primary border-primary/40 text-xs shrink-0">After Hours</Badge>
+          </div>
+        )}
+        {marketState === "CLOSED" && (
+          <div className="w-full px-4 py-2 rounded border border-border bg-muted/40 text-muted-foreground text-sm flex items-center justify-between gap-3">
+            <span>🌙 Market closed — picks are based on last session's closing data. Signals refresh at next open.</span>
+            <Badge variant="outline" className="text-muted-foreground border-border text-xs shrink-0">Market Closed</Badge>
+          </div>
+        )}
         <PreMarketPreviewBanner />
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3">
