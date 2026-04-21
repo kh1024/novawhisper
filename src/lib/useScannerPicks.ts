@@ -353,7 +353,13 @@ export function bucketPicks(args: {
     // ── TradeState evaluation — the new authoritative state machine ────────
     // Quote validity proxies: contract/premium present and not flagged suspect.
     const quoteValid = Number.isFinite(pick.candidate.premium) && pick.candidate.premium > 0;
-    const quoteFresh = !pick.candidate.suspect; // upstream flags suspect/stale premiums
+    // Freshness: strict during regular session; after-hours/closed/pre-market we
+    // can only ever have last-known data, so don't penalize picks for staleness
+    // outside 9:30–4:00 ET. (Quotes flagged "suspect" upstream still fail.)
+    const _marketState = currentMarketState;
+    const quoteFresh = _marketState === "OPEN"
+      ? !pick.candidate.suspect
+      : true;
     const ratio = pick.candidate.contractCost / Math.max(1, args.cap);
     const budgetNearLimit = ratio > 1 && ratio <= 1 + 0.5;
     const ivpNearLimit = (r.ivRank ?? 0) > 75 && (r.ivRank ?? 0) <= 90;

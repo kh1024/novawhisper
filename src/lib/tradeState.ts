@@ -40,6 +40,7 @@ import type { SetupRow } from "./setupScore";
 import type { RankResult } from "./finalRank";
 import type { TradeStatusResult } from "./tradeStatus";
 import type { TierResult } from "./pickTier";
+import { getMarketState } from "./marketHours";
 
 // ── State enum ──────────────────────────────────────────────────────────────
 export type TradeState =
