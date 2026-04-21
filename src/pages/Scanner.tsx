@@ -570,6 +570,9 @@ export default function Scanner() {
           ))}
         </div>
 
+        {/* 🌙 Tomorrow's Game Plan — only renders when market is not OPEN. */}
+        <TomorrowsGamePlan />
+
         {/* ──── Strategy Context Bar + bucketed picks (approved/budget/safety) ──── */}
         {(() => {
           const profileCap = maxPerTradeDollars(strategyProfile);
@@ -845,8 +848,6 @@ export default function Scanner() {
           );
         })()}
 
-        {/* 🌙 Tomorrow's Game Plan — only renders when market is not OPEN. */}
-        <TomorrowsGamePlan />
 
         <StrategyEditDrawer open={strategyDrawerOpen} onOpenChange={setStrategyDrawerOpen} />
 
