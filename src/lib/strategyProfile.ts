@@ -61,6 +61,32 @@ export const DEFAULT_SIGNAL_ENGINE_OVERRIDES: SignalEngineOverrides = {
   tailDayAvoidanceEnabled: true,
 };
 
+/**
+ * Scoring threshold overrides — runtime-configurable knobs that replace the
+ * hardcoded constants in tradeState.ts. Lets the user loosen/tighten the
+ * BUY NOW vs WATCHLIST cutoffs from the Strategy page without a code change.
+ */
+export interface ScoringOverrides {
+  /** Min final score for TRADE_READY (BUY NOW). Default 70. */
+  tradeReadyMinScore: number;
+  /** Min final score to be tracked at all (below = EXCLUDED). Default 50. */
+  watchlistMinScore: number;
+  /** Max soft failures before EXCLUDED. Default 3. */
+  maxSoftFailures: number;
+  /**
+   * Trigger confirmation mode. true = legacy strict (all 3: trigger sub-score
+   * + relVol + bias-aligned move). false = relaxed (any 2 of 3). Default false.
+   */
+  triggerRequireAll: boolean;
+}
+
+export const DEFAULT_SCORING_OVERRIDES: ScoringOverrides = {
+  tradeReadyMinScore: 70,
+  watchlistMinScore: 50,
+  maxSoftFailures: 3,
+  triggerRequireAll: false,
+};
+
 export interface GateOverrides {
   orbLockEnabled: boolean;
   ivpMaxThreshold: number;     // Gate 6 (default 80)
@@ -95,6 +121,9 @@ export interface StrategyProfile {
 
   // GATE OVERRIDES
   gateOverrides: GateOverrides;
+
+  // SCORING THRESHOLDS (runtime-configurable; replace tradeState.ts constants)
+  scoringOverrides: ScoringOverrides;
 
   // COMMUNITY SIGNAL ENGINE v2
   signalEngineOverrides: SignalEngineOverrides;
@@ -139,6 +168,7 @@ export const DEFAULT_PROFILE: StrategyProfile = {
     preMarketPreviewEnabled: true,
   },
   signalEngineOverrides: { ...DEFAULT_SIGNAL_ENGINE_OVERRIDES },
+  scoringOverrides: { ...DEFAULT_SCORING_OVERRIDES },
   tickerUniverse: "All",
   customTickers: [],
   minOptionsLiquidity: 60,
@@ -271,6 +301,7 @@ export function mergeProfile(base: StrategyProfile, patch: Partial<StrategyProfi
     allowedStructures: { ...base.allowedStructures, ...(patch.allowedStructures ?? {}) },
     gateOverrides: { ...base.gateOverrides, ...(patch.gateOverrides ?? {}) },
     signalEngineOverrides: { ...base.signalEngineOverrides, ...(patch.signalEngineOverrides ?? {}) },
+    scoringOverrides: { ...base.scoringOverrides, ...(patch.scoringOverrides ?? {}) },
     customTickers: patch.customTickers ?? base.customTickers,
   };
 }

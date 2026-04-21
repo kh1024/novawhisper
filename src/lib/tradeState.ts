@@ -48,14 +48,14 @@ export type TradeState =
   | "WATCHLIST_ONLY"
   | "EXCLUDED";
 
-// ── Configurable thresholds (centralized) ───────────────────────────────────
+// ── Configurable thresholds (centralized; runtime-overridable per profile) ──
 export const TRADE_STATE_CONFIG = {
   /** Minimum final score to qualify as TRADE_READY. */
-  TRADE_READY_MIN_SCORE: 75,
+  TRADE_READY_MIN_SCORE: 70,
   /** Minimum final score to qualify as NEAR_LIMIT_CONFIRMED. */
-  NEAR_LIMIT_MIN_SCORE: 68,
+  NEAR_LIMIT_MIN_SCORE: 65,
   /** Minimum final score to be worth watching at all. Below this → EXCLUDED. */
-  WATCHLIST_MIN_SCORE: 55,
+  WATCHLIST_MIN_SCORE: 50,
   /** Trigger sub-score floor (out of 30, from finalRank.readinessBreakdown). */
   TRIGGER_MIN_SUBSCORE: 25,
   /** RelVol floor for trigger confirmation. */
@@ -66,9 +66,19 @@ export const TRADE_STATE_CONFIG = {
   TRADE_READY_MAX_SOFT_FAILS: 0,
   /** Max soft failures allowed at NEAR_LIMIT_CONFIRMED. */
   NEAR_LIMIT_MAX_SOFT_FAILS: 1,
-  /** Max soft failures allowed at WATCHLIST_ONLY. */
-  WATCHLIST_MAX_SOFT_FAILS: 2,
+  /** Max soft failures allowed at WATCHLIST_ONLY (default; overridable). */
+  WATCHLIST_MAX_SOFT_FAILS: 3,
+  /** Default trigger mode — false = relaxed (2-of-3), true = strict (all 3). */
+  TRIGGER_REQUIRE_ALL: false,
 } as const;
+
+/** Per-evaluation override knobs read from the active StrategyProfile. */
+export interface ScoringOverrides {
+  tradeReadyMinScore?: number;
+  watchlistMinScore?: number;
+  maxSoftFailures?: number;
+  triggerRequireAll?: boolean;
+}
 
 // ── Penalty codes that CAP the trade state instead of just deducting points ──
 const STATE_BLOCKING_PENALTIES = new Set([
@@ -98,6 +108,8 @@ export interface TradeStateInput {
   budgetNearLimit?: boolean;
   /** Set when IVP is elevated (75-90) but not extreme. */
   ivpNearLimit?: boolean;
+  /** Runtime threshold overrides from the user's StrategyProfile. */
+  scoringOverrides?: ScoringOverrides;
 }
 
 // ── Output ───────────────────────────────────────────────────────────────────
@@ -115,23 +127,30 @@ export interface TradeStateResult {
   blockerCodes: string[];
 }
 
-// ── Trigger confirmation (BOTH must pass per user spec) ──────────────────────
-function isTriggerConfirmed(row: SetupRow, rank: RankResult | null): boolean {
+// ── Trigger confirmation ─────────────────────────────────────────────────────
+// Default mode (TRIGGER_REQUIRE_ALL=false): relaxed — any 2-of-3 of
+//   { trigger sub-score ≥ 25, relVol ≥ 1.5, bias-aligned move > 0.4% } pass.
+// Strict mode (TRIGGER_REQUIRE_ALL=true): legacy — ALL three required.
+// This loosening lets quiet mid-day tickers with strong setup scores qualify
+// when volume hasn't spiked yet but direction + trigger sub-score still align.
+function isTriggerConfirmed(
+  row: SetupRow,
+  rank: RankResult | null,
+  requireAll: boolean,
+): boolean {
   if (!rank) return false;
-  const trig = rank.readinessBreakdown.trigger;
-  if (trig < TRADE_STATE_CONFIG.TRIGGER_MIN_SUBSCORE) return false;
-
+  const trigOk = rank.readinessBreakdown.trigger >= TRADE_STATE_CONFIG.TRIGGER_MIN_SUBSCORE;
   const relVolOk = (row.relVolume ?? 0) >= TRADE_STATE_CONFIG.TRIGGER_MIN_RELVOL;
   const moveAbs = Math.abs(row.changePct);
-  const moveOk = moveAbs > TRADE_STATE_CONFIG.TRIGGER_MIN_MOVE_PCT;
-
-  // Bias-aligned: bullish bias needs upward move, bearish needs downward.
   const aligned =
     (row.bias === "bullish" && row.changePct > 0) ||
     (row.bias === "bearish" && row.changePct < 0) ||
-    row.bias === "reversal"; // reversal accepts either direction
+    row.bias === "reversal";
+  const moveOk = moveAbs > TRADE_STATE_CONFIG.TRIGGER_MIN_MOVE_PCT && aligned;
 
-  return relVolOk && moveOk && aligned;
+  const conds = [trigOk, relVolOk, moveOk];
+  const passing = conds.filter(Boolean).length;
+  return requireAll ? passing === 3 : passing >= 2;
 }
 
 // ── Generate the human "what we're waiting for" string ───────────────────────
@@ -214,6 +233,13 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   const blockers: string[] = [];
   const blockerCodes: string[] = [];
 
+  // ── Resolve runtime-overridable thresholds (StrategyProfile.scoringOverrides) ─
+  const o = input.scoringOverrides;
+  const tradeReadyMin = o?.tradeReadyMinScore ?? TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE;
+  const watchlistMin  = o?.watchlistMinScore  ?? TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE;
+  const maxSoftFails  = o?.maxSoftFailures    ?? TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS;
+  const requireAllTrig = o?.triggerRequireAll ?? TRADE_STATE_CONFIG.TRIGGER_REQUIRE_ALL;
+
   // ── Hard EXCLUDED conditions (no override possible) ────────────────────────
   // 1. Tier classifier said safety failed or hard-dropped.
   if (!tier) {
@@ -238,11 +264,11 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   }
   // 2. Score below the watch floor → EXCLUDED.
   const score = rank?.finalRank ?? row.setupScore;
-  if (score < TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE) {
+  if (score < watchlistMin) {
     return {
       state: "EXCLUDED",
       blockers: ["below-watch-floor"],
-      reason: `Score ${score} below watch floor (${TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE}).`,
+      reason: `Score ${score} below watch floor (${watchlistMin}).`,
       triggerNeeded: null,
       capped: false,
       blockerCodes: [],
@@ -254,7 +280,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
   if (!quoteValid) blockers.push("quote-invalid");
   if (!quoteFresh) blockers.push("quote-stale");
 
-  const triggerOk = isTriggerConfirmed(row, rank);
+  const triggerOk = isTriggerConfirmed(row, rank, requireAllTrig);
   if (!triggerOk) blockers.push("trigger-not-confirmed");
 
   // State-blocking penalties from finalRank.
@@ -292,7 +318,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
 
   // Soft failure count.
   const softFails = countSoftFailures(input);
-  if (softFails > TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS) {
+  if (softFails > maxSoftFails) {
     return {
       state: "EXCLUDED",
       blockers: [...blockers, "too-many-soft-failures"],
@@ -310,7 +336,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
 
   // ── TRADE_READY check (strict) ─────────────────────────────────────────────
   const couldBeTradeReady =
-    score >= TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE &&
+    score >= tradeReadyMin &&
     !hasExecutionBlocker &&
     !input.budgetNearLimit &&
     !input.ivpNearLimit &&
@@ -360,7 +386,7 @@ export function evaluateExecutionState(input: TradeStateInput): TradeStateResult
     blockers,
     reason: triggerNeeded ?? `Setup worth watching at score ${score}; not yet ready.`,
     triggerNeeded,
-    capped: score >= TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE && hasExecutionBlocker,
+    capped: score >= tradeReadyMin && hasExecutionBlocker,
     blockerCodes,
   };
 }

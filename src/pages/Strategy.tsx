@@ -466,6 +466,66 @@ export default function Strategy() {
                     </div>
                   </Field>
                 </div>
+
+                {/* ── Scoring Thresholds ─────────────────────────────────── */}
+                <div className="pt-4 border-t border-border/40 space-y-3">
+                  <div className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                    Scoring thresholds
+                    <span className="ml-2 text-[10px] normal-case tracking-normal text-muted-foreground/70">
+                      Tune how many picks reach BUY NOW vs WATCHLIST.
+                    </span>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label={`BUY NOW min score · ${profile.scoringOverrides.tradeReadyMinScore}`}
+                      hint="Picks below this score show as WATCHLIST only. Lower = more BUY NOW picks. Default 70.">
+                      <Slider
+                        min={60} max={85} step={1}
+                        value={[profile.scoringOverrides.tradeReadyMinScore]}
+                        onValueChange={([v]) => update({
+                          scoringOverrides: { ...profile.scoringOverrides, tradeReadyMinScore: v },
+                        })}
+                      />
+                    </Field>
+                    <Field
+                      label={`WATCHLIST min score · ${profile.scoringOverrides.watchlistMinScore}`}
+                      hint="Picks below this score are excluded entirely. Lower = more WATCHLIST entries. Default 50.">
+                      <Slider
+                        min={40} max={65} step={1}
+                        value={[profile.scoringOverrides.watchlistMinScore]}
+                        onValueChange={([v]) => update({
+                          scoringOverrides: { ...profile.scoringOverrides, watchlistMinScore: v },
+                        })}
+                      />
+                    </Field>
+                    <Field
+                      label="Trigger mode"
+                      hint="Strict mode requires volume spike + bias-aligned move + trigger sub-score simultaneously. Relaxed accepts any 2 of 3.">
+                      <Segmented
+                        ariaLabel="Trigger mode"
+                        value={profile.scoringOverrides.triggerRequireAll ? "all" : "any2"}
+                        onChange={(v) => update({
+                          scoringOverrides: { ...profile.scoringOverrides, triggerRequireAll: v === "all" },
+                        })}
+                        options={[
+                          { value: "any2", label: "Any 2 of 3", hint: "Relaxed (default)" },
+                          { value: "all",  label: "All 3",      hint: "Strict legacy" },
+                        ]}
+                      />
+                    </Field>
+                    <Field
+                      label={`Soft failure limit · ${profile.scoringOverrides.maxSoftFailures}`}
+                      hint="Picks with more soft failures (wide spread + weak vol etc.) than this are excluded. Default 3.">
+                      <Slider
+                        min={1} max={4} step={1}
+                        value={[profile.scoringOverrides.maxSoftFailures]}
+                        onValueChange={([v]) => update({
+                          scoringOverrides: { ...profile.scoringOverrides, maxSoftFailures: v },
+                        })}
+                      />
+                    </Field>
+                  </div>
+                </div>
               </div>
             )}
           </Card>
