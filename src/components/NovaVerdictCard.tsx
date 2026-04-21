@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
 import { usePreMarketStatus } from "@/lib/preMarketPreview";
+import { getMarketState } from "@/lib/marketHours";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
@@ -73,6 +74,11 @@ export function NovaVerdictCard({
   const c = card.best_contract;
   const preMarket = usePreMarketStatus();
   const isPreview = card.preview_mode === true && preMarket.isPreMarket && preMarket.enabled;
+  // Tag the card with "EOD data" when the regular session isn't open and we're
+  // showing a tradable verdict (BUY / WAIT) — makes it obvious the score is
+  // based on last close, not live tape.
+  const marketState = getMarketState();
+  const showEodLabel = marketState !== "OPEN" && card.action !== "SKIP";
 
   // Last 20 closes for the sparkline (price mode) and a 14-step RSI walk (rsi mode).
   const priceTail = closes && closes.length >= 2 ? closes.slice(-20) : null;
