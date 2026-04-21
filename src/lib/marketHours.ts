@@ -56,3 +56,53 @@ export function getMarketState(now: Date = new Date()): MarketState {
 export function isMarketOpen(now: Date = new Date()): boolean {
   return getMarketState(now) === "OPEN";
 }
+
+/**
+ * Returns a Date representing the next 9:30 AM America/New_York open
+ * (skipping weekends). Returned as an absolute UTC instant suitable for
+ * `getTime()` diffing against `Date.now()`.
+ */
+export function getNextMarketOpen(now: Date = new Date()): Date {
+  // Build a YMD in ET regardless of viewer's local zone.
+  const etParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const get = (t: string) => Number(etParts.find((p) => p.type === t)?.value);
+  let y = get("year"), m = get("month"), d = get("day");
+  const hh = get("hour"), mm = get("minute");
+
+  // If today's 9:30 ET has already passed (or it's the weekend), advance days.
+  let advance = 0;
+  if (hh > 9 || (hh === 9 && mm >= 30)) advance = 1;
+
+  const candidate = new Date(Date.UTC(y, m - 1, d));
+  candidate.setUTCDate(candidate.getUTCDate() + advance);
+
+  // Skip Sat/Sun in ET.
+  for (let guard = 0; guard < 7; guard++) {
+    const dow = new Date(candidate.toLocaleString("en-US", { timeZone: "America/New_York" })).getDay();
+    if (dow !== 0 && dow !== 6) break;
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+
+  // Convert "9:30 ET on candidate's date" to an absolute UTC instant.
+  // Strategy: probe an arbitrary UTC instant on that date, measure ET offset,
+  // and shift accordingly so we land exactly on 09:30 ET.
+  y = candidate.getUTCFullYear();
+  m = candidate.getUTCMonth();
+  d = candidate.getUTCDate();
+  const probe = new Date(Date.UTC(y, m, d, 14, 30, 0)); // 14:30 UTC ≈ 9:30/10:30 ET
+  const etProbe = new Date(probe.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const offsetMin = (probe.getTime() - etProbe.getTime()) / 60_000;
+  return new Date(Date.UTC(y, m, d, 9, 30, 0) + offsetMin * 60_000);
+}
+
+/** Returns the next ET calendar date (YYYY-MM-DD) used for tomorrow's-event lookups. */
+export function getTomorrowET(now: Date = new Date()): Date {
+  const open = getNextMarketOpen(now);
+  // open is already next trading session — its calendar day in ET is "tomorrow".
+  return open;
+}
