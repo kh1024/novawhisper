@@ -557,6 +557,86 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     });
   }, [rows, pipelineQ.data, profile, overrides, cap, bucketFilter]);
 
+  // ── Community Signal Engine v2 — enrich every approved pick with the four
+  //    new advisory signals using LIVE VIX + true 52-week IV Rank. Falls back
+  //    to row.ivRank / VIX=15 when iv_history / VIX feed are still loading.
+  const symbols = useMemo(() => bucketed.approved.map((p) => p.row.symbol), [bucketed.approved]);
+  const { vix } = useVix();
+  const { map: ivRankMap } = useIvRank(symbols);
+  const seo = profile.signalEngineOverrides;
+  const today = useMemo(() => new Date(), [dataUpdatedAt]);
+  const eventDayFlag = isEventDay(today);
+  const eventWarning = getEventWarning(today);
+
+  const enrichedApproved = useMemo(() => {
+    return bucketed.approved.map((p) => {
+      const sym = p.row.symbol.toUpperCase();
+      const trueIvRank = ivRankMap.get(sym);
+      const ivRank = trueIvRank != null ? trueIvRank : (p.row.ivRank ?? 0);
+      const closes = closesBySymbol.get(sym);
+      const yClose = closes && closes.length >= 2 ? closes[closes.length - 2] : null;
+      const livePrice = p.row.price;
+      const gapPct = yClose && yClose > 0 ? (livePrice - yClose) / yClose : 0;
+
+      const optionsSignal = generateOptionsSignal({
+        ticker: sym, ivRank, gapPct, currentTime: today, underlyingPrice: livePrice, vix,
+        spxIvRankMax: seo.spxIvRankMax,
+        spxGapFilterEnabled: seo.spxGapFilterEnabled,
+        vixLowMidBoundary: seo.vixLowMidBoundary,
+        vixMidHighBoundary: seo.vixMidHighBoundary,
+      });
+      const spxPutSpreadSignal = scoreSpxPutSpread({
+        ivRank, gapPct, currentTime: today, underlyingPrice: livePrice,
+        maxIvRankOverride: seo.spxIvRankMax,
+        gapFilterEnabled: seo.spxGapFilterEnabled,
+      });
+      const vixRegime = classifyVixRegime(vix, {
+        lowMidBoundary: seo.vixLowMidBoundary,
+        midHighBoundary: seo.vixMidHighBoundary,
+      });
+      const isIcTicker = sym === "SPY" || sym === "QQQ" || sym === "IWM";
+      const spyIcSignal = isIcTicker ? scoreSPYIronCondor({
+        ticker: sym as "SPY" | "QQQ" | "IWM",
+        currentTime: today, underlyingPrice: livePrice, vix, isEventDay: eventDayFlag,
+        windowEnabled: { 1: seo.icWindow1Enabled, 2: seo.icWindow2Enabled, 3: seo.icWindow3Enabled },
+        vixMidHighBoundary: seo.vixMidHighBoundary,
+      }) : null;
+      const isShortVol: boolean = (["THETA","VIX_REGIME_IC","VIX_REGIME_DIAGONAL","SPX_PUT_SPREAD_1DTE"] as SignalStrategy[])
+        .includes(optionsSignal.strategy);
+      const isLongVol = optionsSignal.strategy === "ORB";
+      const exitMode = selectExitMode({
+        isShortVol, isLongVol,
+        dte: 1, currentPnlPct: 0, isNearTailDay: eventDayFlag,
+        tailDayAvoidanceEnabled: seo.tailDayAvoidanceEnabled,
+      });
+
+      return {
+        ...p,
+        optionsSignal,
+        spxPutSpreadSignal,
+        vixRegime,
+        spyIcSignal,
+        exitMode,
+        isEventDay: eventDayFlag,
+        eventWarning,
+        gapPct,
+      };
+    });
+  }, [bucketed.approved, ivRankMap, vix, closesBySymbol, seo, today, eventDayFlag, eventWarning]);
+
+  // Stable sort: bump picks whose advisory signal is higher-WR (SPX > IC > Theta > ORB).
+  const enrichedSorted = useMemo(() => {
+    return [...enrichedApproved].sort((a, b) => {
+      const ra = STRATEGY_RANK[a.optionsSignal.strategy] ?? 0;
+      const rb = STRATEGY_RANK[b.optionsSignal.strategy] ?? 0;
+      return rb - ra;
+    });
+  }, [enrichedApproved]);
+
+  // Replace bucketed.approved with the enriched + signal-sorted version for
+  // all downstream consumers (filters, counts, watchlist split).
+  const approvedEnriched = enrichedSorted;
+
   // ── NO FORCE-FILL ───────────────────────────────────────────────────────
   // Per the new spec ("zero forced trades"): if there are 0 TRADE_READY
   // candidates, we surface 0 — not pad the list with weak NEAR-LIMIT or
