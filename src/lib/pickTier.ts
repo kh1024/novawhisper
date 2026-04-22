@@ -11,7 +11,10 @@
 // Selector contract: pull CLEAN first, then NEAR-LIMIT, then BEST-OF-WAIT
 // until MIN_BUY_NOW_PER_BUCKET (default 3) is hit per bucket.
 
-export type PickTier = "CLEAN" | "NEAR-LIMIT" | "BEST-OF-WAIT" | "EXCLUDED";
+export type PickTier = "CLEAN" | "NEAR-LIMIT" | "BEST-OF-WAIT" | "OVER_BUDGET_WATCHLIST" | "EXCLUDED";
+
+/** Min raw setup score to qualify a severely-over-budget pick as "Worth Watching". */
+export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 65;
 
 export const MIN_BUY_NOW_PER_BUCKET = 3;
 /** Soft budget band — picks within ±50% of cap incur only a small penalty. */
@@ -44,6 +47,11 @@ export interface TierResult {
   caveat: string | null;
   /** True when contractCost > 10× cap — caller should hard-drop. */
   hardDrop: boolean;
+  /** True when raw score >= OVER_BUDGET_WATCHLIST_MIN_SCORE AND contract is
+   *  severely over budget (>50% of cap). The Scanner pipeline uses this
+   *  flag to surface the pick in the "Strong Setups — Over Budget" section
+   *  even though it's also routed to budgetBlocked for back-compat. */
+  overBudgetWorthWatching: boolean;
 }
 
 export function classifyPickTier(i: TierInputs): TierResult {
@@ -54,6 +62,12 @@ export function classifyPickTier(i: TierInputs): TierResult {
   // Within band → 0.  Outside band → up to -15.  >10× cap → hard drop.
   const ratio = i.contractCost / cap;
   let budgetNearLimit = false;
+  // Severe-but-not-hard-drop overshoot (>50% over cap, ≤20× cap) AND a
+  // strong raw setup score → flag as "worth watching" so the Scanner can
+  // surface this in its dedicated section even though it's still over budget.
+  const severeOverBudget = ratio > 1 + BUDGET_SOFT_BAND_PCT && ratio <= BUDGET_HARD_DROP_MULT;
+  const overBudgetWorthWatching = severeOverBudget && i.score >= OVER_BUDGET_WATCHLIST_MIN_SCORE && i.safetyPass;
+
   if (ratio > BUDGET_HARD_DROP_MULT) {
     return {
       tier: "EXCLUDED",
@@ -62,6 +76,7 @@ export function classifyPickTier(i: TierInputs): TierResult {
         reason: `Cost $${i.contractCost.toFixed(0)} > ${BUDGET_HARD_DROP_MULT}× cap $${cap}` }],
       caveat: "Cost > 10× per-trade cap",
       hardDrop: true,
+      overBudgetWorthWatching: false,
     };
   }
   if (ratio > 1 + BUDGET_SOFT_BAND_PCT) {
@@ -92,11 +107,11 @@ export function classifyPickTier(i: TierInputs): TierResult {
 
   // ── Tier decision ────────────────────────────────────────────────────────
   if (!i.safetyPass) {
-    return { tier: "EXCLUDED", adjustedScore, penalties, caveat: "Failed safety gate", hardDrop: false };
+    return { tier: "EXCLUDED", adjustedScore, penalties, caveat: "Failed safety gate", hardDrop: false, overBudgetWorthWatching: false };
   }
 
   if (adjustedScore >= 60 && !budgetNearLimit && !ivpNearLimit && i.nonSafetyRuleFailures === 0) {
-    return { tier: "CLEAN", adjustedScore, penalties, caveat: null, hardDrop: false };
+    return { tier: "CLEAN", adjustedScore, penalties, caveat: null, hardDrop: false, overBudgetWorthWatching };
   }
 
   if (adjustedScore >= 50 && (budgetNearLimit || ivpNearLimit || i.nonSafetyRuleFailures <= 1)) {
@@ -105,33 +120,40 @@ export function classifyPickTier(i: TierInputs): TierResult {
     if (ivpNearLimit) reasons.push("IV elevated");
     if (i.nonSafetyRuleFailures > 0) reasons.push("1 soft rule relaxed");
     return { tier: "NEAR-LIMIT", adjustedScore, penalties,
-      caveat: reasons.join(" · ") || "near limits", hardDrop: false };
+      caveat: reasons.join(" · ") || "near limits", hardDrop: false, overBudgetWorthWatching };
   }
 
   if (adjustedScore >= 45 && i.nonSafetyRuleFailures <= 1) {
     return { tier: "BEST-OF-WAIT", adjustedScore, penalties,
-      caveat: "Best of WAIT — 1 rule relaxed", hardDrop: false };
+      caveat: "Best of WAIT — 1 rule relaxed", hardDrop: false, overBudgetWorthWatching };
   }
 
   return { tier: "EXCLUDED", adjustedScore, penalties,
-    caveat: `score ${adjustedScore} too low or >1 rule failing`, hardDrop: false };
+    caveat: `score ${adjustedScore} too low or >1 rule failing`, hardDrop: false, overBudgetWorthWatching };
 }
 
 export const TIER_LABEL: Record<PickTier, string> = {
-  "CLEAN":        "✅ Clean Pass",
-  "NEAR-LIMIT":   "⚠️ Near limits — reduce size",
-  "BEST-OF-WAIT": "🟡 Best of WAIT — 1 rule relaxed",
-  "EXCLUDED":     "⛔ Excluded",
+  "CLEAN":                 "✅ Clean Pass",
+  "NEAR-LIMIT":            "⚠️ Near limits — reduce size",
+  "BEST-OF-WAIT":          "🟡 Best of WAIT — 1 rule relaxed",
+  "OVER_BUDGET_WATCHLIST": "💰 Worth watching — over budget",
+  "EXCLUDED":              "⛔ Excluded",
 };
 
 export const TIER_CLASSES: Record<PickTier, string> = {
-  "CLEAN":        "border-bullish/40 bg-bullish/10 text-bullish",
-  "NEAR-LIMIT":   "border-warning/40 bg-warning/10 text-warning",
-  "BEST-OF-WAIT": "border-primary/40 bg-primary/10 text-primary",
-  "EXCLUDED":     "border-bearish/40 bg-bearish/10 text-bearish",
+  "CLEAN":                 "border-bullish/40 bg-bullish/10 text-bullish",
+  "NEAR-LIMIT":            "border-warning/40 bg-warning/10 text-warning",
+  "BEST-OF-WAIT":          "border-primary/40 bg-primary/10 text-primary",
+  "OVER_BUDGET_WATCHLIST": "border-orange-600/40 bg-orange-600/10 text-orange-300",
+  "EXCLUDED":              "border-bearish/40 bg-bearish/10 text-bearish",
 };
 
-/** Numeric rank for ordering: CLEAN > NEAR-LIMIT > BEST-OF-WAIT > EXCLUDED. */
+/** Numeric rank for ordering: CLEAN > NEAR-LIMIT > BEST-OF-WAIT > OVER_BUDGET_WATCHLIST > EXCLUDED. */
 export function tierRank(t: PickTier): number {
-  return t === "CLEAN" ? 3 : t === "NEAR-LIMIT" ? 2 : t === "BEST-OF-WAIT" ? 1 : 0;
+  if (t === "CLEAN") return 4;
+  if (t === "NEAR-LIMIT") return 3;
+  if (t === "BEST-OF-WAIT") return 2;
+  if (t === "OVER_BUDGET_WATCHLIST") return 1;
+  return 0;
 }
+

@@ -154,6 +154,8 @@ export interface PipelineCounts {
   gatePassing: number;       // approved before bucket-narrowing
   gateBlocked: number;
   budgetBlocked: number;
+  /** Strong-score picks routed to the over-budget watchlist (subset of budgetBlocked). */
+  overBudgetWatchlist: number;
   shown: number;             // after bucket-narrowing + maxResults
   filterChip: string | null;
   // ── Funnel metrics (debug panel) ──
@@ -178,6 +180,11 @@ export interface ScannerPicksResult {
   watchlistOnly: ApprovedPick[];
   /** Top WATCHLIST_ONLY picks shown when there are 0 trade-ready (max 3). */
   bestPending: ApprovedPick[];
+  /** Strong-score picks (raw score ≥ OVER_BUDGET_WATCHLIST_MIN_SCORE) that
+   *  are severely over the per-trade budget. UI surfaces these in a
+   *  dedicated "Strong Setups — Over Budget" section. They also live in
+   *  budgetBlocked for back-compat with the existing budget collapsible. */
+  overBudgetWatchlist: ApprovedPick[];
   budgetBlocked: BlockedPick[];
   safetyBlocked: BlockedPick[];
   counts: PipelineCounts;
@@ -232,33 +239,28 @@ export function bucketPicks(args: {
 }): {
   approved: ApprovedPick[];
   budgetBlocked: BlockedPick[];
+  /** Strong-score picks (raw setupScore ≥ OVER_BUDGET_WATCHLIST_MIN_SCORE)
+   *  that are also severely over budget. Surfaced in a dedicated UI section
+   *  so the user can see *what they're missing because of the cap*. These
+   *  picks ALSO appear in `budgetBlocked` for back-compat with the existing
+   *  budget-blocked collapsible / consistency tests. */
+  overBudgetWatchlist: ApprovedPick[];
   safetyBlocked: BlockedPick[];
   profileFilteredCount: number;
   universeFilteredCount: number;
 } {
   const approved: ApprovedPick[] = [];
   const budgetBlocked: BlockedPick[] = [];
+  const overBudgetWatchlist: ApprovedPick[] = [];
   const safetyBlocked: BlockedPick[] = [];
   let profileFilteredCount = 0;
   let universeFilteredCount = 0;
   const preMarket = isPreMarketWindow();
   const currentMarketState = getMarketState();
 
-  const debugSym = "SPY";
   for (const r of args.rows) {
-    const isDebug = r.symbol.toUpperCase() === debugSym;
-    if (isDebug) {
-      console.log(`[SPY DEBUG] row found:`, {
-        symbol: r.symbol, price: r.price, bias: r.bias,
-        setupScore: r.setupScore, ivRank: r.ivRank, atrPct: r.atrPct,
-        rsi: r.rsi, optionsLiquidity: r.optionsLiquidity,
-        earningsInDays: r.earningsInDays, riskBadge: r.crl?.riskBadge,
-        crlVerdict: r.crl?.verdict,
-      });
-    }
     if (args.overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
       universeFilteredCount++;
-      if (isDebug) console.log(`[SPY DEBUG] DROPPED: conservativeCheapOnly filter`);
       continue;
     }
     const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
@@ -269,15 +271,10 @@ export function bucketPicks(args: {
       earningsInDays: r.earningsInDays,
       ivRank: r.ivRank,
     });
-    if (isDebug) console.log(`[SPY DEBUG] bucket=${rowB}, bucketFilter=${args.bucketFilter}, optionType=${optionType}, dte=${dte}, expiry=${expiry}`);
-    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) {
-      if (isDebug) console.log(`[SPY DEBUG] DROPPED: bucket mismatch`);
-      continue;
-    }
+    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) continue;
 
     if (!isStructureAllowed(args.profile, optionType, dte)) {
       profileFilteredCount++;
-      if (isDebug) console.log(`[SPY DEBUG] DROPPED: structure not allowed`);
       continue;
     }
 
@@ -289,17 +286,12 @@ export function bucketPicks(args: {
       dte,
       includeOTM: rowB === "Lottery",
     });
-    if (isDebug) console.log(`[SPY DEBUG] ladder (cap=$${args.cap}):`, ladder.map(l => ({ rung: l.rung, strike: l.strike, premium: +l.premium.toFixed(2), cost: l.contractCost, suspect: l.suspect })));
     const fitPick = pickBestRung(ladder, args.cap);
     const pick = fitPick
       ?? (ladder.length > 0
         ? { candidate: ladder[0], cheapest: ladder[ladder.length - 1], fitsCap: false } as const
         : null);
-    if (!pick) {
-      if (isDebug) console.log(`[SPY DEBUG] DROPPED: no ladder candidates`);
-      continue;
-    }
-    if (isDebug) console.log(`[SPY DEBUG] picked rung=${pick.candidate.rung}, strike=${pick.candidate.strike}, cost=$${pick.candidate.contractCost}, fitsCap=${pick.fitsCap}`);
+    if (!pick) continue;
 
     const contract: PickContract = {
       symbol: r.symbol,
@@ -310,7 +302,6 @@ export function bucketPicks(args: {
     const key = contractKey(contract);
     const v = args.verdictByRow.get(r.symbol);
     const isSafetyBlocked = v?.verdict === "Avoid" || (v?.reason ?? "").toLowerCase().includes("block");
-    if (isDebug) console.log(`[SPY DEBUG] verdict:`, { verdict: v?.verdict, reason: v?.reason, isSafetyBlocked });
 
     if (isSafetyBlocked) {
       safetyBlocked.push({
@@ -333,7 +324,6 @@ export function bucketPicks(args: {
       finalRank: rankResult?.finalRank ?? null,
     });
     const tradeStage = tradeStageFromStatus(tradeStatus, preMarket, true);
-    if (isDebug) console.log(`[SPY DEBUG] tradeStatus:`, { blockers: tradeStatus.blockers, finalRank: rankResult?.finalRank, label: rankResult?.label, tradeStage });
 
     // ── Tier classification (soft budget + score-based fail-soft) ─────────
     const nonSafetyRuleFailures = tradeStatus.blockers.filter(
@@ -347,13 +337,14 @@ export function bucketPicks(args: {
       nonSafetyRuleFailures,
       ivRank: r.ivRank,
     });
-    if (isDebug) console.log(`[SPY DEBUG] tier:`, { tier: tier.tier, hardDrop: tier.hardDrop, adjustedScore: tier.adjustedScore, caveat: tier.caveat, penalties: tier.penalties });
 
     const severeBudgetMiss = !pick.fitsCap && pick.candidate.contractCost > args.cap * 1.5;
-    if (isDebug) console.log(`[SPY DEBUG] budget check:`, { contractCost: pick.candidate.contractCost, cap: args.cap, fitsCap: pick.fitsCap, severeBudgetMiss, hardDrop: tier.hardDrop });
 
-    // Hard drop: cost > 20× cap OR materially over budget (>50% above cap)
-    // should be surfaced as budget-blocked, not left in the visible approved set.
+    // Hard drop OR materially over budget (>50% above cap) → surface as
+    // budget-blocked. When tier flags overBudgetWorthWatching (raw score
+    // ≥ OVER_BUDGET_WATCHLIST_MIN_SCORE and not hard-dropped), ALSO push
+    // the pick to the dedicated overBudgetWatchlist array so the Scanner
+    // can render its "Strong Setups — Over Budget" section.
     if (tier.hardDrop || severeBudgetMiss) {
       const blockedCost = pick.candidate.contractCost;
       const overBy = blockedCost - args.cap;
@@ -375,6 +366,44 @@ export function bucketPicks(args: {
         cheaperAlternative: null,
         dropReasons: [tier.hardDrop ? "budget_hard_drop_20x" : "budget_over_50pct"],
       });
+
+      if (tier.overBudgetWorthWatching && !tier.hardDrop) {
+        // Surface a parallel ApprovedPick-shaped record so the Scanner's
+        // "Strong Setups — Over Budget" section can render the same card
+        // layout. Trade-state is forced to WATCHLIST_ONLY since the pick
+        // can't be entered with the current cap.
+        const quoteValid = Number.isFinite(pick.candidate.premium) && pick.candidate.premium > 0;
+        const quoteFresh = currentMarketState === "OPEN" ? !pick.candidate.suspect : true;
+        const tradeStateResult = evaluateExecutionState({
+          row: r, rank: rankResult, tradeStatus, tier,
+          quoteValid, quoteFresh, preMarket,
+          allowsEarnings: false, allowsDeepItm: false,
+          budgetNearLimit: false, ivpNearLimit: (r.ivRank ?? 0) > 75 && (r.ivRank ?? 0) <= 90,
+          scoringOverrides: args.profile.scoringOverrides,
+        });
+        const cta = resolveCta(tradeStateResult.state, tradeStateResult);
+        overBudgetWatchlist.push({
+          key, row: r, rank: rankResult, verdict: v ?? null, contract,
+          estCost: pick.candidate.contractCost,
+          premium: pick.candidate.premium,
+          rung: pick.candidate.rung,
+          suspect: pick.candidate.suspect, preMarket, bucket: rowB,
+          tradeStatus, tradeStage,
+          pickTier: "OVER_BUDGET_WATCHLIST",
+          adjustedScore: tier.adjustedScore,
+          tierCaveat: tier.caveat,
+          tierPenalties: tier.penalties,
+          tradeState: "WATCHLIST_ONLY",
+          tradeStateResult, cta,
+          optionsSignal: { strategy: "NONE", score: 0, confidence: 0, signal: null, rationale: "Pending live signal computation" },
+          spxPutSpreadSignal: { eligible: false, score: 0, spread: null, hardBlocked: false, blockReason: null, rationale: "Pending" },
+          vixRegime: { zone: "MID", strategy: "IRON_CONDOR", deltaTarget: 0.20, legDescription: "", rationale: "Pending live VIX" },
+          spyIcSignal: null,
+          exitMode: { mode: "PROFIT_TARGET", profitTargetPct: 0.50, stopLossPct: 1.00, rationale: "Pending" },
+          isEventDay: false, eventWarning: null, gapPct: 0,
+          currentVix: 15, ivRankUsed: r.ivRank ?? 0, ivRankIsReal: false,
+        });
+      }
       continue;
     }
 
@@ -409,7 +438,6 @@ export function bucketPicks(args: {
       scoringOverrides: args.profile.scoringOverrides,
     });
     const cta = resolveCta(tradeStateResult.state, tradeStateResult);
-    if (isDebug) console.log(`[SPY DEBUG] FINAL ✅ APPROVED:`, { tradeState: tradeStateResult.state, blockers: tradeStateResult.blockers, cta, strike: pick.candidate.strike, cost: pick.candidate.contractCost });
 
     approved.push({
       key,
@@ -460,7 +488,7 @@ export function bucketPicks(args: {
     return b.row.setupScore - a.row.setupScore;
   });
 
-  return { approved, budgetBlocked, safetyBlocked, profileFilteredCount, universeFilteredCount };
+  return { approved, budgetBlocked, overBudgetWatchlist, safetyBlocked, profileFilteredCount, universeFilteredCount };
 }
 
 /**
@@ -736,6 +764,7 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     approved: approvedFinal,
     watchlistOnly,
     bestPending,
+    overBudgetWatchlist: bucketed.overBudgetWatchlist,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
     safetyBlocked: opts.includeSafetyBlocked === false ? [] : bucketed.safetyBlocked,
     counts: {
@@ -743,6 +772,7 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
       gatePassing: approvedEnriched.length + bucketed.budgetBlocked.length,
       gateBlocked: bucketed.safetyBlocked.length,
       budgetBlocked: bucketed.budgetBlocked.length,
+      overBudgetWatchlist: bucketed.overBudgetWatchlist.length,
       shown: approvedFinal.length,
       filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
       safetyPassingCount,
