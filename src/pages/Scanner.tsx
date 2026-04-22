@@ -1,18 +1,16 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useActiveBucket, rowBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
+import { useActiveBucket, rowBucket } from "@/lib/scannerBucket";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Search, LayoutGrid, Table2, SlidersHorizontal, RefreshCw, Loader2,
+  Search, LayoutGrid, Table2, RefreshCw, Loader2,
   TrendingUp, TrendingDown, Minus, AlertTriangle, ShieldAlert, Activity,
   Gauge, Zap, Clock, Newspaper, Scale, RotateCcw, CandlestickChart, ExternalLink,
   ArrowUp, ArrowDown, ArrowUpDown,
@@ -22,7 +20,7 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
 import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
 import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
-import { smartActionLabel } from "@/lib/actionCopy";
+
 import { useSnapshotUploader } from "@/lib/useSnapshotUploader";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
@@ -41,7 +39,7 @@ import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { useEarnings } from "@/lib/earnings";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
-import { NovaFilterBar } from "@/components/NovaFilterBar";
+
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
 import { ScannerToolbar } from "@/components/ScannerToolbar";
@@ -69,7 +67,7 @@ import { isConservativeCheapTicker } from "@/lib/bucketing";
 import { BudgetMismatchCard } from "@/components/BudgetMismatchCard";
 import { TomorrowsGamePlan } from "@/components/TomorrowsGamePlan";
 import { buildStrikeLadder, pickBestRung } from "@/lib/strikeLadder";
-import { findCheapestAlternative } from "@/lib/useScannerPicks";
+
 import { Sparkles } from "lucide-react";
 import { getOrbStatus } from "@/lib/orb";
 import { useScannerPicks } from "@/lib/useScannerPicks";
@@ -686,6 +684,7 @@ export default function Scanner() {
             gatePassing: approvedRows.length + budgetBlocked.length,
             gateBlocked: safetyBlocked.length,
             budgetBlocked: budgetBlocked.length,
+            overBudgetWatchlist: overBudgetPicks.length,
             shown: stable.length,
             filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
           };
@@ -1156,9 +1155,9 @@ export default function Scanner() {
 
         {/* 💰 Strong Setups — Over Budget */}
         {overBudgetPicks.length > 0 && (
-          <Card className="glass-card p-4 border-orange-600/40 bg-orange-600/5 space-y-3">
+          <Card className="glass-card p-4 border-warning/40 bg-warning/5 space-y-3">
             <div>
-              <h3 className="text-base font-semibold text-orange-400">💰 Strong Setups — Over Budget</h3>
+              <h3 className="text-base font-semibold text-warning">💰 Strong Setups — Over Budget</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 High-scoring picks outside your current per-trade cap (${cpScan.cap.toLocaleString()}). Track or raise your cap in Strategy.
               </p>
@@ -1182,7 +1181,7 @@ export default function Scanner() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
-                      <Badge variant="outline" className="bg-orange-600/20 text-orange-300 border-orange-600/40 font-mono">
+                      <Badge variant="outline" className="bg-warning/20 text-warning border-warning/40 font-mono">
                         Needs ~${needs.toLocaleString()}+ to enter
                       </Badge>
                       <span className="text-muted-foreground">Score <span className="font-semibold text-foreground">{Math.round(score)}</span></span>
