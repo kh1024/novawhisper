@@ -157,14 +157,3 @@ export function tierRank(t: PickTier): number {
   return 0;
 }
 
-export const TIER_CLASSES: Record<PickTier, string> = {
-  "CLEAN":        "border-bullish/40 bg-bullish/10 text-bullish",
-  "NEAR-LIMIT":   "border-warning/40 bg-warning/10 text-warning",
-  "BEST-OF-WAIT": "border-primary/40 bg-primary/10 text-primary",
-  "EXCLUDED":     "border-bearish/40 bg-bearish/10 text-bearish",
-};
-
-/** Numeric rank for ordering: CLEAN > NEAR-LIMIT > BEST-OF-WAIT > EXCLUDED. */
-export function tierRank(t: PickTier): number {
-  return t === "CLEAN" ? 3 : t === "NEAR-LIMIT" ? 2 : t === "BEST-OF-WAIT" ? 1 : 0;
-}
