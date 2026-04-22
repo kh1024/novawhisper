@@ -1,18 +1,16 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useActiveBucket, rowBucket, bucketEmoji, type ActiveBucket } from "@/lib/scannerBucket";
+import { useActiveBucket, rowBucket } from "@/lib/scannerBucket";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
-  Search, LayoutGrid, Table2, SlidersHorizontal, RefreshCw, Loader2,
+  Search, LayoutGrid, Table2, RefreshCw, Loader2,
   TrendingUp, TrendingDown, Minus, AlertTriangle, ShieldAlert, Activity,
   Gauge, Zap, Clock, Newspaper, Scale, RotateCcw, CandlestickChart, ExternalLink,
   ArrowUp, ArrowDown, ArrowUpDown,
@@ -22,7 +20,7 @@ import { TICKER_UNIVERSE } from "@/lib/mockData";
 import { computeSetups, type SetupRow, type Bias, type Readiness } from "@/lib/setupScore";
 import { selectStrategy, type StrategyDecision } from "@/lib/strategySelector";
 import { rankSetup, labelClasses, type RankResult, type ActionLabel } from "@/lib/finalRank";
-import { smartActionLabel } from "@/lib/actionCopy";
+
 import { useSnapshotUploader } from "@/lib/useSnapshotUploader";
 import { StrategyPlaybookCard } from "@/components/StrategyPlaybookCard";
 import { ResearchDrawer } from "@/components/ResearchDrawer";
@@ -41,7 +39,7 @@ import { evaluateGuards } from "@/lib/novaGuards";
 import { useSma200 } from "@/lib/sma200";
 import { useEarnings } from "@/lib/earnings";
 import { NovaGuardBadges } from "@/components/NovaGuardBadges";
-import { NovaFilterBar } from "@/components/NovaFilterBar";
+
 import { useNovaFilter, pickMatchesFilter } from "@/lib/novaFilter";
 import { usePortfolio } from "@/lib/portfolio";
 import { ScannerToolbar } from "@/components/ScannerToolbar";
@@ -69,7 +67,7 @@ import { isConservativeCheapTicker } from "@/lib/bucketing";
 import { BudgetMismatchCard } from "@/components/BudgetMismatchCard";
 import { TomorrowsGamePlan } from "@/components/TomorrowsGamePlan";
 import { buildStrikeLadder, pickBestRung } from "@/lib/strikeLadder";
-import { findCheapestAlternative } from "@/lib/useScannerPicks";
+
 import { Sparkles } from "lucide-react";
 import { getOrbStatus } from "@/lib/orb";
 import { useScannerPicks } from "@/lib/useScannerPicks";
