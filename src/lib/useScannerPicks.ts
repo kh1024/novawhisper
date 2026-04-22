@@ -764,7 +764,155 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
 
   // Replace bucketed.approved with the enriched + signal-sorted version for
   // all downstream consumers (filters, counts, watchlist split).
-  const approvedEnriched = enrichedSorted;
+  const approvedEnrichedRaw = enrichedSorted;
+
+  // ── NovaWhisper Quote Integrity enrichment ───────────────────────────────
+  // Async stage: fetch live bid/ask from Massive (with Polygon fallback) for
+  // every candidate, score the quote, then apply penalties + session caps and
+  // (best-effort) write a quote_audit_log row per pick.
+  const integrityCacheKey = useMemo(() => [
+    "scanner-quote-integrity",
+    approvedEnrichedRaw.map((p) => p.key).join(","),
+    cap,
+  ] as const, [approvedEnrichedRaw, cap]);
+
+  const integrityQ = useQuery({
+    queryKey: integrityCacheKey,
+    enabled: approvedEnrichedRaw.length > 0,
+    staleTime: 15_000,
+    gcTime: 60_000,
+    queryFn: async () => {
+      const sessionMode = getSessionMode();
+      const scanRunId = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      const reports = await Promise.all(approvedEnrichedRaw.map(async (p) => {
+        try {
+          const occ = buildOccSymbol(p.contract);
+          const report = await runQuoteIntegrity({
+            symbol: p.contract.symbol,
+            contractSymbol: occ,
+            snapshotUnderlyingPrice: p.row.price,
+            userBudgetCap: cap,
+          });
+          return { key: p.key, report, occ };
+        } catch {
+          return { key: p.key, report: null as QuoteIntegrityReport | null, occ: "" };
+        }
+      }));
+
+      // Best-effort audit-log write — do not block scanner output if it fails.
+      void (async () => {
+        try {
+          const rows = reports.flatMap(({ key, report, occ }) => {
+            if (!report) return [];
+            const pick = approvedEnrichedRaw.find((x) => x.key === key);
+            if (!pick) return [];
+            const oq = report.optionQuote;
+            const uq = report.underlyingQuote;
+            const setupScore = pick.row.setupScore;
+            const adjusted = computeAdjustedScore(setupScore, report);
+            return [{
+              scan_run_id: scanRunId,
+              symbol: pick.contract.symbol,
+              contract_symbol: occ,
+              snapshot_underlying_price: pick.row.price,
+              snapshot_score: setupScore,
+              live_underlying_price: uq.lastPrice,
+              live_underlying_source: uq.source,
+              live_underlying_age_sec: uq.quoteAgeSeconds,
+              live_underlying_status: uq.status,
+              option_bid: oq.bid,
+              option_ask: oq.ask,
+              option_mid: oq.mid,
+              option_last: oq.last,
+              option_spread_pct: oq.spreadPct,
+              option_iv: oq.iv,
+              option_delta: oq.delta,
+              option_volume: Math.round(oq.volume),
+              option_open_interest: Math.round(oq.openInterest),
+              option_source: oq.source,
+              option_age_sec: oq.quoteAgeSeconds,
+              option_status: oq.status,
+              quote_confidence_score: oq.quoteConfidenceScore,
+              quote_confidence_label: oq.quoteConfidenceLabel,
+              liquidity_score: oq.liquidityScore,
+              provider_conflict_pct: report.providerConflict.disagreementPct,
+              underlying_move_pct: report.underlyingMovePct,
+              required_recalc: report.requiresRecalc,
+              score_before_penalty: setupScore,
+              quote_penalty_applied: setupScore - adjusted,
+              adjusted_score: adjusted,
+              tier_assigned: pick.tradeState,
+              block_reasons: report.blockReasons,
+              warn_reasons: report.warnReasons,
+              human_summary: report.humanSummary,
+              user_budget_cap: cap,
+              estimated_fill_cost: oq.ask * 100,
+              budget_fit_label: budgetFitLabel(oq.ask * 100, cap, report),
+            }];
+          });
+          if (rows.length > 0) {
+            await supabase.from("quote_audit_log").insert(rows);
+          }
+        } catch {
+          /* audit log is best-effort; never break the scanner */
+        }
+      })();
+
+      return { sessionMode, byKey: new Map(reports.map((r) => [r.key, r.report])) };
+    },
+  });
+
+  const approvedEnriched = useMemo(() => {
+    const sessionMode = integrityQ.data?.sessionMode ?? getSessionMode();
+    const byKey = integrityQ.data?.byKey ?? new Map<string, QuoteIntegrityReport | null>();
+    return approvedEnrichedRaw.map((p) => {
+      const report = byKey.get(p.key) ?? undefined;
+      const oq = report?.optionQuote;
+      const fillCost = oq ? oq.ask * 100 : undefined;
+      const fit = report ? budgetFitLabel(fillCost ?? 0, cap, report) : undefined;
+      const exec = oq
+        ? (oq.spreadPct > QUOTE_THRESHOLDS.SPREAD_SOFT_FAIL_PCT ? "HIGH"
+        :  oq.spreadPct > QUOTE_THRESHOLDS.SPREAD_OK_PCT ? "MEDIUM"
+        :  "LOW") as "LOW" | "MEDIUM" | "HIGH"
+        : undefined;
+
+      // Session enforcement — outside the regular session, never BUY NOW.
+      let nextTradeState = p.tradeState;
+      let sessionNote: string | undefined;
+      if (!buyNowAllowed(sessionMode) && nextTradeState === "TRADE_READY") {
+        nextTradeState = "WATCHLIST_ONLY";
+      }
+      if (sessionMode === "AFTER_HOURS") {
+        sessionNote = "After-hours quote conditions may be unreliable. Showing as watchlist.";
+      } else if (sessionMode === "PRE_MARKET") {
+        sessionNote = "Pre-market: setup valid, waiting for regular session to confirm live quote.";
+      } else if (sessionMode === "CLOSED") {
+        sessionNote = "Market closed. Showing next-session plan — no live entry signals.";
+      }
+
+      // Quote-quality guardrails — hard blocks bump the pick to WATCHLIST too.
+      if (report && report.blockReasons.length > 0 && nextTradeState === "TRADE_READY") {
+        nextTradeState = "WATCHLIST_ONLY";
+      }
+
+      return {
+        ...p,
+        tradeState: nextTradeState,
+        quoteReport: report,
+        estimatedFillCost: fillCost,
+        budgetFitLabel: fit,
+        executionRiskLabel: exec,
+        quoteConfidenceScore: oq?.quoteConfidenceScore,
+        quoteConfidenceLabel: oq?.quoteConfidenceLabel,
+        humanQuoteSummary: report?.humanSummary,
+        sessionNote,
+      };
+    });
+  }, [approvedEnrichedRaw, integrityQ.data, cap]);
+
 
   // ── NO FORCE-FILL ───────────────────────────────────────────────────────
   // Per the new spec ("zero forced trades"): if there are 0 TRADE_READY
