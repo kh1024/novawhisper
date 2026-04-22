@@ -1,9 +1,10 @@
 // Tomorrow's Game Plan — appears on /scanner whenever the regular session is
-// not OPEN. Shows the top 10 picks from today's closing data with a
-// "what it needs" checklist, a live countdown to the next 9:30 AM ET open,
-// and a watchlist quick-add. Display-only — does not affect verdicts.
+// not OPEN. Shows the top picks from today's closing data split into Call /
+// Put candidates, merges in any saved watchlist items so users see their own
+// tickers alongside scanner output, surfaces an ORB-day banner on Mon/Wed/Fri,
+// and prints the standing exit rules. Display-only — does not affect verdicts.
 import { useEffect, useMemo, useState } from "react";
-import { Moon, Clock, AlertTriangle, ChevronDown, ChevronUp, Bell, TrendingUp, TrendingDown } from "lucide-react";
+import { Moon, Clock, AlertTriangle, ChevronDown, ChevronUp, Bell, TrendingUp, TrendingDown, Star, Target } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { getMarketState, getNextMarketOpen, getTomorrowET } from "@/lib/marketHo
 import { getEventWarning } from "@/lib/signals/eventCalendar";
 import { isTomorrowOrbDay } from "@/lib/orb";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
+import { useWatchlist, type WatchlistItem } from "@/lib/watchlist";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getGamePlanPicks } from "@/lib/gamePlan";
@@ -108,42 +110,102 @@ function AlertForm({ symbol, defaultPrice, onClose }: { symbol: string; defaultP
   );
 }
 
-function GamePlanCard({ pick }: { pick: ApprovedPick }) {
+/** Unified row used by the plan — works for scanner picks AND watchlist entries. */
+interface PlanRow {
+  key: string;
+  symbol: string;
+  price: number;
+  score: number | null;
+  optionType: "call" | "put";
+  strike: number;
+  expiry: string;
+  bias: "bullish" | "bearish" | "neutral";
+  source: "scanner" | "watchlist";
+  // Scanner-only extras
+  pick?: ApprovedPick;
+  // Watchlist-only extras
+  watchlist?: WatchlistItem;
+}
+
+function fromScanner(pick: ApprovedPick): PlanRow {
+  const bias = pick.row.bias === "bearish" ? "bearish" : pick.row.bias === "bullish" ? "bullish" : "neutral";
+  return {
+    key: `scan:${pick.key}`,
+    symbol: pick.row.symbol,
+    price: pick.row.price,
+    score: pick.rank?.finalRank ?? pick.row.setupScore,
+    optionType: pick.contract.optionType,
+    strike: pick.contract.strike,
+    expiry: pick.contract.expiry,
+    bias,
+    source: "scanner",
+    pick,
+  };
+}
+
+function fromWatchlist(w: WatchlistItem): PlanRow | null {
+  const ot = w.option_type === "put" ? "put" : w.option_type === "call" ? "call" : null;
+  if (!ot) return null;
+  const strike = w.strike != null ? Number(w.strike) : null;
+  const price = w.entry_price != null ? Number(w.entry_price) : null;
+  if (strike == null || price == null) return null;
+  const bias = w.bias === "bearish" ? "bearish" : w.bias === "bullish" ? "bullish" : ot === "put" ? "bearish" : "bullish";
+  return {
+    key: `watch:${w.id}`,
+    symbol: w.symbol,
+    price,
+    score: null,
+    optionType: ot,
+    strike,
+    expiry: w.expiry ?? new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+    bias,
+    source: "watchlist",
+    watchlist: w,
+  };
+}
+
+function GamePlanCard({ row }: { row: PlanRow }) {
   const [showAlert, setShowAlert] = useState(false);
-  const r = pick.row;
-  const score = pick.rank?.finalRank ?? r.setupScore;
-  const isBullish = r.bias !== "bearish";
-  const horizon =
-    pick.bucket === "Lottery" ? "DAY" :
-    pick.bucket === "Aggressive" ? "SWING" :
-    pick.bucket === "Conservative" ? "POSITION" : "SWING";
+  const isBullish = row.bias !== "bearish";
+  const score = row.score;
+  const dte = Math.max(1, Math.round((new Date(row.expiry).getTime() - Date.now()) / 86_400_000));
+  const lo = (row.price * 0.997).toFixed(2);
+  const hi = (row.price * 1.003).toFixed(2);
+  const entryMid = row.price;
 
-  const gatesPassed = pick.verdict?.verdict !== "Avoid";
-  const scoreOk = score >= 63;
-  const earningsRisk = (r.earningsInDays ?? 99) < 7;
-  const wideSpread = pick.suspect;
-  const relVolMissing = (r.relVolume ?? 0) < 1.5;
-
-  const lo = (r.price * 0.997).toFixed(2);
-  const hi = (r.price * 1.003).toFixed(2);
-  const entryMid = r.price;
-  const dte = Math.max(1, Math.round((new Date(pick.contract.expiry).getTime() - Date.now()) / 86_400_000));
+  // Scanner-specific signals
+  const r = row.pick?.row;
+  const gatesPassed = row.pick ? row.pick.verdict?.verdict !== "Avoid" : true;
+  const scoreOk = score != null && score >= 63;
+  const earningsRisk = (r?.earningsInDays ?? 99) < 7;
+  const wideSpread = row.pick?.suspect ?? false;
+  const relVolMissing = r ? (r.relVolume ?? 0) < 1.5 : false;
+  const horizon = row.pick
+    ? (row.pick.bucket === "Lottery" ? "DAY"
+      : row.pick.bucket === "Aggressive" ? "SWING"
+      : row.pick.bucket === "Conservative" ? "POSITION" : "SWING")
+    : "WATCH";
 
   return (
     <Card className="glass-card p-3 sm:p-4 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold">{r.symbol}</span>
-            <span className="mono text-sm text-muted-foreground">${r.price.toFixed(2)}</span>
+            <span className="font-semibold">{row.symbol}</span>
+            <span className="mono text-sm text-muted-foreground">${row.price.toFixed(2)}</span>
             <Badge variant="outline" className="text-[10px]">{horizon}</Badge>
+            {row.source === "watchlist" && (
+              <Badge variant="outline" className="text-[10px] border-warning/40 text-warning gap-1">
+                <Star className="h-2.5 w-2.5 fill-warning" /> Watchlist
+              </Badge>
+            )}
           </div>
-          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5">
+          <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
             <span className="mono">
-              ${pick.contract.strike}{pick.contract.optionType === "call" ? "C" : "P"}
+              ${row.strike}{row.optionType === "call" ? "C" : "P"}
             </span>
             <span>·</span>
-            <span>{pick.contract.expiry} ({dte} DTE)</span>
+            <span>{row.expiry} ({dte} DTE)</span>
             <span>·</span>
             <span className={cn("inline-flex items-center gap-0.5", isBullish ? "text-bullish" : "text-bearish")}>
               {isBullish ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -153,23 +215,38 @@ function GamePlanCard({ pick }: { pick: ApprovedPick }) {
         </div>
         <div className="text-right shrink-0">
           <div className="text-[10px] uppercase text-muted-foreground">Score</div>
-          <div className={cn("font-semibold", score >= 70 ? "text-bullish" : score >= 50 ? "text-foreground" : "text-bearish")}>
-            {Math.round(score)}
+          <div className={cn(
+            "font-semibold",
+            score == null ? "text-muted-foreground"
+              : score >= 70 ? "text-bullish"
+              : score >= 50 ? "text-foreground"
+              : "text-bearish",
+          )}>
+            {score == null ? "—" : Math.round(score)}
           </div>
         </div>
       </div>
 
-      <div className="rounded border border-border/60 bg-muted/30 p-2 space-y-1">
-        <div className="text-[10px] uppercase text-muted-foreground tracking-wider">What it needs to flip BUY NOW</div>
-        <ul className="text-xs space-y-0.5">
-          <li>{gatesPassed ? "✅" : "⛔"} Gates {gatesPassed ? "passed" : "failed"}</li>
-          <li>{scoreOk ? "✅" : "⏳"} Setup score: {Math.round(score)} {scoreOk ? "" : "(needs ≥ 63)"}</li>
-          <li>⏳ Live trigger at open</li>
-          {relVolMissing && <li>⏳ Needs relVolume ≥ 1.5× (watch 9:35 AM)</li>}
-          {earningsRisk && <li className="text-warning">⚠ Earnings in {r.earningsInDays}d</li>}
-          {wideSpread && <li className="text-warning">⚠ Wide spread — verify at open</li>}
-        </ul>
-      </div>
+      {row.source === "scanner" ? (
+        <div className="rounded border border-border/60 bg-muted/30 p-2 space-y-1">
+          <div className="text-[10px] uppercase text-muted-foreground tracking-wider">What it needs to flip BUY NOW</div>
+          <ul className="text-xs space-y-0.5">
+            <li>{gatesPassed ? "✅" : "⛔"} Gates {gatesPassed ? "passed" : "failed"}</li>
+            <li>{scoreOk ? "✅" : "⏳"} Setup score: {score == null ? "—" : Math.round(score)} {scoreOk ? "" : "(needs ≥ 63)"}</li>
+            <li>⏳ Live trigger at open</li>
+            {relVolMissing && <li>⏳ Needs relVolume ≥ 1.5× (watch 9:35 AM)</li>}
+            {earningsRisk && <li className="text-warning">⚠ Earnings in {r?.earningsInDays}d</li>}
+            {wideSpread && <li className="text-warning">⚠ Wide spread — verify at open</li>}
+          </ul>
+        </div>
+      ) : (
+        <div className="rounded border border-warning/30 bg-warning/5 p-2 space-y-1">
+          <div className="text-[10px] uppercase text-warning tracking-wider">From your watchlist</div>
+          <div className="text-xs text-muted-foreground">
+            {row.watchlist?.thesis ?? "Saved by you. Re-check live trigger at open."}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div>
@@ -178,28 +255,30 @@ function GamePlanCard({ pick }: { pick: ApprovedPick }) {
         </div>
         <div>
           <div className="text-muted-foreground">Target</div>
-          <div className="mono text-bullish">+40–80%</div>
+          <div className="mono text-bullish">+50%</div>
         </div>
         <div>
           <div className="text-muted-foreground">Stop</div>
-          <div className="mono text-bearish">-25%</div>
+          <div className="mono text-bearish">-35%</div>
         </div>
       </div>
 
       <div className="flex items-center gap-2 pt-1">
-        <SaveToWatchlistButton
-          size="xs"
-          symbol={r.symbol}
-          direction="long"
-          optionType={pick.contract.optionType}
-          strike={pick.contract.strike}
-          expiry={pick.contract.expiry}
-          bias={r.bias}
-          tier={pick.pickTier}
-          entryPrice={r.price}
-          thesis={`Game Plan · score ${Math.round(score)}`}
-          source="game_plan"
-        />
+        {row.source === "scanner" && (
+          <SaveToWatchlistButton
+            size="xs"
+            symbol={row.symbol}
+            direction="long"
+            optionType={row.optionType}
+            strike={row.strike}
+            expiry={row.expiry}
+            bias={row.bias}
+            tier={row.pick?.pickTier}
+            entryPrice={row.price}
+            thesis={`Game Plan · score ${score == null ? "—" : Math.round(score)}`}
+            source="game_plan"
+          />
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -210,8 +289,40 @@ function GamePlanCard({ pick }: { pick: ApprovedPick }) {
           {showAlert ? "Cancel" : "Set Alert"}
         </Button>
       </div>
-      {showAlert && <AlertForm symbol={r.symbol} defaultPrice={entryMid} onClose={() => setShowAlert(false)} />}
+      {showAlert && <AlertForm symbol={row.symbol} defaultPrice={entryMid} onClose={() => setShowAlert(false)} />}
     </Card>
+  );
+}
+
+function CandidateSection({
+  title,
+  icon,
+  rows,
+  emptyMsg,
+  accent,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  rows: PlanRow[];
+  emptyMsg: string;
+  accent: "bullish" | "bearish";
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className={cn("inline-flex items-center gap-1.5 text-sm font-semibold", accent === "bullish" ? "text-bullish" : "text-bearish")}>
+          {icon} {title}
+        </span>
+        <Badge variant="outline" className="h-5 text-[10px]">{rows.length}</Badge>
+      </div>
+      {rows.length === 0 ? (
+        <Card className="glass-card p-4 text-center text-xs text-muted-foreground">{emptyMsg}</Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {rows.map((r) => <GamePlanCard key={r.key} row={r} />)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -219,11 +330,32 @@ export function TomorrowsGamePlan() {
   const marketState = getMarketState();
   const visible = marketState !== "OPEN";
   const scan = useScannerPicks({ bucket: "All" });
+  const { data: watchlistItems = [] } = useWatchlist();
 
   const liveTop = useMemo(
     () => getGamePlanPicks(scan, 10),
     [scan.approved, scan.watchlistOnly, scan.bestPending, scan.cap],
   );
+
+  // Merge scanner picks + watchlist items into a single deduped pool keyed by
+  // symbol|type|strike|expiry so a watchlist entry doesn't double-up with the
+  // same scanner pick.
+  const merged = useMemo(() => {
+    const all: PlanRow[] = liveTop.map(fromScanner);
+    const seen = new Set(all.map((r) => `${r.symbol}|${r.optionType}|${r.strike}|${r.expiry}`));
+    for (const w of watchlistItems) {
+      const row = fromWatchlist(w);
+      if (!row) continue;
+      const sig = `${row.symbol}|${row.optionType}|${row.strike}|${row.expiry}`;
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+      all.push(row);
+    }
+    return all;
+  }, [liveTop, watchlistItems]);
+
+  const calls = useMemo(() => merged.filter((r) => r.optionType === "call"), [merged]);
+  const puts = useMemo(() => merged.filter((r) => r.optionType === "put"), [merged]);
 
   useEffect(() => {
     if (!visible || liveTop.length === 0) return;
@@ -243,8 +375,10 @@ export function TomorrowsGamePlan() {
 
   const tomorrow = getTomorrowET();
   const tomorrowEvent = getEventWarning(tomorrow);
+  const tomorrowOrb = isTomorrowOrbDay();
   const buyReadyCount = liveTop.filter((p) => (p.rank?.finalRank ?? p.row.setupScore) >= 63).length;
   const topPick = liveTop[0];
+  const watchlistInPlan = merged.filter((r) => r.source === "watchlist").length;
   const [open, setOpen] = useState(true);
 
   if (!visible) return null;
@@ -263,6 +397,9 @@ export function TomorrowsGamePlan() {
                     <span className="text-muted-foreground ml-1">
                       · Top pick: <span className="text-foreground font-mono">{topPick.row.symbol} ${topPick.contract.strike}{topPick.contract.optionType === "call" ? "C" : "P"}</span>
                     </span>
+                  )}
+                  {watchlistInPlan > 0 && (
+                    <span className="text-warning ml-1">· +{watchlistInPlan} from watchlist</span>
                   )}
                 </>
               ) : (
@@ -287,22 +424,59 @@ export function TomorrowsGamePlan() {
             <span className="inline-flex items-center gap-2">
               <Moon className="h-4 w-4" /> Tomorrow's Game Plan
               <span className="text-xs text-muted-foreground font-normal">
-                · Setups to watch at open — built from today's closing data
+                · Setups + your watchlist — built from today's closing data
               </span>
             </span>
             {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent className="mt-3">
-          {liveTop.length === 0 ? (
+        <CollapsibleContent className="mt-3 space-y-4">
+          {tomorrowOrb && (
+            <Card className="glass-card p-3 border-primary/30 bg-primary/5 text-xs">
+              <div className="flex items-start gap-2">
+                <Target className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                <div>
+                  <div className="font-semibold text-primary">ORB Day Tomorrow</div>
+                  <div className="text-muted-foreground mt-0.5">
+                    Mark the 9:30–9:35 AM ET range. Take ATM call on break above the high, ATM put on break below the low. Exit at +100% or −50% same-day.
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {merged.length === 0 ? (
             <Card className="glass-card p-8 text-center text-sm text-muted-foreground">
               No budget-qualified setups scoring ≥ 50 yet. Plan rebuilds as the scan completes.
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {liveTop.map((p) => <GamePlanCard key={p.key} pick={p} />)}
-            </div>
+            <>
+              <CandidateSection
+                title="Call Candidates"
+                icon={<TrendingUp className="h-4 w-4" />}
+                rows={calls}
+                emptyMsg="No call candidates yet. Watchlist calls will appear here automatically."
+                accent="bullish"
+              />
+              <CandidateSection
+                title="Put Candidates"
+                icon={<TrendingDown className="h-4 w-4" />}
+                rows={puts}
+                emptyMsg="No put candidates yet. Watchlist puts will appear here automatically."
+                accent="bearish"
+              />
+            </>
           )}
+
+          <Card className="glass-card p-3 text-xs">
+            <div className="font-semibold mb-1 text-foreground">Standing Rules — Calls & Puts mode</div>
+            <ul className="text-muted-foreground space-y-0.5">
+              <li>• Take profit at <span className="text-bullish font-mono">+50%</span> on the contract.</li>
+              <li>• Hard stop at <span className="text-bearish font-mono">−35%</span> on the contract.</li>
+              <li>• Close any position with <span className="font-mono">≤ 7 DTE</span> remaining (theta accelerates).</li>
+              <li>• These defaults apply to every Call/Put pick unless overridden in the plan card.</li>
+            </ul>
+          </Card>
         </CollapsibleContent>
       </Collapsible>
     </div>
