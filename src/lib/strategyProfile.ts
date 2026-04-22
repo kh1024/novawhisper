@@ -78,6 +78,16 @@ export interface ScoringOverrides {
    * + relVol + bias-aligned move). false = relaxed (any 2 of 3). Default false.
    */
   triggerRequireAll: boolean;
+  /**
+   * Calls & Puts mode — focus the scanner on pure long directional plays.
+   * UI toggle that the C&P scoring overlay reads. Default true.
+   */
+  callsPutsMode: boolean;
+  /**
+   * Show high-scoring picks that exceed the per-trade cap in a dedicated
+   * "Strong Setups — Over Budget" section instead of hiding them. Default true.
+   */
+  showOverBudgetWatchlist: boolean;
 }
 
 export const DEFAULT_SCORING_OVERRIDES: ScoringOverrides = {
@@ -85,6 +95,8 @@ export const DEFAULT_SCORING_OVERRIDES: ScoringOverrides = {
   watchlistMinScore: 50,
   maxSoftFailures: 3,
   triggerRequireAll: false,
+  callsPutsMode: true,
+  showOverBudgetWatchlist: true,
 };
 
 export interface GateOverrides {

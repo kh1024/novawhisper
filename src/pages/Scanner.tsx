@@ -71,6 +71,8 @@ import { TomorrowsGamePlan } from "@/components/TomorrowsGamePlan";
 import { buildStrikeLadder, pickBestRung } from "@/lib/strikeLadder";
 import { findCheapestAlternative } from "@/lib/useScannerPicks";
 import { Sparkles } from "lucide-react";
+import { getOrbStatus } from "@/lib/orb";
+import { useScannerPicks } from "@/lib/useScannerPicks";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -490,10 +492,26 @@ export default function Scanner() {
     : "—";
 
   const marketState = getMarketState();
+  const orbStatus = getOrbStatus();
+  const cpScan = useScannerPicks({ bucket: activeBucket });
+  const overBudgetPicks = cpScan.overBudgetWatchlist ?? [];
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="p-3 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-4 sm:space-y-6">
+        {/* ORB status banner — Mon/Wed/Fri only */}
+        {orbStatus.isOrbDay && (
+          <div className={cn(
+            "w-full px-4 py-2 rounded text-sm font-medium",
+            orbStatus.inRangeWindow && "border border-primary/40 bg-primary/10 text-primary",
+            orbStatus.inEntryWindow && "border border-bullish/50 bg-bullish/10 text-bullish",
+            orbStatus.windowExpired && "border border-border bg-muted/40 text-muted-foreground",
+          )}>
+            {orbStatus.inRangeWindow && "⏱ ORB RECORDING — 9:30–9:35 ET opening range forming. Breakout trade available at 9:35."}
+            {orbStatus.inEntryWindow && "🟢 ORB WINDOW OPEN — Entry valid until 10:30 AM ET. ATM calls or puts only. Exit at +100% or -50%."}
+            {orbStatus.windowExpired && "ORB window closed for today (expired 10:30 AM ET)."}
+          </div>
+        )}
         {/* Market session banner — explains why scoring may be on EOD data. */}
         {marketState === "PRE_MARKET" && (
           <div className="w-full px-4 py-2 rounded border border-warning/40 bg-warning/10 text-warning text-sm flex items-center justify-between gap-3">
@@ -1134,6 +1152,52 @@ export default function Scanner() {
               ))}
             </div>
           )
+        )}
+
+        {/* 💰 Strong Setups — Over Budget */}
+        {overBudgetPicks.length > 0 && (
+          <Card className="glass-card p-4 border-orange-600/40 bg-orange-600/5 space-y-3">
+            <div>
+              <h3 className="text-base font-semibold text-orange-400">💰 Strong Setups — Over Budget</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                High-scoring picks outside your current per-trade cap (${cpScan.cap.toLocaleString()}). Track or raise your cap in Strategy.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {overBudgetPicks.slice(0, 12).map((p) => {
+                const score = p.rank?.finalRank ?? p.row.setupScore;
+                const needs = Math.ceil(p.estCost / 100) * 100;
+                const isCall = p.contract.optionType === "call";
+                return (
+                  <Card key={p.key} className="p-3 space-y-2 border border-border/60 bg-card">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div>
+                        <span className="font-mono font-semibold">{p.row.symbol}</span>
+                        <span className="ml-2 mono text-sm">${p.row.price.toFixed(2)}</span>
+                      </div>
+                      <span className={cn("mono text-sm font-bold px-2 py-0.5 rounded border",
+                        isCall ? "text-bullish border-bullish/60 bg-bullish/10" : "text-bearish border-bearish/60 bg-bearish/10",
+                      )}>
+                        ${p.contract.strike}{isCall ? "C" : "P"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <Badge variant="outline" className="bg-orange-600/20 text-orange-300 border-orange-600/40 font-mono">
+                        Needs ~${needs.toLocaleString()}+ to enter
+                      </Badge>
+                      <span className="text-muted-foreground">Score <span className="font-semibold text-foreground">{Math.round(score)}</span></span>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Cheapest rung: {p.rung} {isCall ? "call" : "put"} ${p.contract.strike} · ~${p.estCost.toLocaleString()}/contract
+                    </div>
+                    <a href="/strategy" className="text-[11px] text-primary hover:underline inline-flex items-center gap-1">
+                      Raise budget in Strategy <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </Card>
+                );
+              })}
+            </div>
+          </Card>
         )}
 
         <ResearchDrawer symbol={openSymbol} onClose={() => setOpenSymbol(null)} />

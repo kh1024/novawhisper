@@ -525,6 +525,39 @@ export default function Strategy() {
                       />
                     </Field>
                   </div>
+                  {/* ── Calls & Puts revamp toggles ──────────────────────── */}
+                  <div className="grid gap-3 md:grid-cols-2 pt-3 border-t border-border/30">
+                    <Field
+                      label="Calls & Puts Mode"
+                      hint="Focus the scanner on pure directional long calls and puts. Uses community-validated rules: 21+ DTE, ATM strikes, 50% profit target, 35% stop loss.">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={profile.scoringOverrides.callsPutsMode}
+                          onCheckedChange={(v) => update({
+                            scoringOverrides: { ...profile.scoringOverrides, callsPutsMode: v },
+                          })}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {profile.scoringOverrides.callsPutsMode ? "On" : "Off"}
+                        </span>
+                      </div>
+                    </Field>
+                    <Field
+                      label="Show Over-Budget Picks in Watchlist"
+                      hint="Tickers like SPY ($4,000+ contract) appear in a dedicated 'Strong Setups — Over Budget' section even when they exceed your cap, so you can still track them.">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={profile.scoringOverrides.showOverBudgetWatchlist}
+                          onCheckedChange={(v) => update({
+                            scoringOverrides: { ...profile.scoringOverrides, showOverBudgetWatchlist: v },
+                          })}
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {profile.scoringOverrides.showOverBudgetWatchlist ? "On" : "Off"}
+                        </span>
+                      </div>
+                    </Field>
+                  </div>
                 </div>
               </div>
             )}

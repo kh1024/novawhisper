@@ -57,6 +57,8 @@ import {
 } from "@/lib/signals/redditSignalEngine";
 import { isEventDay, getEventWarning } from "@/lib/signals/eventCalendar";
 import { useVix, useIvRank } from "@/lib/vix";
+import { scoreCandidateCP } from "@/lib/scoreCandidateCP";
+import { isOrbDay } from "@/lib/orb";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -126,6 +128,18 @@ export interface ApprovedPick {
   ivRankUsed: number;
   /** True when ivRankUsed came from real 52w iv_history; false = IVP proxy. */
   ivRankIsReal: boolean;
+  // ── Calls & Puts revamp (additive, optional) ────────────────────────────
+  /** Directional bias produced by scoreCandidateCP (CALL / PUT / NEUTRAL). */
+  direction?: "CALL" | "PUT" | "NEUTRAL";
+  /** True today (Mon/Wed/Fri) — used by ORB banner. */
+  orbDay?: boolean;
+  /** True when the pick is eligible for the ORB engine (default same as orbDay). */
+  orbEligible?: boolean;
+  /** Standardized exit plan: 50% profit / 35% stop / close at 7 DTE. */
+  exitPlan?: { profitTarget: number; stopLoss: number; maxDte: number };
+  /** When a gate would block but the directional CP score is strong, set
+   *  this string and surface the pick as WATCH with a footnote. */
+  gateOverrideReason?: string;
 }
 
 export interface BlockedPick {
@@ -382,6 +396,9 @@ export function bucketPicks(args: {
           scoringOverrides: args.profile.scoringOverrides,
         });
         const cta = resolveCta(tradeStateResult.state, tradeStateResult);
+        const cpScore = scoreCandidateCP({
+          row: r, cap: args.cap, contractCost: pick.candidate.contractCost, dte,
+        });
         overBudgetWatchlist.push({
           key, row: r, rank: rankResult, verdict: v ?? null, contract,
           estCost: pick.candidate.contractCost,
@@ -402,6 +419,8 @@ export function bucketPicks(args: {
           exitMode: { mode: "PROFIT_TARGET", profitTargetPct: 0.50, stopLossPct: 1.00, rationale: "Pending" },
           isEventDay: false, eventWarning: null, gapPct: 0,
           currentVix: 15, ivRankUsed: r.ivRank ?? 0, ivRankIsReal: false,
+          direction: cpScore.direction, orbDay: isOrbDay(), orbEligible: isOrbDay(),
+          exitPlan: cpScore.exitPlan,
         });
       }
       continue;
@@ -473,6 +492,14 @@ export function bucketPicks(args: {
       currentVix: 15,
       ivRankUsed: r.ivRank ?? 0,
       ivRankIsReal: false,
+      // ── Calls & Puts overlay (additive) ──
+      direction: (() => {
+        const cp = scoreCandidateCP({ row: r, cap: args.cap, contractCost: pick.candidate.contractCost, dte });
+        return cp.direction;
+      })(),
+      orbDay: isOrbDay(),
+      orbEligible: isOrbDay(),
+      exitPlan: { profitTarget: 0.5, stopLoss: -0.35, maxDte: 7 },
     });
   }
 
