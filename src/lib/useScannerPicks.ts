@@ -1024,6 +1024,25 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         plainEnglishSummary = derivePlainEnglishSummary(contractResult, executionResult, report, setupScoreVal);
       }
 
+      // ── Final 4-score classifier (additive — does NOT replace pickTier) ──
+      let classification: ReturnType<typeof classifyPick> | undefined;
+      if (contractResult && executionResult) {
+        classification = classifyPick({
+          setup_score: setupScoreVal,
+          contract_score: contractResult.contract_score,
+          execution_score: executionResult.execution_score,
+          quote_confidence_score: oq?.quoteConfidenceScore ?? 0,
+          final_score: finalScore ?? 0,
+          contractResult,
+          executionResult,
+          quoteReport: report,
+          userBudgetCap: cap,
+          sessionMode: getSessionMode(),
+          earningsToday: p.row.earningsInDays !== undefined && p.row.earningsInDays <= 0,
+          majorEventToday: p.isEventDay ?? false,
+        });
+      }
+
       return {
         ...p,
         tradeState: nextTradeState,
@@ -1042,7 +1061,12 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         execution_score: executionResult?.execution_score,
         quote_confidence_score: oq?.quoteConfidenceScore,
         final_score: finalScore,
-        plain_english_summary: plainEnglishSummary,
+        plain_english_summary: plainEnglishSummary ?? classification?.tier_reason,
+        tier4: classification?.tier,
+        tierReason: classification?.tier_reason,
+        failingGates: classification?.failing_gates,
+        upgradePath: classification?.upgrade_path,
+        isHardBlocked: classification?.is_hard_blocked,
       };
     });
   }, [approvedEnrichedRaw, integrityQ.data, cap]);
