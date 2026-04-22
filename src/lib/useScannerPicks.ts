@@ -244,7 +244,18 @@ export function bucketPicks(args: {
   const preMarket = isPreMarketWindow();
   const currentMarketState = getMarketState();
 
+  const debugSym = "SPY";
   for (const r of args.rows) {
+    const isDebug = r.symbol.toUpperCase() === debugSym;
+    if (isDebug) {
+      console.log(`[SPY DEBUG] row found:`, {
+        symbol: r.symbol, price: r.price, bias: r.bias,
+        setupScore: r.setupScore, ivRank: r.ivRank, atrPct: r.atrPct,
+        rsi: r.rsi, optionsLiquidity: r.optionsLiquidity,
+        earningsInDays: r.earningsInDays, riskBadge: r.crl?.riskBadge,
+        crlVerdict: r.crl?.verdict,
+      });
+    }
     if (args.overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
       universeFilteredCount++;
       continue;
