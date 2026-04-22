@@ -21,6 +21,8 @@ export interface PipelineCounts {
   gatePassing: number;
   gateBlocked: number;
   budgetBlocked: number;
+  /** Optional: subset of budgetBlocked routed to "Strong Setups — Over Budget". */
+  overBudgetWatchlist?: number;
   shown: number;
   /** Optional reason text e.g. "excluded 4 long puts (profile allows calls only)" */
   filterChip?: string | null;

@@ -96,6 +96,15 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, vix
         </span>
         <span
           className={cn(
+            "mono text-[10px] font-bold px-1.5 py-0.5 rounded",
+            isCall ? "bg-bullish/20 text-bullish" : "bg-bearish/20 text-bearish",
+          )}
+          title={isCall ? "Long call" : "Long put"}
+        >
+          {isCall ? "CALL" : "PUT"}
+        </span>
+        <span
+          className={cn(
             "mono text-[11px] font-bold px-2 py-0.5 rounded border",
             isCall
               ? "text-bullish border-bullish/60 bg-bullish/10"
@@ -105,6 +114,11 @@ function MobileScannerCardImpl({ row, verdict, budgetCheck, guard, contract, vix
           ${contract.strike}{isCall ? "C" : "P"}
         </span>
         {budgetCheck && <BudgetImpactPill result={budgetCheck} />}
+      </div>
+
+      <div className="flex items-center justify-between text-[10px] text-muted-foreground border border-border/40 rounded px-2 py-1 bg-muted/20">
+        <span title="Default exit rules for Calls & Puts mode">Exit:</span>
+        <span className="mono"><span className="text-bullish font-semibold">+50%</span> · <span className="text-bearish font-semibold">−35%</span> · <span className="text-foreground font-semibold">7 DTE</span></span>
       </div>
 
       <Accordion
