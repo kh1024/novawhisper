@@ -43,7 +43,23 @@ export interface NovaCard {
   iv_rank?: number | null;
   /** True when iv_rank came from real 52w history; false = IVP proxy. */
   iv_rank_is_real?: boolean;
+  /** Optional NovaWhisper integrity report — renders Live Price Check + Greeks. */
+  quote_report?: QuoteIntegrityReport | null;
+  /** Optional execution-risk label derived from spread % (LOW/MEDIUM/HIGH). */
+  execution_risk?: "LOW" | "MEDIUM" | "HIGH" | null;
+  /** Optional budget-fit label (GOOD/TIGHT/OVER_BUDGET). */
+  budget_fit?: "GOOD" | "TIGHT" | "OVER_BUDGET" | null;
+  /** Optional plain-English quote summary. */
+  human_quote_summary?: string | null;
 }
+
+const CONFIDENCE_BADGE: Record<QuoteConfidenceLabel, { label: string; cls: string }> = {
+  VERIFIED:   { label: "✓ Real-Time Verified", cls: "border-bullish/50 bg-bullish/15 text-bullish" },
+  ACCEPTABLE: { label: "✓ Fresh Quote",        cls: "border-primary/50 bg-primary/15 text-primary" },
+  CAUTION:    { label: "⚠ Delayed Quote",      cls: "border-warning/50 bg-warning/15 text-warning" },
+  UNRELIABLE: { label: "⚠ Stale Data",         cls: "border-bearish/50 bg-bearish/15 text-bearish" },
+  BLOCKED:    { label: "✕ No Reliable Quote",  cls: "border-muted-foreground/50 bg-muted/40 text-muted-foreground" },
+};
 
 const ACTION_STYLES: Record<NovaCard["action"], { bg: string; text: string; ring: string; emoji: string }> = {
   BUY:  { bg: "bg-bullish/15", text: "text-bullish", ring: "ring-bullish/40", emoji: "✅" },
