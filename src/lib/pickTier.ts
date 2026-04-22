@@ -157,13 +157,6 @@ export function tierRank(t: PickTier): number {
   return 0;
 }
 
-export const TIER_LABEL: Record<PickTier, string> = {
-  "CLEAN":        "✅ Clean Pass",
-  "NEAR-LIMIT":   "⚠️ Near limits — reduce size",
-  "BEST-OF-WAIT": "🟡 Best of WAIT — 1 rule relaxed",
-  "EXCLUDED":     "⛔ Excluded",
-};
-
 export const TIER_CLASSES: Record<PickTier, string> = {
   "CLEAN":        "border-bullish/40 bg-bullish/10 text-bullish",
   "NEAR-LIMIT":   "border-warning/40 bg-warning/10 text-warning",
