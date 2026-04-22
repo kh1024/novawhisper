@@ -48,7 +48,11 @@ import {
   evaluateExecutionState, resolveCta, tradeStateRank,
   type TradeState, type TradeStateResult, type CtaPlan,
 } from "@/lib/tradeState";
-import { currentMarketMode, getMarketState } from "@/lib/marketHours";
+import { currentMarketMode, getMarketState, getSessionMode, buyNowAllowed } from "@/lib/marketHours";
+import { runQuoteIntegrity } from "@/lib/quotes/quoteIntegrityEngine";
+import { QUOTE_THRESHOLDS } from "@/lib/quotes/quoteProvider";
+import type { QuoteIntegrityReport } from "@/lib/quotes/quoteTypes";
+import { supabase } from "@/integrations/supabase/client";
 import {
   scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
   generateOptionsSignal, STRATEGY_RANK,
