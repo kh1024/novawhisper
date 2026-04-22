@@ -258,6 +258,7 @@ export function bucketPicks(args: {
     }
     if (args.overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
       universeFilteredCount++;
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: conservativeCheapOnly filter`);
       continue;
     }
     const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
@@ -268,16 +269,18 @@ export function bucketPicks(args: {
       earningsInDays: r.earningsInDays,
       ivRank: r.ivRank,
     });
-    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) continue;
-
-    if (!isStructureAllowed(args.profile, optionType, dte)) {
-      profileFilteredCount++;
+    if (isDebug) console.log(`[SPY DEBUG] bucket=${rowB}, bucketFilter=${args.bucketFilter}, optionType=${optionType}, dte=${dte}, expiry=${expiry}`);
+    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) {
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: bucket mismatch`);
       continue;
     }
 
-    // ── Strike ladder: generate Deep ITM / ITM / ATM (+OTM for lottery) ──
-    // and price each rung via Black-Scholes-lite. The picker then selects
-    // the highest-quality rung that fits the per-trade cap.
+    if (!isStructureAllowed(args.profile, optionType, dte)) {
+      profileFilteredCount++;
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: structure not allowed`);
+      continue;
+    }
+
     const ladder = buildStrikeLadder({
       spot: r.price,
       ivRank: r.ivRank,
@@ -286,14 +289,17 @@ export function bucketPicks(args: {
       dte,
       includeOTM: rowB === "Lottery",
     });
-    // Try the best-fitting rung first, but DON'T hard-drop on cap miss; the
-    // tier classifier converts budget into a soft penalty unless cost > 10×.
+    if (isDebug) console.log(`[SPY DEBUG] ladder (cap=$${args.cap}):`, ladder.map(l => ({ rung: l.rung, strike: l.strike, premium: +l.premium.toFixed(2), cost: l.contractCost, suspect: l.suspect })));
     const fitPick = pickBestRung(ladder, args.cap);
     const pick = fitPick
       ?? (ladder.length > 0
         ? { candidate: ladder[0], cheapest: ladder[ladder.length - 1], fitsCap: false } as const
         : null);
-    if (!pick) continue;
+    if (!pick) {
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: no ladder candidates`);
+      continue;
+    }
+    if (isDebug) console.log(`[SPY DEBUG] picked rung=${pick.candidate.rung}, strike=${pick.candidate.strike}, cost=$${pick.candidate.contractCost}, fitsCap=${pick.fitsCap}`);
 
     const contract: PickContract = {
       symbol: r.symbol,
