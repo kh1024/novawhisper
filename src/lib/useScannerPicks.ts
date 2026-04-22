@@ -54,6 +54,8 @@ import { QUOTE_THRESHOLDS } from "@/lib/quotes/quoteProvider";
 import type { QuoteIntegrityReport } from "@/lib/quotes/quoteTypes";
 import { computeContractScore, type ContractScoreResult } from "@/lib/scoring/contractScore";
 import { computeExecutionScore, type ExecutionScoreResult } from "@/lib/scoring/executionScore";
+import { classifyPick } from "@/lib/scoring/finalClassifier";
+import { getSessionMode } from "@/lib/marketHours";
 import { supabase } from "@/integrations/supabase/client";
 import {
   scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
@@ -172,6 +174,12 @@ export interface ApprovedPick {
   quote_confidence_score?: number;
   final_score?: number;
   plain_english_summary?: string;
+  // ── Final Classifier (additive, optional — does not replace pickTier) ────
+  tier4?: import("./scoring/finalClassifier").FinalTier;
+  tierReason?: string;
+  failingGates?: import("./scoring/finalClassifier").FailingGate[];
+  upgradePath?: string[];
+  isHardBlocked?: boolean;
 }
 
 export interface BlockedPick {
