@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useScannerPicks, type ApprovedPick } from "@/lib/useScannerPicks";
 import { getMarketState, getNextMarketOpen, getTomorrowET } from "@/lib/marketHours";
 import { getEventWarning } from "@/lib/signals/eventCalendar";
+import { isTomorrowOrbDay } from "@/lib/orb";
 import { SaveToWatchlistButton } from "@/components/SaveToWatchlistButton";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
