@@ -117,16 +117,6 @@ export default function Dashboard() {
                   </div>
                 </Card>
               )},
-              { id: "ai-summary", node: (
-                <Card className="glass-card p-5">
-                  <h2 className="text-sm font-semibold tracking-wide mb-3 flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" /> AI Summary of the Day
-                  </h2>
-                  <p className="text-sm text-foreground/80 leading-relaxed">
-                    Risk-on regime continues with semis leading. <span className="text-bullish font-medium">SMH +2.4%</span> dragged tech higher. IV remains compressed across mega caps — <span className="text-foreground">favor premium-selling on quality</span>. Caution: <span className="text-bearish font-medium">NVDA earnings Thursday</span>; consider closing short-dated short premium before AMC.
-                  </p>
-                </Card>
-              )},
               { id: "tips", node: <TipsRotator /> },
               { id: "playbook", node: <PlaybookCard onPick={setOpenSymbol} /> },
               { id: "news", node: <NewsFeed limit={8} title="Reuters News" sources={["reuters"]} sourceLabel="via Reuters" /> },
