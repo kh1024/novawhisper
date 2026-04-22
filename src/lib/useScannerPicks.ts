@@ -310,7 +310,7 @@ export function bucketPicks(args: {
     const key = contractKey(contract);
     const v = args.verdictByRow.get(r.symbol);
     const isSafetyBlocked = v?.verdict === "Avoid" || (v?.reason ?? "").toLowerCase().includes("block");
-    if (isDebug) console.log(`[SPY DEBUG] verdict:`, { verdict: v?.verdict, reason: v?.reason, label: v?.label, isSafetyBlocked });
+    if (isDebug) console.log(`[SPY DEBUG] verdict:`, { verdict: v?.verdict, reason: v?.reason, isSafetyBlocked });
 
     if (isSafetyBlocked) {
       safetyBlocked.push({
@@ -333,7 +333,7 @@ export function bucketPicks(args: {
       finalRank: rankResult?.finalRank ?? null,
     });
     const tradeStage = tradeStageFromStatus(tradeStatus, preMarket, true);
-    if (isDebug) console.log(`[SPY DEBUG] tradeStatus:`, { ready: tradeStatus.ready, blockers: tradeStatus.blockers, finalRank: rankResult?.finalRank, label: rankResult?.label, tradeStage });
+    if (isDebug) console.log(`[SPY DEBUG] tradeStatus:`, { blockers: tradeStatus.blockers, finalRank: rankResult?.finalRank, label: rankResult?.label, tradeStage });
 
     // ── Tier classification (soft budget + score-based fail-soft) ─────────
     const nonSafetyRuleFailures = tradeStatus.blockers.filter(
@@ -348,6 +348,9 @@ export function bucketPicks(args: {
       ivRank: r.ivRank,
     });
     if (isDebug) console.log(`[SPY DEBUG] tier:`, { tier: tier.tier, hardDrop: tier.hardDrop, adjustedScore: tier.adjustedScore, caveat: tier.caveat, penalties: tier.penalties });
+
+    const severeBudgetMiss = !pick.fitsCap && pick.candidate.contractCost > args.cap * 1.5;
+    if (isDebug) console.log(`[SPY DEBUG] budget check:`, { contractCost: pick.candidate.contractCost, cap: args.cap, fitsCap: pick.fitsCap, severeBudgetMiss, hardDrop: tier.hardDrop });
 
     // Hard drop: cost > 20× cap OR materially over budget (>50% above cap)
     // should be surfaced as budget-blocked, not left in the visible approved set.
