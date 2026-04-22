@@ -24,10 +24,61 @@ import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
 import { useSma200 } from "@/lib/sma200";
 import { TradePlanCard } from "@/components/TradePlanCard";
 import { useScannerPicks } from "@/lib/useScannerPicks";
+import { QUOTE_THRESHOLDS } from "@/lib/quotes/quoteProvider";
+import type { QuoteConfidenceLabel } from "@/lib/quotes/quoteTypes";
 
 type Props = {
   symbol: string | null;
   onClose: () => void;
+};
+
+// ── Quote confidence filter ──────────────────────────────────────────────────
+// Lets the user hide BLOCKED / UNRELIABLE picks in the Live Picks tab.
+type ConfidenceFilterMode = "ALL" | "TRUSTED" | "STRICT";
+
+const CONFIDENCE_FILTERS: { id: ConfidenceFilterMode; label: string; tip: string; allowed: QuoteConfidenceLabel[] }[] = [
+  { id: "TRUSTED", label: "Trusted", tip: "Only VERIFIED + ACCEPTABLE quotes — hides CAUTION, UNRELIABLE, BLOCKED",
+    allowed: ["VERIFIED", "ACCEPTABLE"] },
+  { id: "STRICT",  label: "Verified only", tip: "Strictest — only VERIFIED real-time quotes",
+    allowed: ["VERIFIED"] },
+  { id: "ALL",     label: "Show all", tip: "No filter — includes CAUTION / UNRELIABLE / BLOCKED",
+    allowed: ["VERIFIED", "ACCEPTABLE", "CAUTION", "UNRELIABLE", "BLOCKED"] },
+];
+
+/**
+ * Approximate a contract's confidence label from chain data alone.
+ * The full integrity engine runs server-side per scan; here we mirror its
+ * spread + liquidity + greeks heuristics so the drawer filter matches.
+ */
+function deriveContractConfidence(c: OptionContract): QuoteConfidenceLabel {
+  let score = 100;
+  const spread = (c.spreadPct ?? 0) / 100; // OptionContract spreadPct is in percent (e.g. 5.2 = 5.2%)
+  if (spread > QUOTE_THRESHOLDS.SPREAD_SOFT_FAIL_PCT) score -= 25;
+  else if (spread > QUOTE_THRESHOLDS.SPREAD_OK_PCT)   score -= 12;
+  else if (spread > QUOTE_THRESHOLDS.SPREAD_NARROW_PCT) score -= 5;
+
+  if ((c.volume ?? 0) < QUOTE_THRESHOLDS.MIN_VOLUME_FLOOR) score -= 10;
+  if ((c.openInterest ?? 0) < QUOTE_THRESHOLDS.MIN_OI_FLOOR) score -= 10;
+
+  if (c.dte <= 7 && ((c.iv ?? 0) === 0 || (c.delta ?? 0) === 0)) score -= 20;
+  else if ((c.iv ?? 0) === 0 || (c.delta ?? 0) === 0) score -= 10;
+
+  // Mid/last both zero → no usable quote at all
+  if ((c.mid ?? 0) <= 0 && (c.last ?? 0) <= 0) score -= 45;
+
+  if (score >= 85) return "VERIFIED";
+  if (score >= 65) return "ACCEPTABLE";
+  if (score >= 40) return "CAUTION";
+  if (score >= 20) return "UNRELIABLE";
+  return "BLOCKED";
+}
+
+const CONFIDENCE_BADGE: Record<QuoteConfidenceLabel, { label: string; cls: string }> = {
+  VERIFIED:   { label: "✓ Verified",   cls: "bg-bullish/15 text-bullish border-bullish/40" },
+  ACCEPTABLE: { label: "✓ Acceptable", cls: "bg-primary/15 text-primary border-primary/40" },
+  CAUTION:    { label: "⚠ Caution",    cls: "bg-warning/15 text-warning border-warning/40" },
+  UNRELIABLE: { label: "⚠ Unreliable", cls: "bg-bearish/10 text-bearish border-bearish/30" },
+  BLOCKED:    { label: "✕ Blocked",    cls: "bg-muted text-muted-foreground border-border" },
 };
 
 const SYMPATHY_MAP: Record<string, string[]> = {
