@@ -973,7 +973,7 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
           entryZoneLow: 0,
           entryZoneHigh: 0,
           snapshotPrice: p.row.price ?? 0,
-          relativeVolume: p.row.relativeVolume ?? 1.0,
+          relativeVolume: 1.0,
           liveTriggerConfirmed: false,
           quoteAgeSeconds: oq.quoteAgeSeconds ?? 999,
           quoteConfidenceScore: oq.quoteConfidenceScore ?? 0,
