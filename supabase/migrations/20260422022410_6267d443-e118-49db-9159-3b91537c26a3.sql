@@ -1,0 +1,17 @@
+ALTER TABLE public.quote_audit_log
+  ADD COLUMN IF NOT EXISTS setup_score             integer,
+  ADD COLUMN IF NOT EXISTS contract_score          integer,
+  ADD COLUMN IF NOT EXISTS execution_score         integer,
+  ADD COLUMN IF NOT EXISTS final_score             integer,
+  ADD COLUMN IF NOT EXISTS final_tier              text,
+  ADD COLUMN IF NOT EXISTS tier_reason             text,
+  ADD COLUMN IF NOT EXISTS failing_gates           jsonb,
+  ADD COLUMN IF NOT EXISTS upgrade_path            text[],
+  ADD COLUMN IF NOT EXISTS is_hard_blocked         boolean,
+  ADD COLUMN IF NOT EXISTS session_mode            text,
+  ADD COLUMN IF NOT EXISTS earnings_days_away      integer,
+  ADD COLUMN IF NOT EXISTS contract_grade          text,
+  ADD COLUMN IF NOT EXISTS execution_label         text,
+  ADD COLUMN IF NOT EXISTS spread_label            text,
+  ADD COLUMN IF NOT EXISTS delta_fit               text,
+  ADD COLUMN IF NOT EXISTS dte_fit                 text;

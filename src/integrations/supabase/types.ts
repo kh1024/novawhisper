@@ -407,10 +407,21 @@ export type Database = {
           adjusted_score: number | null
           block_reasons: string[] | null
           budget_fit_label: string | null
+          contract_grade: string | null
+          contract_score: number | null
           contract_symbol: string
+          delta_fit: string | null
+          dte_fit: string | null
+          earnings_days_away: number | null
           estimated_fill_cost: number | null
+          execution_label: string | null
+          execution_score: number | null
+          failing_gates: Json | null
+          final_score: number | null
+          final_tier: string | null
           human_summary: string | null
           id: string
+          is_hard_blocked: boolean | null
           liquidity_score: number | null
           live_underlying_age_sec: number | null
           live_underlying_price: number | null
@@ -436,11 +447,16 @@ export type Database = {
           scan_run_id: string
           scanned_at: string
           score_before_penalty: number | null
+          session_mode: string | null
+          setup_score: number | null
           snapshot_score: number | null
           snapshot_underlying_price: number | null
+          spread_label: string | null
           symbol: string
           tier_assigned: string | null
+          tier_reason: string | null
           underlying_move_pct: number | null
+          upgrade_path: string[] | null
           user_budget_cap: number | null
           warn_reasons: string[] | null
         }
@@ -448,10 +464,21 @@ export type Database = {
           adjusted_score?: number | null
           block_reasons?: string[] | null
           budget_fit_label?: string | null
+          contract_grade?: string | null
+          contract_score?: number | null
           contract_symbol: string
+          delta_fit?: string | null
+          dte_fit?: string | null
+          earnings_days_away?: number | null
           estimated_fill_cost?: number | null
+          execution_label?: string | null
+          execution_score?: number | null
+          failing_gates?: Json | null
+          final_score?: number | null
+          final_tier?: string | null
           human_summary?: string | null
           id?: string
+          is_hard_blocked?: boolean | null
           liquidity_score?: number | null
           live_underlying_age_sec?: number | null
           live_underlying_price?: number | null
@@ -477,11 +504,16 @@ export type Database = {
           scan_run_id: string
           scanned_at?: string
           score_before_penalty?: number | null
+          session_mode?: string | null
+          setup_score?: number | null
           snapshot_score?: number | null
           snapshot_underlying_price?: number | null
+          spread_label?: string | null
           symbol: string
           tier_assigned?: string | null
+          tier_reason?: string | null
           underlying_move_pct?: number | null
+          upgrade_path?: string[] | null
           user_budget_cap?: number | null
           warn_reasons?: string[] | null
         }
@@ -489,10 +521,21 @@ export type Database = {
           adjusted_score?: number | null
           block_reasons?: string[] | null
           budget_fit_label?: string | null
+          contract_grade?: string | null
+          contract_score?: number | null
           contract_symbol?: string
+          delta_fit?: string | null
+          dte_fit?: string | null
+          earnings_days_away?: number | null
           estimated_fill_cost?: number | null
+          execution_label?: string | null
+          execution_score?: number | null
+          failing_gates?: Json | null
+          final_score?: number | null
+          final_tier?: string | null
           human_summary?: string | null
           id?: string
+          is_hard_blocked?: boolean | null
           liquidity_score?: number | null
           live_underlying_age_sec?: number | null
           live_underlying_price?: number | null
@@ -518,11 +561,16 @@ export type Database = {
           scan_run_id?: string
           scanned_at?: string
           score_before_penalty?: number | null
+          session_mode?: string | null
+          setup_score?: number | null
           snapshot_score?: number | null
           snapshot_underlying_price?: number | null
+          spread_label?: string | null
           symbol?: string
           tier_assigned?: string | null
+          tier_reason?: string | null
           underlying_move_pct?: number | null
+          upgrade_path?: string[] | null
           user_budget_cap?: number | null
           warn_reasons?: string[] | null
         }
