@@ -62,6 +62,107 @@ export function classifyPickTier(i: TierInputs): TierResult {
   // Within band → 0.  Outside band → up to -15.  >10× cap → hard drop.
   const ratio = i.contractCost / cap;
   let budgetNearLimit = false;
+  // Severe-but-not-hard-drop overshoot (>50% over cap, ≤20× cap) AND a
+  // strong raw setup score → flag as "worth watching" so the Scanner can
+  // surface this in its dedicated section even though it's still over budget.
+  const severeOverBudget = ratio > 1 + BUDGET_SOFT_BAND_PCT && ratio <= BUDGET_HARD_DROP_MULT;
+  const overBudgetWorthWatching = severeOverBudget && i.score >= OVER_BUDGET_WATCHLIST_MIN_SCORE && i.safetyPass;
+
+  if (ratio > BUDGET_HARD_DROP_MULT) {
+    return {
+      tier: "EXCLUDED",
+      adjustedScore: 0,
+      penalties: [{ code: "BUDGET_HARD_DROP", points: 0,
+        reason: `Cost $${i.contractCost.toFixed(0)} > ${BUDGET_HARD_DROP_MULT}× cap $${cap}` }],
+      caveat: "Cost > 10× per-trade cap",
+      hardDrop: true,
+      overBudgetWorthWatching: false,
+    };
+  }
+  if (ratio > 1 + BUDGET_SOFT_BAND_PCT) {
+    // Outside the +50% band — meaningful penalty proportional to overshoot.
+    const over = Math.min(2, ratio - 1);              // cap at 200% over
+    const pts = -Math.round(over * 12);               // up to -24
+    penalties.push({
+      code: "BUDGET_OVER_BAND", points: pts,
+      reason: `Cost $${i.contractCost.toFixed(0)} is ${((ratio - 1) * 100).toFixed(0)}% over cap $${cap}`,
+    });
+  } else if (ratio > 1) {
+    budgetNearLimit = true;
+    penalties.push({
+      code: "BUDGET_NEAR_LIMIT", points: -4,
+      reason: `Cost $${i.contractCost.toFixed(0)} slightly above cap $${cap} (within +50%)`,
+    });
+  }
+
+  // ── IVP near-limit flag (only used to qualify NEAR-LIMIT tier) ───────────
+  const ivpNearLimit = (i.ivRank ?? 0) > 75 && (i.ivRank ?? 0) <= 90;
+  if (ivpNearLimit) {
+    penalties.push({ code: "IVP_ELEVATED", points: -3,
+      reason: `IV rank ${i.ivRank} is elevated but not extreme.` });
+  }
+
+  const penaltyTotal = penalties.reduce((s, p) => s + p.points, 0);
+  const adjustedScore = Math.max(0, Math.min(100, Math.round(i.score + penaltyTotal)));
+
+  // ── Tier decision ────────────────────────────────────────────────────────
+  if (!i.safetyPass) {
+    return { tier: "EXCLUDED", adjustedScore, penalties, caveat: "Failed safety gate", hardDrop: false, overBudgetWorthWatching: false };
+  }
+
+  if (adjustedScore >= 60 && !budgetNearLimit && !ivpNearLimit && i.nonSafetyRuleFailures === 0) {
+    return { tier: "CLEAN", adjustedScore, penalties, caveat: null, hardDrop: false, overBudgetWorthWatching };
+  }
+
+  if (adjustedScore >= 50 && (budgetNearLimit || ivpNearLimit || i.nonSafetyRuleFailures <= 1)) {
+    const reasons: string[] = [];
+    if (budgetNearLimit) reasons.push("slightly over budget");
+    if (ivpNearLimit) reasons.push("IV elevated");
+    if (i.nonSafetyRuleFailures > 0) reasons.push("1 soft rule relaxed");
+    return { tier: "NEAR-LIMIT", adjustedScore, penalties,
+      caveat: reasons.join(" · ") || "near limits", hardDrop: false, overBudgetWorthWatching };
+  }
+
+  if (adjustedScore >= 45 && i.nonSafetyRuleFailures <= 1) {
+    return { tier: "BEST-OF-WAIT", adjustedScore, penalties,
+      caveat: "Best of WAIT — 1 rule relaxed", hardDrop: false, overBudgetWorthWatching };
+  }
+
+  return { tier: "EXCLUDED", adjustedScore, penalties,
+    caveat: `score ${adjustedScore} too low or >1 rule failing`, hardDrop: false, overBudgetWorthWatching };
+}
+
+export const TIER_LABEL: Record<PickTier, string> = {
+  "CLEAN":                 "✅ Clean Pass",
+  "NEAR-LIMIT":            "⚠️ Near limits — reduce size",
+  "BEST-OF-WAIT":          "🟡 Best of WAIT — 1 rule relaxed",
+  "OVER_BUDGET_WATCHLIST": "💰 Worth watching — over budget",
+  "EXCLUDED":              "⛔ Excluded",
+};
+
+export const TIER_CLASSES: Record<PickTier, string> = {
+  "CLEAN":                 "border-bullish/40 bg-bullish/10 text-bullish",
+  "NEAR-LIMIT":            "border-warning/40 bg-warning/10 text-warning",
+  "BEST-OF-WAIT":          "border-primary/40 bg-primary/10 text-primary",
+  "OVER_BUDGET_WATCHLIST": "border-orange-600/40 bg-orange-600/10 text-orange-300",
+  "EXCLUDED":              "border-bearish/40 bg-bearish/10 text-bearish",
+};
+
+/** Numeric rank for ordering: CLEAN > NEAR-LIMIT > BEST-OF-WAIT > OVER_BUDGET_WATCHLIST > EXCLUDED. */
+export function tierRank(t: PickTier): number {
+  if (t === "CLEAN") return 4;
+  if (t === "NEAR-LIMIT") return 3;
+  if (t === "BEST-OF-WAIT") return 2;
+  if (t === "OVER_BUDGET_WATCHLIST") return 1;
+  return 0;
+}
+  const penalties: TierResult["penalties"] = [];
+  const cap = Math.max(1, i.cap);
+
+  // ── Soft budget penalty ─────────────────────────────────────────────────
+  // Within band → 0.  Outside band → up to -15.  >10× cap → hard drop.
+  const ratio = i.contractCost / cap;
+  let budgetNearLimit = false;
   if (ratio > BUDGET_HARD_DROP_MULT) {
     return {
       tier: "EXCLUDED",
