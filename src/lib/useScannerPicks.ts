@@ -57,6 +57,8 @@ import {
 } from "@/lib/signals/redditSignalEngine";
 import { isEventDay, getEventWarning } from "@/lib/signals/eventCalendar";
 import { useVix, useIvRank } from "@/lib/vix";
+import { scoreCandidateCP } from "@/lib/scoreCandidateCP";
+import { isOrbDay } from "@/lib/orb";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
