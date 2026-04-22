@@ -51,7 +51,7 @@ import {
   computeVerdict, isMarketOpen, isWeekend,
   type VerdictResult, type Verdict,
 } from "@/lib/verdictModel";
-import { getMarketState } from "@/lib/marketHours";
+import { getMarketState, getSessionMode, type SessionMode } from "@/lib/marketHours";
 import { MobileScannerList } from "@/components/scanner/MobileScannerList";
 import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
 import { StrategyContextBar, type PipelineCounts } from "@/components/StrategyContextBar";
@@ -223,8 +223,17 @@ export default function Scanner() {
   }, [highlightKey]);
 
   const universe = useMemo(() => TICKER_UNIVERSE.map((t) => t.symbol), []);
+  // Session-aware refetch cadence — quote freshness expectations differ by session.
+  const sessionMode = getSessionMode();
+  const SESSION_REFRESH_MS: Record<SessionMode, number> = {
+    MARKET_OPEN: 10_000,
+    PRE_MARKET:  30_000,
+    AFTER_HOURS: 60_000,
+    CLOSED:      0,
+  };
+  const refetchMs = SESSION_REFRESH_MS[sessionMode] || 60_000;
   const { data: quotes = [], isLoading, isFetching, refetch, dataUpdatedAt } = useLiveQuotes(universe, {
-    refetchMs: 60_000,
+    refetchMs,
   });
 
   // 200-day SMA gate — pulled once per session, cached 24h. Also feeds real
@@ -531,6 +540,17 @@ export default function Scanner() {
             <Badge variant="outline" className="text-muted-foreground border-border text-xs shrink-0">Market Closed</Badge>
           </div>
         )}
+        {/* NovaWhisper session-aware refresh chip */}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="pill pill-neutral">
+            <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
+            {refetchMs > 0 ? `Auto-refresh ${Math.round(refetchMs / 1000)}s` : "Auto-refresh paused"}
+          </span>
+          <span>· Session: {sessionMode.replace("_", " ").toLowerCase()}</span>
+          {sessionMode !== "MARKET_OPEN" && (
+            <span>· Buy-Now signals only during regular session</span>
+          )}
+        </div>
         <PreMarketPreviewBanner />
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3">

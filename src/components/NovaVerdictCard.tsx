@@ -11,6 +11,7 @@ import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
 import { usePreMarketStatus } from "@/lib/preMarketPreview";
 import { getMarketState } from "@/lib/marketHours";
+import type { QuoteIntegrityReport, QuoteConfidenceLabel } from "@/lib/quotes/quoteTypes";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
@@ -42,7 +43,23 @@ export interface NovaCard {
   iv_rank?: number | null;
   /** True when iv_rank came from real 52w history; false = IVP proxy. */
   iv_rank_is_real?: boolean;
+  /** Optional NovaWhisper integrity report — renders Live Price Check + Greeks. */
+  quote_report?: QuoteIntegrityReport | null;
+  /** Optional execution-risk label derived from spread % (LOW/MEDIUM/HIGH). */
+  execution_risk?: "LOW" | "MEDIUM" | "HIGH" | null;
+  /** Optional budget-fit label (GOOD/TIGHT/OVER_BUDGET). */
+  budget_fit?: "GOOD" | "TIGHT" | "OVER_BUDGET" | null;
+  /** Optional plain-English quote summary. */
+  human_quote_summary?: string | null;
 }
+
+const CONFIDENCE_BADGE: Record<QuoteConfidenceLabel, { label: string; cls: string }> = {
+  VERIFIED:   { label: "✓ Real-Time Verified", cls: "border-bullish/50 bg-bullish/15 text-bullish" },
+  ACCEPTABLE: { label: "✓ Fresh Quote",        cls: "border-primary/50 bg-primary/15 text-primary" },
+  CAUTION:    { label: "⚠ Delayed Quote",      cls: "border-warning/50 bg-warning/15 text-warning" },
+  UNRELIABLE: { label: "⚠ Stale Data",         cls: "border-bearish/50 bg-bearish/15 text-bearish" },
+  BLOCKED:    { label: "✕ No Reliable Quote",  cls: "border-muted-foreground/50 bg-muted/40 text-muted-foreground" },
+};
 
 const ACTION_STYLES: Record<NovaCard["action"], { bg: string; text: string; ring: string; emoji: string }> = {
   BUY:  { bg: "bg-bullish/15", text: "text-bullish", ring: "ring-bullish/40", emoji: "✅" },
@@ -183,6 +200,17 @@ export function NovaVerdictCard({
         </div>
       ) : null}
 
+
+      {/* ── NovaWhisper Live Price Check ─────────────────────────────────── */}
+      {card.quote_report && (
+        <LivePriceCheckPanel
+          report={card.quote_report}
+          executionRisk={card.execution_risk ?? null}
+          budgetFit={card.budget_fit ?? null}
+          humanSummary={card.human_quote_summary ?? null}
+        />
+      )}
+
       {/* Better structure hint when not SKIP */}
       {card.action !== "SKIP" && card.better_structure && (
         <div className="mt-3 text-xs text-muted-foreground">
@@ -228,6 +256,20 @@ export function NovaVerdictCard({
         <span className={`pill ${card.confidence === "High" ? "pill-bullish" : card.confidence === "Medium" ? "pill-neutral" : "pill-bearish"}`}>
           Confidence {card.confidence}
         </span>
+        {card.quote_report?.optionQuote.quoteConfidenceLabel && (
+          (() => {
+            const lbl = card.quote_report!.optionQuote.quoteConfidenceLabel;
+            const meta = CONFIDENCE_BADGE[lbl];
+            return (
+              <span
+                className={`pill ${meta.cls}`}
+                title={`Quote confidence ${card.quote_report!.optionQuote.quoteConfidenceScore}/100`}
+              >
+                {meta.label}
+              </span>
+            );
+          })()
+        )}
         {card.iv_rank != null && Number.isFinite(card.iv_rank) && (
           <span
             className="pill pill-neutral"
@@ -287,5 +329,94 @@ export function NovaVerdictCard({
         </div>
       )}
     </Card>
+  );
+}
+
+// ── NovaWhisper Live Price Check sub-panel ─────────────────────────────────
+function LivePriceCheckPanel({
+  report,
+  executionRisk,
+  budgetFit,
+  humanSummary,
+}: {
+  report: QuoteIntegrityReport;
+  executionRisk: "LOW" | "MEDIUM" | "HIGH" | null;
+  budgetFit: "GOOD" | "TIGHT" | "OVER_BUDGET" | null;
+  humanSummary: string | null;
+}) {
+  const oq = report.optionQuote;
+  const uq = report.underlyingQuote;
+  const spreadCls =
+    oq.spreadPct > 0.18 ? "text-bearish" : oq.spreadPct > 0.12 ? "text-warning" : "text-bullish";
+  const execCls =
+    executionRisk === "HIGH" ? "text-bearish" : executionRisk === "MEDIUM" ? "text-warning" : "text-bullish";
+  const budgetCls =
+    budgetFit === "OVER_BUDGET" ? "text-bearish" : budgetFit === "TIGHT" ? "text-warning" : "text-bullish";
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-surface/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          Live Price Check
+        </div>
+        {report.requiresRecalc && (
+          <span className="pill border-warning/50 bg-warning/15 text-warning">⚠ RECALC</span>
+        )}
+      </div>
+
+      {humanSummary && (
+        <div className="text-[11px] text-foreground/85 leading-snug">{humanSummary}</div>
+      )}
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+        <Row k="Underlying" v={`$${uq.lastPrice.toFixed(2)}`} sub={`${uq.source} · ${uq.quoteAgeSeconds.toFixed(0)}s`} />
+        <Row k="Move since snap" v={`${(report.underlyingMovePct * 100).toFixed(2)}%`} cls={report.requiresRecalc ? "text-warning" : ""} />
+        <Row k="Bid" v={`$${oq.bid.toFixed(2)}`} />
+        <Row k="Ask" v={`$${oq.ask.toFixed(2)}`} />
+        <Row k="Mid (use this)" v={`$${oq.mid.toFixed(2)}`} cls="font-semibold" />
+        <Row k="Last trade" v={`$${oq.last.toFixed(2)}`} sub="reference only" />
+        <Row k="Spread" v={`${(oq.spreadPct * 100).toFixed(1)}%`} cls={spreadCls} sub={executionRisk ? `${executionRisk} exec risk` : undefined} subCls={execCls} />
+        <Row k="Quote age" v={`${oq.quoteAgeSeconds.toFixed(0)}s`} sub={oq.source} />
+        <Row k="Confidence" v={`${oq.quoteConfidenceScore}/100`} sub={oq.quoteConfidenceLabel} />
+        {budgetFit && <Row k="Budget fit" v={budgetFit} cls={budgetCls} />}
+      </div>
+
+      {report.blockReasons.length > 0 && (
+        <div className="space-y-0.5 pt-1 border-t border-border/60">
+          {report.blockReasons.map((r, i) => (
+            <div key={i} className="text-[11px] text-bearish leading-snug">✕ {r}</div>
+          ))}
+        </div>
+      )}
+      {report.warnReasons.length > 0 && (
+        <div className="space-y-0.5">
+          {report.warnReasons.map((r, i) => (
+            <div key={i} className="text-[11px] text-warning leading-snug">⚠ {r}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Greeks + liquidity strip */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t border-border/60 text-[10px] font-mono text-muted-foreground">
+        <span>IV {(oq.iv * 100).toFixed(1)}%</span>
+        <span>Δ {oq.delta.toFixed(2)}</span>
+        <span>θ {oq.theta.toFixed(3)}</span>
+        <span>Vol {oq.volume.toLocaleString()}</span>
+        <span>OI {oq.openInterest.toLocaleString()}</span>
+        <span>DTE {oq.dte}</span>
+      </div>
+    </div>
+  );
+}
+
+function Row({ k, v, sub, cls, subCls }: { k: string; v: string; sub?: string; cls?: string; subCls?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 min-w-0">
+      <span className="text-muted-foreground truncate">{k}</span>
+      <span className="text-right">
+        <span className={`mono ${cls ?? "text-foreground"}`}>{v}</span>
+        {sub && <span className={`ml-1 text-[9px] ${subCls ?? "text-muted-foreground"}`}>{sub}</span>}
+      </span>
+    </div>
   );
 }

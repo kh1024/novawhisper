@@ -23,6 +23,7 @@ import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
 import { useSma200 } from "@/lib/sma200";
 import { TradePlanCard } from "@/components/TradePlanCard";
+import { useScannerPicks } from "@/lib/useScannerPicks";
 
 type Props = {
   symbol: string | null;
@@ -126,6 +127,12 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   // Daily closes — feeds the sparkline on NovaVerdictCard.
   const { map: smaMap } = useSma200(symbol ? [symbol] : []);
   const novaCloses = symbol ? smaMap.get(symbol)?.closes ?? null : null;
+  // Look up matching scanner pick to surface its NovaWhisper quote integrity report.
+  const scanner = useScannerPicks();
+  const matchingPick = useMemo(
+    () => symbol ? scanner.approved.find((p) => p.row.symbol.toUpperCase() === symbol.toUpperCase()) ?? null : null,
+    [scanner.approved, symbol],
+  );
   const topPicks = useMemo(
     () => (chain && q ? pickTopContracts(chain.contracts, q.price) : []),
     [chain, q]
@@ -480,7 +487,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                     )}
                     {novaCard && (
                       <NovaVerdictCard
-                        card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }}
+                        card={{
+                          ...novaCard,
+                          full_analysis_md: novaCard.full_analysis_md ?? novaText,
+                          quote_report: matchingPick?.quoteReport ?? null,
+                          execution_risk: matchingPick?.executionRiskLabel ?? null,
+                          budget_fit: matchingPick?.budgetFitLabel ?? null,
+                          human_quote_summary: matchingPick?.humanQuoteSummary ?? null,
+                        }}
                         closes={novaCloses ?? undefined}
                         symbol={symbol ?? undefined}
                       />
