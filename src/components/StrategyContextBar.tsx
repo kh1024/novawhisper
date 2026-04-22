@@ -72,7 +72,7 @@ export function StrategyContextBar({
         <CountChip label="budget-blocked" value={counts.budgetBlocked} tone={counts.budgetBlocked > 0 ? "warn" : "neutral"} />
         {counts.overBudgetWatchlist != null && counts.overBudgetWatchlist > 0 && (
           <span
-            className="inline-flex items-baseline gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-1.5 text-orange-400"
+            className="inline-flex items-baseline gap-1 rounded-full border border-warning/40 bg-warning/10 px-1.5 text-warning"
             title="Strong-score picks routed to the over-budget watchlist (subset of budget-blocked)."
           >
             <span className="mono font-semibold">{counts.overBudgetWatchlist}</span>
