@@ -492,10 +492,26 @@ export default function Scanner() {
     : "—";
 
   const marketState = getMarketState();
+  const orbStatus = getOrbStatus();
+  const cpScan = useScannerPicks({ bucket: activeBucket });
+  const overBudgetPicks = cpScan.overBudgetWatchlist ?? [];
 
   return (
     <TooltipProvider delayDuration={150}>
       <div className="p-3 sm:p-6 md:p-8 max-w-[1700px] mx-auto space-y-4 sm:space-y-6">
+        {/* ORB status banner — Mon/Wed/Fri only */}
+        {orbStatus.isOrbDay && (
+          <div className={cn(
+            "w-full px-4 py-2 rounded text-sm font-medium",
+            orbStatus.inRangeWindow && "border border-primary/40 bg-primary/10 text-primary",
+            orbStatus.inEntryWindow && "border border-bullish/50 bg-bullish/10 text-bullish",
+            orbStatus.windowExpired && "border border-border bg-muted/40 text-muted-foreground",
+          )}>
+            {orbStatus.inRangeWindow && "⏱ ORB RECORDING — 9:30–9:35 ET opening range forming. Breakout trade available at 9:35."}
+            {orbStatus.inEntryWindow && "🟢 ORB WINDOW OPEN — Entry valid until 10:30 AM ET. ATM calls or puts only. Exit at +100% or -50%."}
+            {orbStatus.windowExpired && "ORB window closed for today (expired 10:30 AM ET)."}
+          </div>
+        )}
         {/* Market session banner — explains why scoring may be on EOD data. */}
         {marketState === "PRE_MARKET" && (
           <div className="w-full px-4 py-2 rounded border border-warning/40 bg-warning/10 text-warning text-sm flex items-center justify-between gap-3">
