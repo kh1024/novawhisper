@@ -302,8 +302,50 @@ export function TomorrowsGamePlan() {
               No budget-qualified setups scoring ≥ 50 yet. Plan rebuilds as the scan completes.
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {liveTop.map((p) => <GamePlanCard key={p.key} pick={p} />)}
+            <div className="space-y-4">
+              {tomorrowIsOrbDay && (
+                <Card className="glass-card p-3 border-primary/40 bg-primary/5 text-xs">
+                  <div className="font-semibold text-primary mb-1">📍 ORB day tomorrow (Mon/Wed/Fri)</div>
+                  <div className="text-muted-foreground">
+                    Watch the 9:30–9:35 AM ET opening range. Enter ATM calls (bullish breakout) or ATM puts (bearish breakdown) at 9:35.
+                    Exit at +100% or −50%. Window closes at 10:30 AM ET.
+                  </div>
+                </Card>
+              )}
+
+              {callPicks.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-bullish flex items-center gap-1.5">
+                    <TrendingUp className="h-4 w-4" /> Call Candidates ({callPicks.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {callPicks.map((p) => <GamePlanCard key={p.key} pick={p} />)}
+                  </div>
+                </div>
+              )}
+
+              {putPicks.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-bearish flex items-center gap-1.5">
+                    <TrendingDown className="h-4 w-4" /> Put Candidates ({putPicks.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {putPicks.map((p) => <GamePlanCard key={p.key} pick={p} />)}
+                  </div>
+                </div>
+              )}
+
+              <Card className="glass-card p-3 border-border/60 bg-muted/20 text-xs">
+                <div className="font-semibold text-foreground mb-1.5">Standing Rules (every trade)</div>
+                <ul className="space-y-0.5 text-muted-foreground list-disc pl-4">
+                  <li>Sell at +50% gain — no holding for more</li>
+                  <li>Sell at −35% loss — no averaging down</li>
+                  <li>Close any position at 7 DTE regardless of P&L</li>
+                  <li>Never hold through earnings</li>
+                  <li>Max 1–2 trades per day</li>
+                  <li>Check VIX first — if VIX &gt; 25, cut size in half</li>
+                </ul>
+              </Card>
             </div>
           )}
         </CollapsibleContent>
