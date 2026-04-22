@@ -52,6 +52,8 @@ import { currentMarketMode, getMarketState, getSessionMode, buyNowAllowed } from
 import { runQuoteIntegrity } from "@/lib/quotes/quoteIntegrityEngine";
 import { QUOTE_THRESHOLDS } from "@/lib/quotes/quoteProvider";
 import type { QuoteIntegrityReport } from "@/lib/quotes/quoteTypes";
+import { computeContractScore, type ContractScoreResult } from "@/lib/scoring/contractScore";
+import { computeExecutionScore, type ExecutionScoreResult } from "@/lib/scoring/executionScore";
 import { supabase } from "@/integrations/supabase/client";
 import {
   scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
