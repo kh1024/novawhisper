@@ -950,6 +950,52 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         nextTradeState = "WATCHLIST_ONLY";
       }
 
+      // ── 4-Score system ────────────────────────────────────────────────
+      let contractResult: ContractScoreResult | undefined;
+      let executionResult: ExecutionScoreResult | undefined;
+      let finalScore: number | undefined;
+      let plainEnglishSummary: string | undefined;
+      const setupScoreVal = p.row.setupScore ?? 50;
+
+      if (oq && report) {
+        contractResult = computeContractScore({
+          optionQuote: oq,
+          userBudgetCap: cap,
+          targetDteLow: 21,
+          targetDteHigh: 45,
+          targetDeltaLow: 0.35,
+          targetDeltaHigh: 0.65,
+        });
+
+        const nowET = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        executionResult = computeExecutionScore({
+          currentPrice: report.underlyingQuote.lastPrice ?? p.row.price ?? 0,
+          entryZoneLow: 0,
+          entryZoneHigh: 0,
+          snapshotPrice: p.row.price ?? 0,
+          relativeVolume: p.row.relativeVolume ?? 1.0,
+          liveTriggerConfirmed: false,
+          quoteAgeSeconds: oq.quoteAgeSeconds ?? 999,
+          quoteConfidenceScore: oq.quoteConfidenceScore ?? 0,
+          daysToEarnings: p.row.earningsInDays,
+          majorEventToday: p.isEventDay ?? false,
+          eventName: p.eventWarning ?? undefined,
+          currentHourET: nowET.getHours(),
+          underlyingQuote: report.underlyingQuote,
+          vix: p.currentVix,
+          dte: oq.dte ?? 30,
+        });
+
+        finalScore = Math.round(
+          setupScoreVal * 0.30 +
+          contractResult.contract_score * 0.30 +
+          executionResult.execution_score * 0.25 +
+          (oq.quoteConfidenceScore ?? 0) * 0.15,
+        );
+
+        plainEnglishSummary = derivePlainEnglishSummary(contractResult, executionResult, report, setupScoreVal);
+      }
+
       return {
         ...p,
         tradeState: nextTradeState,
@@ -961,6 +1007,14 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         quoteConfidenceLabel: oq?.quoteConfidenceLabel,
         humanQuoteSummary: report?.humanSummary,
         sessionNote,
+        contractScoreResult: contractResult,
+        executionScoreResult: executionResult,
+        setup_score: setupScoreVal,
+        contract_score: contractResult?.contract_score,
+        execution_score: executionResult?.execution_score,
+        quote_confidence_score: oq?.quoteConfidenceScore,
+        final_score: finalScore,
+        plain_english_summary: plainEnglishSummary,
       };
     });
   }, [approvedEnrichedRaw, integrityQ.data, cap]);
