@@ -190,6 +190,34 @@ export function NovaVerdictCard({
         </div>
       )}
 
+      {/* Exit Strategy panel — default rules for Calls & Puts mode */}
+      {card.action !== "SKIP" && (
+        <div className="mt-3 rounded-lg border border-border bg-surface/30 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              Exit Strategy
+            </div>
+            <span className="text-[9px] text-muted-foreground/80 italic">
+              Default for Calls & Puts mode
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded border border-bullish/30 bg-bullish/5 py-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Profit</div>
+              <div className="mono text-sm font-bold text-bullish">+50%</div>
+            </div>
+            <div className="rounded border border-bearish/30 bg-bearish/5 py-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Stop</div>
+              <div className="mono text-sm font-bold text-bearish">−35%</div>
+            </div>
+            <div className="rounded border border-border bg-muted/30 py-1.5">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Time</div>
+              <div className="mono text-sm font-bold text-foreground">7 DTE</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Compact meta chips */}
       <div className="mt-4 flex flex-wrap gap-1.5 items-center">
         <span className={`pill ${card.data_quality === "PASS" ? "pill-bullish" : card.data_quality === "PARTIAL" ? "pill-neutral" : "pill-bearish"}`}>
