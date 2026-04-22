@@ -163,6 +163,15 @@ export interface ApprovedPick {
   humanQuoteSummary?: string;
   /** Set when a session rule (after-hours / closed / pre-market) capped the pick. */
   sessionNote?: string;
+  // ── 4-Score System (additive, optional) ──────────────────────────────────
+  contractScoreResult?: ContractScoreResult;
+  executionScoreResult?: ExecutionScoreResult;
+  setup_score?: number;
+  contract_score?: number;
+  execution_score?: number;
+  quote_confidence_score?: number;
+  final_score?: number;
+  plain_english_summary?: string;
 }
 
 export interface BlockedPick {
