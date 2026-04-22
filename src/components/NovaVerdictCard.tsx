@@ -256,6 +256,20 @@ export function NovaVerdictCard({
         <span className={`pill ${card.confidence === "High" ? "pill-bullish" : card.confidence === "Medium" ? "pill-neutral" : "pill-bearish"}`}>
           Confidence {card.confidence}
         </span>
+        {card.quote_report?.optionQuote.quoteConfidenceLabel && (
+          (() => {
+            const lbl = card.quote_report!.optionQuote.quoteConfidenceLabel;
+            const meta = CONFIDENCE_BADGE[lbl];
+            return (
+              <span
+                className={`pill ${meta.cls}`}
+                title={`Quote confidence ${card.quote_report!.optionQuote.quoteConfidenceScore}/100`}
+              >
+                {meta.label}
+              </span>
+            );
+          })()
+        )}
         {card.iv_rank != null && Number.isFinite(card.iv_rank) && (
           <span
             className="pill pill-neutral"
