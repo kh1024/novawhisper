@@ -73,6 +73,7 @@ import { findCheapestAlternative } from "@/lib/useScannerPicks";
 import { Sparkles } from "lucide-react";
 import { getOrbStatus } from "@/lib/orb";
 import { useScannerPicks } from "@/lib/useScannerPicks";
+import { ScannerBuckets } from "@/components/ScannerBuckets";
 
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
@@ -802,45 +803,11 @@ export default function Scanner() {
                 </CollapsibleBlockedSection>
               )}
 
-              <CollapsibleBlockedSection
-                title="Approved — passes profile + safety gates"
-                count={stable.length}
-                subtitle={stable.length > 0 ? "Sorted by Final Rank" : "0 picks pass right now"}
-                tone="approved"
-                defaultOpen
-              >
-                {stable.length === 0 ? (
-                  <div className="text-[12px] text-muted-foreground px-1 py-2">
-                    No approved picks. See blocked sections below or use the Loosen panel.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {stable.map((c) => {
-                      const r = c.payload;
-                      return (
-                        <div
-                          key={c.key}
-                          id={`pick-${r.symbol}`}
-                          className={cn(
-                            "relative transition-all duration-500",
-                            flashKey === r.symbol && "ring-4 ring-primary/70 ring-offset-2 ring-offset-background rounded-lg",
-                          )}
-                        >
-                          <SetupCard
-                            row={r}
-                            rank={rankMap.get(r.symbol)?.rank ?? null}
-                            closes={sma.map.get(r.symbol)?.closes ?? null}
-                            onOpen={() => setOpenSymbol(r.symbol)}
-                          />
-                          <span className="absolute top-2 left-2 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-border/60 bg-background/80 text-muted-foreground">
-                            On board {formatCacheAge(c.firstSeenAt)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CollapsibleBlockedSection>
+              {/* ── 4-Score Bucket Layout (BUY NOW / WATCHLIST / NEEDS RECHECK / AVOID) ── */}
+              {/* Replaces the legacy "Approved" SetupCard grid. Driven by useScannerPicks
+                  + finalClassifier — every card shows 4 score bars, classification badge,
+                  contract grid, plain-English reason, upgrade path, live price check. */}
+              <ScannerBucketsSection onOpen={setOpenSymbol} flashKey={flashKey} />
 
               {budgetBlocked.length > 0 && (
                 <CollapsibleBlockedSection
