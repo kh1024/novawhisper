@@ -578,15 +578,52 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                 </TabsContent>
 
                 <TabsContent value="picks" className="mt-4 space-y-2">
+                  {/* Quote-integrity filter — hide BLOCKED / UNRELIABLE quotes */}
+                  <div className="flex items-center gap-2 flex-wrap p-2 rounded-md bg-surface/40 border border-border/50">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Quote integrity</span>
+                    <div className="flex gap-1 flex-wrap">
+                      {CONFIDENCE_FILTERS.map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setConfidenceFilter(f.id)}
+                          title={f.tip}
+                          className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                            confidenceFilter === f.id
+                              ? "bg-primary/20 border-primary text-primary"
+                              : "border-border text-muted-foreground hover:bg-surface"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {hiddenCount > 0 && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {hiddenCount} hidden by filter
+                      </span>
+                    )}
+                  </div>
+
                   {chainLoading && (
                     <div className="text-sm text-muted-foreground p-4 text-center flex items-center justify-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" /> Loading live chain…
                     </div>
                   )}
-                  {!chainLoading && topPicks.length === 0 && (
+                  {!chainLoading && annotatedPicks.length === 0 && (
                     <div className="text-sm text-muted-foreground p-4 text-center">No qualifying contracts in 7–60 DTE window.</div>
                   )}
-                  {topPicks.map(({ c, mid, annualized, score }) => {
+                  {!chainLoading && annotatedPicks.length > 0 && visiblePicks.length === 0 && (
+                    <div className="text-sm text-muted-foreground p-4 text-center space-y-2">
+                      <div>All {annotatedPicks.length} picks were hidden by the <strong>{CONFIDENCE_FILTERS.find(f => f.id === confidenceFilter)?.label}</strong> filter.</div>
+                      <button
+                        onClick={() => setConfidenceFilter("ALL")}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Show all anyway →
+                      </button>
+                    </div>
+                  )}
+                  {visiblePicks.map(({ c, mid, annualized, score, confidence }) => {
                     const absDelta = c.delta != null ? Math.abs(c.delta) : null;
                     const risk =
                       absDelta == null
@@ -598,10 +635,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         : { label: "🔴 Aggressive", cls: "bg-bearish/15 text-bearish border-bearish/40", tip: "OTM · Δ < 0.40 · high theta decay" };
                     const cost = mid * 100;
                     const inBudget = cost <= budget;
+                    const conf = CONFIDENCE_BADGE[confidence];
                     return (
                     <Card key={c.ticker} className="glass-card p-3 flex items-center gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${conf.cls}`} title={`Quote confidence: ${confidence}`}>
+                            {conf.label}
+                          </span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${risk.cls}`} title={risk.tip}>
                             {risk.label}
                           </span>
@@ -634,9 +675,9 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                           expiry={c.expiration}
                           entryPrice={q?.price ?? null}
                           premiumEstimate={mid > 0 ? `$${mid.toFixed(2)}` : null}
-                          thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`}
+                          thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann. · ${confidence}`}
                           source="research-drawer"
-                          meta={{ score, annualized, dte: c.dte }}
+                          meta={{ score, annualized, dte: c.dte, quoteConfidence: confidence }}
                         />
                         <AddToPortfolioButton
                           size="xs"
@@ -650,7 +691,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                             premium: mid > 0 ? mid : null,
                             ivRank: c.iv != null ? Math.round(c.iv * 100) : null,
                             initialScore: score,
-                            thesis: `Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`,
+                            thesis: `Research drawer · score ${score} · ${annualized.toFixed(0)}% ann. · ${confidence}`,
                             source: "research-drawer",
                           }}
                         />
