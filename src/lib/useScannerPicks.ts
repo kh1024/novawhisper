@@ -154,6 +154,8 @@ export interface PipelineCounts {
   gatePassing: number;       // approved before bucket-narrowing
   gateBlocked: number;
   budgetBlocked: number;
+  /** Strong-score picks routed to the over-budget watchlist (subset of budgetBlocked). */
+  overBudgetWatchlist: number;
   shown: number;             // after bucket-narrowing + maxResults
   filterChip: string | null;
   // ── Funnel metrics (debug panel) ──
@@ -178,6 +180,11 @@ export interface ScannerPicksResult {
   watchlistOnly: ApprovedPick[];
   /** Top WATCHLIST_ONLY picks shown when there are 0 trade-ready (max 3). */
   bestPending: ApprovedPick[];
+  /** Strong-score picks (raw score ≥ OVER_BUDGET_WATCHLIST_MIN_SCORE) that
+   *  are severely over the per-trade budget. UI surfaces these in a
+   *  dedicated "Strong Setups — Over Budget" section. They also live in
+   *  budgetBlocked for back-compat with the existing budget collapsible. */
+  overBudgetWatchlist: ApprovedPick[];
   budgetBlocked: BlockedPick[];
   safetyBlocked: BlockedPick[];
   counts: PipelineCounts;
