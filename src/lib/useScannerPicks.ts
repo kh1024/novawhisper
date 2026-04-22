@@ -625,7 +625,7 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
 
   const bucketed = useMemo(() => {
     if (!pipelineQ.data) {
-      return { approved: [], budgetBlocked: [], safetyBlocked: [], profileFilteredCount: 0, universeFilteredCount: 0 };
+      return { approved: [], budgetBlocked: [], overBudgetWatchlist: [], safetyBlocked: [], profileFilteredCount: 0, universeFilteredCount: 0 };
     }
     return bucketPicks({
       rows,
