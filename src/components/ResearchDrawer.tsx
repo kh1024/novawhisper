@@ -189,6 +189,22 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
     [chain, q]
   );
 
+  // Quote-integrity filter for the Live Picks tab.
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilterMode>("TRUSTED");
+  const allowedLabels = useMemo(
+    () => new Set(CONFIDENCE_FILTERS.find((f) => f.id === confidenceFilter)?.allowed ?? []),
+    [confidenceFilter],
+  );
+  const annotatedPicks = useMemo(
+    () => topPicks.map((p) => ({ ...p, confidence: deriveContractConfidence(p.c) })),
+    [topPicks],
+  );
+  const visiblePicks = useMemo(
+    () => annotatedPicks.filter((p) => allowedLabels.has(p.confidence)),
+    [annotatedPicks, allowedLabels],
+  );
+  const hiddenCount = annotatedPicks.length - visiblePicks.length;
+
   // Detect stale option data: chain loaded with contracts but every mid/last is 0
   const optionsStale = useMemo(() => {
     if (!chain || chainLoading) return false;
