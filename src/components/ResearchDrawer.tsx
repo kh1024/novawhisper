@@ -487,7 +487,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                     )}
                     {novaCard && (
                       <NovaVerdictCard
-                        card={{ ...novaCard, full_analysis_md: novaCard.full_analysis_md ?? novaText }}
+                        card={{
+                          ...novaCard,
+                          full_analysis_md: novaCard.full_analysis_md ?? novaText,
+                          quote_report: matchingPick?.quoteReport ?? null,
+                          execution_risk: matchingPick?.executionRiskLabel ?? null,
+                          budget_fit: matchingPick?.budgetFitLabel ?? null,
+                          human_quote_summary: matchingPick?.humanQuoteSummary ?? null,
+                        }}
                         closes={novaCloses ?? undefined}
                         symbol={symbol ?? undefined}
                       />
