@@ -764,6 +764,7 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
     approved: approvedFinal,
     watchlistOnly,
     bestPending,
+    overBudgetWatchlist: bucketed.overBudgetWatchlist,
     budgetBlocked: opts.includeBudgetBlocked === false ? [] : bucketed.budgetBlocked,
     safetyBlocked: opts.includeSafetyBlocked === false ? [] : bucketed.safetyBlocked,
     counts: {
@@ -771,6 +772,7 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
       gatePassing: approvedEnriched.length + bucketed.budgetBlocked.length,
       gateBlocked: bucketed.safetyBlocked.length,
       budgetBlocked: bucketed.budgetBlocked.length,
+      overBudgetWatchlist: bucketed.overBudgetWatchlist.length,
       shown: approvedFinal.length,
       filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
       safetyPassingCount,
