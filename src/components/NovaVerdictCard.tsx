@@ -202,9 +202,17 @@ export function NovaVerdictCard({
 
 
       {/* ── NovaWhisper Live Price Check ─────────────────────────────────── */}
-      {card.quote_report && <LivePriceCheckPanel report={card.quote_report} executionRisk={card.execution_risk ?? null} budgetFit={card.budget_fit ?? null} humanSummary={card.human_quote_summary ?? null} />}
+      {card.quote_report && (
+        <LivePriceCheckPanel
+          report={card.quote_report}
+          executionRisk={card.execution_risk ?? null}
+          budgetFit={card.budget_fit ?? null}
+          humanSummary={card.human_quote_summary ?? null}
+        />
+      )}
 
-
+      {/* Better structure hint when not SKIP */}
+      {card.action !== "SKIP" && card.better_structure && (
         <div className="mt-3 text-xs text-muted-foreground">
           <span className="font-semibold text-foreground/80">Better:</span> {card.better_structure}
         </div>
