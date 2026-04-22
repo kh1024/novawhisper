@@ -55,7 +55,6 @@ import type { QuoteIntegrityReport } from "@/lib/quotes/quoteTypes";
 import { computeContractScore, type ContractScoreResult } from "@/lib/scoring/contractScore";
 import { computeExecutionScore, type ExecutionScoreResult } from "@/lib/scoring/executionScore";
 import { classifyPick } from "@/lib/scoring/finalClassifier";
-import { getSessionMode } from "@/lib/marketHours";
 import { supabase } from "@/integrations/supabase/client";
 import {
   scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
