@@ -245,6 +245,9 @@ export function TomorrowsGamePlan() {
   const tomorrowEvent = getEventWarning(tomorrow);
   const buyReadyCount = liveTop.filter((p) => (p.rank?.finalRank ?? p.row.setupScore) >= 63).length;
   const topPick = liveTop[0];
+  const tomorrowIsOrbDay = isTomorrowOrbDay();
+  const callPicks = liveTop.filter((p) => p.contract.optionType === "call");
+  const putPicks = liveTop.filter((p) => p.contract.optionType === "put");
   const [open, setOpen] = useState(true);
 
   if (!visible) return null;
