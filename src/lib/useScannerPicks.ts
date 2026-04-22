@@ -396,6 +396,9 @@ export function bucketPicks(args: {
           scoringOverrides: args.profile.scoringOverrides,
         });
         const cta = resolveCta(tradeStateResult.state, tradeStateResult);
+        const cpScore = scoreCandidateCP({
+          row: r, cap: args.cap, contractCost: pick.candidate.contractCost, dte,
+        });
         overBudgetWatchlist.push({
           key, row: r, rank: rankResult, verdict: v ?? null, contract,
           estCost: pick.candidate.contractCost,
@@ -416,6 +419,8 @@ export function bucketPicks(args: {
           exitMode: { mode: "PROFIT_TARGET", profitTargetPct: 0.50, stopLossPct: 1.00, rationale: "Pending" },
           isEventDay: false, eventWarning: null, gapPct: 0,
           currentVix: 15, ivRankUsed: r.ivRank ?? 0, ivRankIsReal: false,
+          direction: cpScore.direction, orbDay: isOrbDay(), orbEligible: isOrbDay(),
+          exitPlan: cpScore.exitPlan,
         });
       }
       continue;
