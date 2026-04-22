@@ -492,6 +492,14 @@ export function bucketPicks(args: {
       currentVix: 15,
       ivRankUsed: r.ivRank ?? 0,
       ivRankIsReal: false,
+      // ── Calls & Puts overlay (additive) ──
+      direction: (() => {
+        const cp = scoreCandidateCP({ row: r, cap: args.cap, contractCost: pick.candidate.contractCost, dte });
+        return cp.direction;
+      })(),
+      orbDay: isOrbDay(),
+      orbEligible: isOrbDay(),
+      exitPlan: { profitTarget: 0.5, stopLoss: -0.35, maxDte: 7 },
     });
   }
 
