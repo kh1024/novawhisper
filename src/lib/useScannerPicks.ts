@@ -52,6 +52,8 @@ import { currentMarketMode, getMarketState, getSessionMode, buyNowAllowed } from
 import { runQuoteIntegrity } from "@/lib/quotes/quoteIntegrityEngine";
 import { QUOTE_THRESHOLDS } from "@/lib/quotes/quoteProvider";
 import type { QuoteIntegrityReport } from "@/lib/quotes/quoteTypes";
+import { computeContractScore, type ContractScoreResult } from "@/lib/scoring/contractScore";
+import { computeExecutionScore, type ExecutionScoreResult } from "@/lib/scoring/executionScore";
 import { supabase } from "@/integrations/supabase/client";
 import {
   scoreSpxPutSpread, classifyVixRegime, scoreSPYIronCondor, selectExitMode,
@@ -161,6 +163,15 @@ export interface ApprovedPick {
   humanQuoteSummary?: string;
   /** Set when a session rule (after-hours / closed / pre-market) capped the pick. */
   sessionNote?: string;
+  // ── 4-Score System (additive, optional) ──────────────────────────────────
+  contractScoreResult?: ContractScoreResult;
+  executionScoreResult?: ExecutionScoreResult;
+  setup_score?: number;
+  contract_score?: number;
+  execution_score?: number;
+  quote_confidence_score?: number;
+  final_score?: number;
+  plain_english_summary?: string;
 }
 
 export interface BlockedPick {
@@ -280,6 +291,27 @@ function budgetFitLabel(
   if (overBudget || fillCost > cap * 1.5) return "OVER_BUDGET";
   if (fillCost > cap) return "TIGHT";
   return "GOOD";
+}
+
+function derivePlainEnglishSummary(
+  contract: ContractScoreResult,
+  execution: ExecutionScoreResult,
+  quoteReport: QuoteIntegrityReport | undefined,
+  setupScore: number,
+): string {
+  if (contract.hard_blocked) return contract.hard_block_reason ?? "Contract data invalid.";
+  if (quoteReport?.blockReasons.length) return quoteReport.blockReasons[0];
+  if (!execution.session_allows_buy_now) return execution.plain_english_reason;
+  if (contract.budget_fit === "OVER_BUDGET") return contract.plain_english_reason;
+  if (contract.spread_label === "TOO_WIDE") return `Option spread ${(contract.spread_pct * 100).toFixed(1)}% — too wide for a clean fill.`;
+  if (contract.delta_fit === "TOO_FAR_OTM") return `Strike too far out of the money. Needs big move just to profit.`;
+  if (!execution.trigger_confirmed) return execution.plain_english_reason;
+  if (!execution.volume_confirmed) return "Setup valid, but volume not confirming the move yet.";
+  if (setupScore < 50) return "Underlying trend is weak — not a strong setup.";
+  if (contract.contract_grade === "EXCELLENT" && execution.execution_label === "TRADE_READY") {
+    return "Trigger confirmed, volume confirming, clean contract. Entry is live.";
+  }
+  return execution.plain_english_reason;
 }
 
 /** Mirror of the quote-penalty math used inline in the integrity enrichment;
@@ -939,6 +971,52 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         nextTradeState = "WATCHLIST_ONLY";
       }
 
+      // ── 4-Score system ────────────────────────────────────────────────
+      let contractResult: ContractScoreResult | undefined;
+      let executionResult: ExecutionScoreResult | undefined;
+      let finalScore: number | undefined;
+      let plainEnglishSummary: string | undefined;
+      const setupScoreVal = p.row.setupScore ?? 50;
+
+      if (oq && report) {
+        contractResult = computeContractScore({
+          optionQuote: oq,
+          userBudgetCap: cap,
+          targetDteLow: 21,
+          targetDteHigh: 45,
+          targetDeltaLow: 0.35,
+          targetDeltaHigh: 0.65,
+        });
+
+        const nowET = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+        executionResult = computeExecutionScore({
+          currentPrice: report.underlyingQuote.lastPrice ?? p.row.price ?? 0,
+          entryZoneLow: 0,
+          entryZoneHigh: 0,
+          snapshotPrice: p.row.price ?? 0,
+          relativeVolume: 1.0,
+          liveTriggerConfirmed: false,
+          quoteAgeSeconds: oq.quoteAgeSeconds ?? 999,
+          quoteConfidenceScore: oq.quoteConfidenceScore ?? 0,
+          daysToEarnings: p.row.earningsInDays,
+          majorEventToday: p.isEventDay ?? false,
+          eventName: p.eventWarning ?? undefined,
+          currentHourET: nowET.getHours(),
+          underlyingQuote: report.underlyingQuote,
+          vix: p.currentVix,
+          dte: oq.dte ?? 30,
+        });
+
+        finalScore = Math.round(
+          setupScoreVal * 0.30 +
+          contractResult.contract_score * 0.30 +
+          executionResult.execution_score * 0.25 +
+          (oq.quoteConfidenceScore ?? 0) * 0.15,
+        );
+
+        plainEnglishSummary = derivePlainEnglishSummary(contractResult, executionResult, report, setupScoreVal);
+      }
+
       return {
         ...p,
         tradeState: nextTradeState,
@@ -950,6 +1028,14 @@ export function useScannerPicks(opts: UseScannerPicksOptions = {}): ScannerPicks
         quoteConfidenceLabel: oq?.quoteConfidenceLabel,
         humanQuoteSummary: report?.humanSummary,
         sessionNote,
+        contractScoreResult: contractResult,
+        executionScoreResult: executionResult,
+        setup_score: setupScoreVal,
+        contract_score: contractResult?.contract_score,
+        execution_score: executionResult?.execution_score,
+        quote_confidence_score: oq?.quoteConfidenceScore,
+        final_score: finalScore,
+        plain_english_summary: plainEnglishSummary,
       };
     });
   }, [approvedEnrichedRaw, integrityQ.data, cap]);
