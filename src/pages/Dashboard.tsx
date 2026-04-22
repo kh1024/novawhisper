@@ -118,7 +118,6 @@ export default function Dashboard() {
                 </Card>
               )},
               { id: "tips", node: <TipsRotator /> },
-              { id: "playbook", node: <PlaybookCard onPick={setOpenSymbol} /> },
               { id: "news", node: <NewsFeed limit={8} title="Reuters News" sources={["reuters"]} sourceLabel="via Reuters" /> },
               { id: "sectors", node: <SectorBreakdown quotes={quotes} onPick={setOpenSymbol} /> },
             ]}
