@@ -75,6 +75,33 @@ import { getOrbStatus } from "@/lib/orb";
 import { useScannerPicks } from "@/lib/useScannerPicks";
 import { ScannerBuckets } from "@/components/ScannerBuckets";
 
+// Wrapper that owns the useScannerPicks subscription and renders the new
+// 4-Score bucket layout. Lives at the top of the file so the inline approved
+// section in Scanner() can drop it in without re-deriving the picks pipeline.
+function ScannerBucketsSection({
+  onOpen,
+  flashKey,
+}: {
+  onOpen: (symbol: string) => void;
+  flashKey: string | null;
+}) {
+  const { approved, isLoading } = useScannerPicks();
+  if (isLoading) {
+    return (
+      <div className="text-[12px] text-muted-foreground px-1 py-2">
+        Scoring picks against 4-gate model…
+      </div>
+    );
+  }
+  // Highlight the deep-linked symbol (Dashboard → Top Opportunity).
+  const sorted = flashKey
+    ? [...approved].sort((a, b) =>
+        a.row.symbol === flashKey ? -1 : b.row.symbol === flashKey ? 1 : 0,
+      )
+    : approved;
+  return <ScannerBuckets picks={sorted} onOpen={onOpen} />;
+}
+
 // Build a sensible default options contract from a scanner row so the user can
 // save it to their portfolio with one click. ATM strike, ~30 DTE next Friday,
 // option type follows the row's bias (bullish → call, bearish → put,
