@@ -686,6 +686,7 @@ export default function Scanner() {
             gatePassing: approvedRows.length + budgetBlocked.length,
             gateBlocked: safetyBlocked.length,
             budgetBlocked: budgetBlocked.length,
+            overBudgetWatchlist: overBudgetPicks.length,
             shown: stable.length,
             filterChip: filterChipParts.length > 0 ? filterChipParts.join(" · ") : null,
           };
