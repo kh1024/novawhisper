@@ -106,3 +106,38 @@ export function getTomorrowET(now: Date = new Date()): Date {
   // open is already next trading session — its calendar day in ET is "tomorrow".
   return open;
 }
+
+// ─── Session mode (NovaWhisper Quote Integrity engine) ───────────────────────
+// Coarser-grained label than MarketState used by the scanner UI banner and
+// the auto-refresh loop. Equivalent semantics, kept separate so we can tune
+// thresholds (max quote age, BUY NOW eligibility) without touching the
+// existing MarketMode / MarketState consumers.
+
+export type SessionMode =
+  | "PRE_MARKET"   // before 9:30 ET (Mon-Fri)
+  | "MARKET_OPEN"  // 9:30-16:00 ET
+  | "AFTER_HOURS"  // 16:00-20:00 ET
+  | "CLOSED";      // overnight / weekend
+
+export function getSessionMode(now: Date = new Date()): SessionMode {
+  const state = getMarketState(now);
+  if (state === "OPEN")        return "MARKET_OPEN";
+  if (state === "PRE_MARKET")  return "PRE_MARKET";
+  if (state === "AFTER_HOURS") return "AFTER_HOURS";
+  return "CLOSED";
+}
+
+/** True only during the regular session — every other window forces WATCHLIST. */
+export function buyNowAllowed(sessionMode: SessionMode = getSessionMode()): boolean {
+  return sessionMode === "MARKET_OPEN";
+}
+
+/** Maximum allowed quote age (seconds) before a quote is treated as STALE. */
+export function maxQuoteAge(sessionMode: SessionMode = getSessionMode()): number {
+  switch (sessionMode) {
+    case "MARKET_OPEN": return 15;
+    case "PRE_MARKET":  return 120;
+    case "AFTER_HOURS": return 300;
+    case "CLOSED":      return Number.POSITIVE_INFINITY;
+  }
+}
