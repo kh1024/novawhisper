@@ -11,7 +11,10 @@
 // Selector contract: pull CLEAN first, then NEAR-LIMIT, then BEST-OF-WAIT
 // until MIN_BUY_NOW_PER_BUCKET (default 3) is hit per bucket.
 
-export type PickTier = "CLEAN" | "NEAR-LIMIT" | "BEST-OF-WAIT" | "EXCLUDED";
+export type PickTier = "CLEAN" | "NEAR-LIMIT" | "BEST-OF-WAIT" | "OVER_BUDGET_WATCHLIST" | "EXCLUDED";
+
+/** Min raw setup score to qualify a severely-over-budget pick as "Worth Watching". */
+export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 65;
 
 export const MIN_BUY_NOW_PER_BUCKET = 3;
 /** Soft budget band — picks within ±50% of cap incur only a small penalty. */
@@ -44,6 +47,11 @@ export interface TierResult {
   caveat: string | null;
   /** True when contractCost > 10× cap — caller should hard-drop. */
   hardDrop: boolean;
+  /** True when raw score >= OVER_BUDGET_WATCHLIST_MIN_SCORE AND contract is
+   *  severely over budget (>50% of cap). The Scanner pipeline uses this
+   *  flag to surface the pick in the "Strong Setups — Over Budget" section
+   *  even though it's also routed to budgetBlocked for back-compat. */
+  overBudgetWorthWatching: boolean;
 }
 
 export function classifyPickTier(i: TierInputs): TierResult {
