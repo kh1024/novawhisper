@@ -126,6 +126,18 @@ export interface ApprovedPick {
   ivRankUsed: number;
   /** True when ivRankUsed came from real 52w iv_history; false = IVP proxy. */
   ivRankIsReal: boolean;
+  // ── Calls & Puts revamp (additive, optional) ────────────────────────────
+  /** Directional bias produced by scoreCandidateCP (CALL / PUT / NEUTRAL). */
+  direction?: "CALL" | "PUT" | "NEUTRAL";
+  /** True today (Mon/Wed/Fri) — used by ORB banner. */
+  orbDay?: boolean;
+  /** True when the pick is eligible for the ORB engine (default same as orbDay). */
+  orbEligible?: boolean;
+  /** Standardized exit plan: 50% profit / 35% stop / close at 7 DTE. */
+  exitPlan?: { profitTarget: number; stopLoss: number; maxDte: number };
+  /** When a gate would block but the directional CP score is strong, set
+   *  this string and surface the pick as WATCH with a footnote. */
+  gateOverrideReason?: string;
 }
 
 export interface BlockedPick {
