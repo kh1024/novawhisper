@@ -94,6 +94,9 @@ export function AddToPortfolioButton({ pick, spec, size = "sm", className, varia
     return null;
   }, [pick, spec]);
 
+  // Block over-budget watchlist picks — they're tracked, not traded.
+  const isOverBudget = pick?.pickTier === "OVER_BUDGET_WATCHLIST";
+
   const [settings] = useSettings();
   const add = useAddPosition();
   const navigate = useNavigate();

@@ -70,6 +70,15 @@ export function StrategyContextBar({
         <CountChip label="gate-passing" value={counts.gatePassing} tone={counts.gatePassing > 0 ? "good" : "neutral"} />
         <CountChip label="gate-blocked" value={counts.gateBlocked} tone={counts.gateBlocked > 0 ? "warn" : "neutral"} />
         <CountChip label="budget-blocked" value={counts.budgetBlocked} tone={counts.budgetBlocked > 0 ? "warn" : "neutral"} />
+        {counts.overBudgetWatchlist != null && counts.overBudgetWatchlist > 0 && (
+          <span
+            className="inline-flex items-baseline gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-1.5 text-orange-400"
+            title="Strong-score picks routed to the over-budget watchlist (subset of budget-blocked)."
+          >
+            <span className="mono font-semibold">{counts.overBudgetWatchlist}</span>
+            <span>over-budget</span>
+          </span>
+        )}
         <CountChip label="shown" value={counts.shown} tone={counts.shown > 0 ? "good" : "bad"} />
         {counts.filterChip && (
           <Badge variant="outline" className="border-warning/40 bg-warning/10 text-warning text-[10px] gap-1 ml-1">
