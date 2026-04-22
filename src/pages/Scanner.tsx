@@ -1157,9 +1157,9 @@ export default function Scanner() {
 
         {/* 💰 Strong Setups — Over Budget */}
         {overBudgetPicks.length > 0 && (
-          <Card className="glass-card p-4 border-orange-600/40 bg-orange-600/5 space-y-3">
+          <Card className="glass-card p-4 border-warning/40 bg-warning/5 space-y-3">
             <div>
-              <h3 className="text-base font-semibold text-orange-400">💰 Strong Setups — Over Budget</h3>
+              <h3 className="text-base font-semibold text-warning">💰 Strong Setups — Over Budget</h3>
               <p className="text-xs text-muted-foreground mt-0.5">
                 High-scoring picks outside your current per-trade cap (${cpScan.cap.toLocaleString()}). Track or raise your cap in Strategy.
               </p>
@@ -1183,7 +1183,7 @@ export default function Scanner() {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
-                      <Badge variant="outline" className="bg-orange-600/20 text-orange-300 border-orange-600/40 font-mono">
+                      <Badge variant="outline" className="bg-warning/20 text-warning border-warning/40 font-mono">
                         Needs ~${needs.toLocaleString()}+ to enter
                       </Badge>
                       <span className="text-muted-foreground">Score <span className="font-semibold text-foreground">{Math.round(score)}</span></span>
