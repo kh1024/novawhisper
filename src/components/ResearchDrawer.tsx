@@ -127,6 +127,12 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
   // Daily closes — feeds the sparkline on NovaVerdictCard.
   const { map: smaMap } = useSma200(symbol ? [symbol] : []);
   const novaCloses = symbol ? smaMap.get(symbol)?.closes ?? null : null;
+  // Look up matching scanner pick to surface its NovaWhisper quote integrity report.
+  const scanner = useScannerPicks();
+  const matchingPick = useMemo(
+    () => symbol ? scanner.approved.find((p) => p.row.symbol.toUpperCase() === symbol.toUpperCase()) ?? null : null,
+    [scanner.approved, symbol],
+  );
   const topPicks = useMemo(
     () => (chain && q ? pickTopContracts(chain.contracts, q.price) : []),
     [chain, q]
