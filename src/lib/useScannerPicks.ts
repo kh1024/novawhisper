@@ -431,7 +431,6 @@ export function bucketPicks(args: {
       scoringOverrides: args.profile.scoringOverrides,
     });
     const cta = resolveCta(tradeStateResult.state, tradeStateResult);
-    if (isDebug) console.log(`[SPY DEBUG] FINAL ✅ APPROVED:`, { tradeState: tradeStateResult.state, blockers: tradeStateResult.blockers, cta, strike: pick.candidate.strike, cost: pick.candidate.contractCost });
 
     approved.push({
       key,
@@ -482,7 +481,7 @@ export function bucketPicks(args: {
     return b.row.setupScore - a.row.setupScore;
   });
 
-  return { approved, budgetBlocked, safetyBlocked, profileFilteredCount, universeFilteredCount };
+  return { approved, budgetBlocked, overBudgetWatchlist, safetyBlocked, profileFilteredCount, universeFilteredCount };
 }
 
 /**
