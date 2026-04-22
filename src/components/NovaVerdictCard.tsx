@@ -42,8 +42,6 @@ export interface NovaCard {
   iv_rank?: number | null;
   /** True when iv_rank came from real 52w history; false = IVP proxy. */
   iv_rank_is_real?: boolean;
-  /** Optional gate-override note — when present, shown as a directional override callout. */
-  gate_override_reason?: string | null;
 }
 
 const ACTION_STYLES: Record<NovaCard["action"], { bg: string; text: string; ring: string; emoji: string }> = {
@@ -247,12 +245,6 @@ export function NovaVerdictCard({
           </span>
         )}
       </div>
-
-      {card.gate_override_reason && (
-        <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-2 text-[11px] text-warning">
-          ⚡ <span className="font-semibold">Directional override:</span> {card.gate_override_reason}
-        </div>
-      )}
 
       {/* Footer actions: Chain jump + toggle full analysis */}
       {(card.full_analysis_md || (symbol && c)) && (
