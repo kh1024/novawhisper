@@ -540,6 +540,17 @@ export default function Scanner() {
             <Badge variant="outline" className="text-muted-foreground border-border text-xs shrink-0">Market Closed</Badge>
           </div>
         )}
+        {/* NovaWhisper session-aware refresh chip */}
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <span className="pill pill-neutral">
+            <RefreshCw className={cn("h-3 w-3", isFetching && "animate-spin")} />
+            {refetchMs > 0 ? `Auto-refresh ${Math.round(refetchMs / 1000)}s` : "Auto-refresh paused"}
+          </span>
+          <span>· Session: {sessionMode.replace("_", " ").toLowerCase()}</span>
+          {sessionMode !== "MARKET_OPEN" && (
+            <span>· Buy-Now signals only during regular session</span>
+          )}
+        </div>
         <PreMarketPreviewBanner />
         {/* Header */}
         <div className="flex items-start justify-between flex-wrap gap-3">
