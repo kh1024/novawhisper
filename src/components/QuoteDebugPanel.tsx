@@ -62,7 +62,31 @@ BLOCK (${qr.blockReasons.length})
 ${qr.blockReasons.length === 0 ? "  (none)" : qr.blockReasons.map((r) => "  • " + r).join("\n")}
 
 WARN (${qr.warnReasons.length})
-${qr.warnReasons.length === 0 ? "  (none)" : qr.warnReasons.map((r) => "  • " + r).join("\n")}`}
+${qr.warnReasons.length === 0 ? "  (none)" : qr.warnReasons.map((r) => "  • " + r).join("\n")}
+
+CLASSIFICATION
+  tier:        ${pick.tier4 ?? "(unset)"}
+  reason:      ${pick.tierReason ?? "(unset)"}
+  hard block:  ${pick.isHardBlocked ? "YES" : "no"}
+  failing gates (${(pick.failingGates ?? []).length}):
+${
+  (pick.failingGates ?? []).length === 0
+    ? "    (none — all gates passed)"
+    : (pick.failingGates ?? []).map((g) => `    • ${g.gate}: ${g.score}/${g.minimum} — ${g.reason}`).join("\n")
+}
+  upgrade path:
+${
+  (pick.upgradePath ?? []).length === 0
+    ? "    (n/a)"
+    : (pick.upgradePath ?? []).map((s) => `    → ${s}`).join("\n")
+}
+
+4-SCORE SUMMARY
+  setup:    ${pick.setup_score ?? "—"}/100
+  contract: ${pick.contract_score ?? "—"}/100
+  execution:${pick.execution_score ?? "—"}/100
+  quote:    ${pick.quote_confidence_score ?? "—"}/100
+  final:    ${pick.final_score ?? "—"}/100`}
         </pre>
       )}
     </div>
