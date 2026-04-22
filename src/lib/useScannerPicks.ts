@@ -140,6 +140,23 @@ export interface ApprovedPick {
   /** When a gate would block but the directional CP score is strong, set
    *  this string and surface the pick as WATCH with a footnote. */
   gateOverrideReason?: string;
+  // ── NovaWhisper Quote Integrity (additive, optional) ─────────────────────
+  /** Full integrity report — bid/ask/spread/source/age/conflict/recalc. */
+  quoteReport?: import("./quotes/quoteTypes").QuoteIntegrityReport;
+  /** Aggressive fill estimate (option ask × 100). */
+  estimatedFillCost?: number;
+  /** Coarse budget-fit label for the UI. */
+  budgetFitLabel?: "GOOD" | "TIGHT" | "OVER_BUDGET";
+  /** Coarse execution risk label derived from spread %. */
+  executionRiskLabel?: "LOW" | "MEDIUM" | "HIGH";
+  /** 0-100 confidence in the live option quote. */
+  quoteConfidenceScore?: number;
+  /** Mirror of optionQuote.quoteConfidenceLabel for UI ergonomics. */
+  quoteConfidenceLabel?: import("./quotes/quoteTypes").QuoteConfidenceLabel;
+  /** Plain-English summary the card surfaces in its decision section. */
+  humanQuoteSummary?: string;
+  /** Set when a session rule (after-hours / closed / pre-market) capped the pick. */
+  sessionNote?: string;
 }
 
 export interface BlockedPick {
