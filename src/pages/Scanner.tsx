@@ -51,7 +51,7 @@ import {
   computeVerdict, isMarketOpen, isWeekend,
   type VerdictResult, type Verdict,
 } from "@/lib/verdictModel";
-import { getMarketState } from "@/lib/marketHours";
+import { getMarketState, getSessionMode, type SessionMode } from "@/lib/marketHours";
 import { MobileScannerList } from "@/components/scanner/MobileScannerList";
 import { PreMarketPreviewBanner } from "@/components/PreMarketPreviewBanner";
 import { StrategyContextBar, type PipelineCounts } from "@/components/StrategyContextBar";
