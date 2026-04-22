@@ -261,6 +261,47 @@ function contractKey(c: PickContract): string {
   return `${c.symbol.toUpperCase()}|${c.optionType}|${c.strike}|${c.expiry}`;
 }
 
+/** Build an OCC-style option symbol like "AAPL250117C00190000" from a PickContract. */
+function buildOccSymbol(c: PickContract): string {
+  const yymmdd = c.expiry.slice(2, 4) + c.expiry.slice(5, 7) + c.expiry.slice(8, 10);
+  const cp = c.optionType === "call" ? "C" : "P";
+  const strikeInt = Math.round(c.strike * 1000).toString().padStart(8, "0");
+  return `${c.symbol.toUpperCase()}${yymmdd}${cp}${strikeInt}`;
+}
+
+/** Coarse budget-fit label used by both the audit-log writer and the UI. */
+function budgetFitLabel(
+  fillCost: number,
+  cap: number,
+  report: import("./quotes/quoteTypes").QuoteIntegrityReport,
+): "GOOD" | "TIGHT" | "OVER_BUDGET" {
+  if (cap <= 0 || fillCost === 0) return "GOOD";
+  const overBudget = report.blockReasons.some((r) => r.includes("cap"));
+  if (overBudget || fillCost > cap * 1.5) return "OVER_BUDGET";
+  if (fillCost > cap) return "TIGHT";
+  return "GOOD";
+}
+
+/** Mirror of the quote-penalty math used inline in the integrity enrichment;
+ *  exported as a helper so the audit-log writer can record it. */
+function computeAdjustedScore(
+  setupScore: number,
+  report: import("./quotes/quoteTypes").QuoteIntegrityReport,
+): number {
+  let penalty = 0;
+  const oq = report.optionQuote;
+  if (oq.status === "STALE")   penalty += 30;
+  if (oq.status === "DELAYED") penalty += 12;
+  if (oq.source === "BSLITE")  penalty += 20;
+  if (oq.spreadPct > 0.18)     penalty += 20;
+  else if (oq.spreadPct > 0.12) penalty += 10;
+  if (report.providerConflict.disagreementPct >= 0.025) penalty += 20;
+  else if (report.providerConflict.disagreementPct >= 0.01) penalty += 8;
+  if (oq.iv === 0 || oq.delta === 0) penalty += 10;
+  if (oq.liquidityScore < 30) penalty += 12;
+  return Math.max(0, setupScore - penalty);
+}
+
 // Deterministic pure-function stage of the pipeline. Exported for the
 // consistency test so we can assert the same input → same output.
 export function bucketPicks(args: {
