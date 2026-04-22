@@ -331,3 +331,92 @@ export function NovaVerdictCard({
     </Card>
   );
 }
+
+// ── NovaWhisper Live Price Check sub-panel ─────────────────────────────────
+function LivePriceCheckPanel({
+  report,
+  executionRisk,
+  budgetFit,
+  humanSummary,
+}: {
+  report: QuoteIntegrityReport;
+  executionRisk: "LOW" | "MEDIUM" | "HIGH" | null;
+  budgetFit: "GOOD" | "TIGHT" | "OVER_BUDGET" | null;
+  humanSummary: string | null;
+}) {
+  const oq = report.optionQuote;
+  const uq = report.underlyingQuote;
+  const spreadCls =
+    oq.spreadPct > 0.18 ? "text-bearish" : oq.spreadPct > 0.12 ? "text-warning" : "text-bullish";
+  const execCls =
+    executionRisk === "HIGH" ? "text-bearish" : executionRisk === "MEDIUM" ? "text-warning" : "text-bullish";
+  const budgetCls =
+    budgetFit === "OVER_BUDGET" ? "text-bearish" : budgetFit === "TIGHT" ? "text-warning" : "text-bullish";
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-surface/30 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          Live Price Check
+        </div>
+        {report.requiresRecalc && (
+          <span className="pill border-warning/50 bg-warning/15 text-warning">⚠ RECALC</span>
+        )}
+      </div>
+
+      {humanSummary && (
+        <div className="text-[11px] text-foreground/85 leading-snug">{humanSummary}</div>
+      )}
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+        <Row k="Underlying" v={`$${uq.lastPrice.toFixed(2)}`} sub={`${uq.source} · ${uq.quoteAgeSeconds.toFixed(0)}s`} />
+        <Row k="Move since snap" v={`${(report.underlyingMovePct * 100).toFixed(2)}%`} cls={report.requiresRecalc ? "text-warning" : ""} />
+        <Row k="Bid" v={`$${oq.bid.toFixed(2)}`} />
+        <Row k="Ask" v={`$${oq.ask.toFixed(2)}`} />
+        <Row k="Mid (use this)" v={`$${oq.mid.toFixed(2)}`} cls="font-semibold" />
+        <Row k="Last trade" v={`$${oq.last.toFixed(2)}`} sub="reference only" />
+        <Row k="Spread" v={`${(oq.spreadPct * 100).toFixed(1)}%`} cls={spreadCls} sub={executionRisk ? `${executionRisk} exec risk` : undefined} subCls={execCls} />
+        <Row k="Quote age" v={`${oq.quoteAgeSeconds.toFixed(0)}s`} sub={oq.source} />
+        <Row k="Confidence" v={`${oq.quoteConfidenceScore}/100`} sub={oq.quoteConfidenceLabel} />
+        {budgetFit && <Row k="Budget fit" v={budgetFit} cls={budgetCls} />}
+      </div>
+
+      {report.blockReasons.length > 0 && (
+        <div className="space-y-0.5 pt-1 border-t border-border/60">
+          {report.blockReasons.map((r, i) => (
+            <div key={i} className="text-[11px] text-bearish leading-snug">✕ {r}</div>
+          ))}
+        </div>
+      )}
+      {report.warnReasons.length > 0 && (
+        <div className="space-y-0.5">
+          {report.warnReasons.map((r, i) => (
+            <div key={i} className="text-[11px] text-warning leading-snug">⚠ {r}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Greeks + liquidity strip */}
+      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 border-t border-border/60 text-[10px] font-mono text-muted-foreground">
+        <span>IV {(oq.iv * 100).toFixed(1)}%</span>
+        <span>Δ {oq.delta.toFixed(2)}</span>
+        <span>θ {oq.theta.toFixed(3)}</span>
+        <span>Vol {oq.volume.toLocaleString()}</span>
+        <span>OI {oq.openInterest.toLocaleString()}</span>
+        <span>DTE {oq.dte}</span>
+      </div>
+    </div>
+  );
+}
+
+function Row({ k, v, sub, cls, subCls }: { k: string; v: string; sub?: string; cls?: string; subCls?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 min-w-0">
+      <span className="text-muted-foreground truncate">{k}</span>
+      <span className="text-right">
+        <span className={`mono ${cls ?? "text-foreground"}`}>{v}</span>
+        {sub && <span className={`ml-1 text-[9px] ${subCls ?? "text-muted-foreground"}`}>{sub}</span>}
+      </span>
+    </div>
+  );
+}
