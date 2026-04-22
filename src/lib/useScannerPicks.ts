@@ -293,6 +293,27 @@ function budgetFitLabel(
   return "GOOD";
 }
 
+function derivePlainEnglishSummary(
+  contract: ContractScoreResult,
+  execution: ExecutionScoreResult,
+  quoteReport: QuoteIntegrityReport | undefined,
+  setupScore: number,
+): string {
+  if (contract.hard_blocked) return contract.hard_block_reason ?? "Contract data invalid.";
+  if (quoteReport?.blockReasons.length) return quoteReport.blockReasons[0];
+  if (!execution.session_allows_buy_now) return execution.plain_english_reason;
+  if (contract.budget_fit === "OVER_BUDGET") return contract.plain_english_reason;
+  if (contract.spread_label === "TOO_WIDE") return `Option spread ${(contract.spread_pct * 100).toFixed(1)}% — too wide for a clean fill.`;
+  if (contract.delta_fit === "TOO_FAR_OTM") return `Strike too far out of the money. Needs big move just to profit.`;
+  if (!execution.trigger_confirmed) return execution.plain_english_reason;
+  if (!execution.volume_confirmed) return "Setup valid, but volume not confirming the move yet.";
+  if (setupScore < 50) return "Underlying trend is weak — not a strong setup.";
+  if (contract.contract_grade === "EXCELLENT" && execution.execution_label === "TRADE_READY") {
+    return "Trigger confirmed, volume confirming, clean contract. Entry is live.";
+  }
+  return execution.plain_english_reason;
+}
+
 /** Mirror of the quote-penalty math used inline in the integrity enrichment;
  *  exported as a helper so the audit-log writer can record it. */
 function computeAdjustedScore(
