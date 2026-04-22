@@ -24,10 +24,61 @@ import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
 import { useSma200 } from "@/lib/sma200";
 import { TradePlanCard } from "@/components/TradePlanCard";
 import { useScannerPicks } from "@/lib/useScannerPicks";
+import { QUOTE_THRESHOLDS } from "@/lib/quotes/quoteProvider";
+import type { QuoteConfidenceLabel } from "@/lib/quotes/quoteTypes";
 
 type Props = {
   symbol: string | null;
   onClose: () => void;
+};
+
+// ── Quote confidence filter ──────────────────────────────────────────────────
+// Lets the user hide BLOCKED / UNRELIABLE picks in the Live Picks tab.
+type ConfidenceFilterMode = "ALL" | "TRUSTED" | "STRICT";
+
+const CONFIDENCE_FILTERS: { id: ConfidenceFilterMode; label: string; tip: string; allowed: QuoteConfidenceLabel[] }[] = [
+  { id: "TRUSTED", label: "Trusted", tip: "Only VERIFIED + ACCEPTABLE quotes — hides CAUTION, UNRELIABLE, BLOCKED",
+    allowed: ["VERIFIED", "ACCEPTABLE"] },
+  { id: "STRICT",  label: "Verified only", tip: "Strictest — only VERIFIED real-time quotes",
+    allowed: ["VERIFIED"] },
+  { id: "ALL",     label: "Show all", tip: "No filter — includes CAUTION / UNRELIABLE / BLOCKED",
+    allowed: ["VERIFIED", "ACCEPTABLE", "CAUTION", "UNRELIABLE", "BLOCKED"] },
+];
+
+/**
+ * Approximate a contract's confidence label from chain data alone.
+ * The full integrity engine runs server-side per scan; here we mirror its
+ * spread + liquidity + greeks heuristics so the drawer filter matches.
+ */
+function deriveContractConfidence(c: OptionContract): QuoteConfidenceLabel {
+  let score = 100;
+  const spread = (c.spreadPct ?? 0) / 100; // OptionContract spreadPct is in percent (e.g. 5.2 = 5.2%)
+  if (spread > QUOTE_THRESHOLDS.SPREAD_SOFT_FAIL_PCT) score -= 25;
+  else if (spread > QUOTE_THRESHOLDS.SPREAD_OK_PCT)   score -= 12;
+  else if (spread > QUOTE_THRESHOLDS.SPREAD_NARROW_PCT) score -= 5;
+
+  if ((c.volume ?? 0) < QUOTE_THRESHOLDS.MIN_VOLUME_FLOOR) score -= 10;
+  if ((c.openInterest ?? 0) < QUOTE_THRESHOLDS.MIN_OI_FLOOR) score -= 10;
+
+  if (c.dte <= 7 && ((c.iv ?? 0) === 0 || (c.delta ?? 0) === 0)) score -= 20;
+  else if ((c.iv ?? 0) === 0 || (c.delta ?? 0) === 0) score -= 10;
+
+  // Mid/last both zero → no usable quote at all
+  if ((c.mid ?? 0) <= 0 && (c.last ?? 0) <= 0) score -= 45;
+
+  if (score >= 85) return "VERIFIED";
+  if (score >= 65) return "ACCEPTABLE";
+  if (score >= 40) return "CAUTION";
+  if (score >= 20) return "UNRELIABLE";
+  return "BLOCKED";
+}
+
+const CONFIDENCE_BADGE: Record<QuoteConfidenceLabel, { label: string; cls: string }> = {
+  VERIFIED:   { label: "✓ Verified",   cls: "bg-bullish/15 text-bullish border-bullish/40" },
+  ACCEPTABLE: { label: "✓ Acceptable", cls: "bg-primary/15 text-primary border-primary/40" },
+  CAUTION:    { label: "⚠ Caution",    cls: "bg-warning/15 text-warning border-warning/40" },
+  UNRELIABLE: { label: "⚠ Unreliable", cls: "bg-bearish/10 text-bearish border-bearish/30" },
+  BLOCKED:    { label: "✕ Blocked",    cls: "bg-muted text-muted-foreground border-border" },
 };
 
 const SYMPATHY_MAP: Record<string, string[]> = {
@@ -137,6 +188,22 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
     () => (chain && q ? pickTopContracts(chain.contracts, q.price) : []),
     [chain, q]
   );
+
+  // Quote-integrity filter for the Live Picks tab.
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilterMode>("TRUSTED");
+  const allowedLabels = useMemo(
+    () => new Set(CONFIDENCE_FILTERS.find((f) => f.id === confidenceFilter)?.allowed ?? []),
+    [confidenceFilter],
+  );
+  const annotatedPicks = useMemo(
+    () => topPicks.map((p) => ({ ...p, confidence: deriveContractConfidence(p.c) })),
+    [topPicks],
+  );
+  const visiblePicks = useMemo(
+    () => annotatedPicks.filter((p) => allowedLabels.has(p.confidence)),
+    [annotatedPicks, allowedLabels],
+  );
+  const hiddenCount = annotatedPicks.length - visiblePicks.length;
 
   // Detect stale option data: chain loaded with contracts but every mid/last is 0
   const optionsStale = useMemo(() => {
@@ -511,15 +578,52 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                 </TabsContent>
 
                 <TabsContent value="picks" className="mt-4 space-y-2">
+                  {/* Quote-integrity filter — hide BLOCKED / UNRELIABLE quotes */}
+                  <div className="flex items-center gap-2 flex-wrap p-2 rounded-md bg-surface/40 border border-border/50">
+                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Quote integrity</span>
+                    <div className="flex gap-1 flex-wrap">
+                      {CONFIDENCE_FILTERS.map((f) => (
+                        <button
+                          key={f.id}
+                          onClick={() => setConfidenceFilter(f.id)}
+                          title={f.tip}
+                          className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                            confidenceFilter === f.id
+                              ? "bg-primary/20 border-primary text-primary"
+                              : "border-border text-muted-foreground hover:bg-surface"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    {hiddenCount > 0 && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {hiddenCount} hidden by filter
+                      </span>
+                    )}
+                  </div>
+
                   {chainLoading && (
                     <div className="text-sm text-muted-foreground p-4 text-center flex items-center justify-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" /> Loading live chain…
                     </div>
                   )}
-                  {!chainLoading && topPicks.length === 0 && (
+                  {!chainLoading && annotatedPicks.length === 0 && (
                     <div className="text-sm text-muted-foreground p-4 text-center">No qualifying contracts in 7–60 DTE window.</div>
                   )}
-                  {topPicks.map(({ c, mid, annualized, score }) => {
+                  {!chainLoading && annotatedPicks.length > 0 && visiblePicks.length === 0 && (
+                    <div className="text-sm text-muted-foreground p-4 text-center space-y-2">
+                      <div>All {annotatedPicks.length} picks were hidden by the <strong>{CONFIDENCE_FILTERS.find(f => f.id === confidenceFilter)?.label}</strong> filter.</div>
+                      <button
+                        onClick={() => setConfidenceFilter("ALL")}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Show all anyway →
+                      </button>
+                    </div>
+                  )}
+                  {visiblePicks.map(({ c, mid, annualized, score, confidence }) => {
                     const absDelta = c.delta != null ? Math.abs(c.delta) : null;
                     const risk =
                       absDelta == null
@@ -531,10 +635,14 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                         : { label: "🔴 Aggressive", cls: "bg-bearish/15 text-bearish border-bearish/40", tip: "OTM · Δ < 0.40 · high theta decay" };
                     const cost = mid * 100;
                     const inBudget = cost <= budget;
+                    const conf = CONFIDENCE_BADGE[confidence];
                     return (
                     <Card key={c.ticker} className="glass-card p-3 flex items-center gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${conf.cls}`} title={`Quote confidence: ${confidence}`}>
+                            {conf.label}
+                          </span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${risk.cls}`} title={risk.tip}>
                             {risk.label}
                           </span>
@@ -567,9 +675,9 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                           expiry={c.expiration}
                           entryPrice={q?.price ?? null}
                           premiumEstimate={mid > 0 ? `$${mid.toFixed(2)}` : null}
-                          thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`}
+                          thesis={`Research drawer · score ${score} · ${annualized.toFixed(0)}% ann. · ${confidence}`}
                           source="research-drawer"
-                          meta={{ score, annualized, dte: c.dte }}
+                          meta={{ score, annualized, dte: c.dte, quoteConfidence: confidence }}
                         />
                         <AddToPortfolioButton
                           size="xs"
@@ -583,7 +691,7 @@ export function ResearchDrawer({ symbol, onClose }: Props) {
                             premium: mid > 0 ? mid : null,
                             ivRank: c.iv != null ? Math.round(c.iv * 100) : null,
                             initialScore: score,
-                            thesis: `Research drawer · score ${score} · ${annualized.toFixed(0)}% ann.`,
+                            thesis: `Research drawer · score ${score} · ${annualized.toFixed(0)}% ann. · ${confidence}`,
                             source: "research-drawer",
                           }}
                         />
