@@ -402,6 +402,132 @@ export type Database = {
           },
         ]
       }
+      quote_audit_log: {
+        Row: {
+          adjusted_score: number | null
+          block_reasons: string[] | null
+          budget_fit_label: string | null
+          contract_symbol: string
+          estimated_fill_cost: number | null
+          human_summary: string | null
+          id: string
+          liquidity_score: number | null
+          live_underlying_age_sec: number | null
+          live_underlying_price: number | null
+          live_underlying_source: string | null
+          live_underlying_status: string | null
+          option_age_sec: number | null
+          option_ask: number | null
+          option_bid: number | null
+          option_delta: number | null
+          option_iv: number | null
+          option_last: number | null
+          option_mid: number | null
+          option_open_interest: number | null
+          option_source: string | null
+          option_spread_pct: number | null
+          option_status: string | null
+          option_volume: number | null
+          provider_conflict_pct: number | null
+          quote_confidence_label: string | null
+          quote_confidence_score: number | null
+          quote_penalty_applied: number | null
+          required_recalc: boolean | null
+          scan_run_id: string
+          scanned_at: string
+          score_before_penalty: number | null
+          snapshot_score: number | null
+          snapshot_underlying_price: number | null
+          symbol: string
+          tier_assigned: string | null
+          underlying_move_pct: number | null
+          user_budget_cap: number | null
+          warn_reasons: string[] | null
+        }
+        Insert: {
+          adjusted_score?: number | null
+          block_reasons?: string[] | null
+          budget_fit_label?: string | null
+          contract_symbol: string
+          estimated_fill_cost?: number | null
+          human_summary?: string | null
+          id?: string
+          liquidity_score?: number | null
+          live_underlying_age_sec?: number | null
+          live_underlying_price?: number | null
+          live_underlying_source?: string | null
+          live_underlying_status?: string | null
+          option_age_sec?: number | null
+          option_ask?: number | null
+          option_bid?: number | null
+          option_delta?: number | null
+          option_iv?: number | null
+          option_last?: number | null
+          option_mid?: number | null
+          option_open_interest?: number | null
+          option_source?: string | null
+          option_spread_pct?: number | null
+          option_status?: string | null
+          option_volume?: number | null
+          provider_conflict_pct?: number | null
+          quote_confidence_label?: string | null
+          quote_confidence_score?: number | null
+          quote_penalty_applied?: number | null
+          required_recalc?: boolean | null
+          scan_run_id: string
+          scanned_at?: string
+          score_before_penalty?: number | null
+          snapshot_score?: number | null
+          snapshot_underlying_price?: number | null
+          symbol: string
+          tier_assigned?: string | null
+          underlying_move_pct?: number | null
+          user_budget_cap?: number | null
+          warn_reasons?: string[] | null
+        }
+        Update: {
+          adjusted_score?: number | null
+          block_reasons?: string[] | null
+          budget_fit_label?: string | null
+          contract_symbol?: string
+          estimated_fill_cost?: number | null
+          human_summary?: string | null
+          id?: string
+          liquidity_score?: number | null
+          live_underlying_age_sec?: number | null
+          live_underlying_price?: number | null
+          live_underlying_source?: string | null
+          live_underlying_status?: string | null
+          option_age_sec?: number | null
+          option_ask?: number | null
+          option_bid?: number | null
+          option_delta?: number | null
+          option_iv?: number | null
+          option_last?: number | null
+          option_mid?: number | null
+          option_open_interest?: number | null
+          option_source?: string | null
+          option_spread_pct?: number | null
+          option_status?: string | null
+          option_volume?: number | null
+          provider_conflict_pct?: number | null
+          quote_confidence_label?: string | null
+          quote_confidence_score?: number | null
+          quote_penalty_applied?: number | null
+          required_recalc?: boolean | null
+          scan_run_id?: string
+          scanned_at?: string
+          score_before_penalty?: number | null
+          snapshot_score?: number | null
+          snapshot_underlying_price?: number | null
+          symbol?: string
+          tier_assigned?: string | null
+          underlying_move_pct?: number | null
+          user_budget_cap?: number | null
+          warn_reasons?: string[] | null
+        }
+        Relationships: []
+      }
       strategy_profiles: {
         Row: {
           owner_key: string
