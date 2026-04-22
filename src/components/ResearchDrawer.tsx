@@ -23,6 +23,7 @@ import { FundamentalsPanel } from "@/components/FundamentalsPanel";
 import { InsiderActivityPanel } from "@/components/InsiderActivityPanel";
 import { useSma200 } from "@/lib/sma200";
 import { TradePlanCard } from "@/components/TradePlanCard";
+import { useScannerPicks } from "@/lib/useScannerPicks";
 
 type Props = {
   symbol: string | null;
