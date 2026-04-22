@@ -128,6 +128,11 @@ const universe: UniverseEntry[] = [
   { symbol: "TLT", name: "20+ Year Treasury ETF", sector: "ETF", base: 92 },
   { symbol: "ARKK", name: "ARK Innovation ETF", sector: "ETF", base: 58 },
   { symbol: "SOXL", name: "Direxion Semis Bull 3x", sector: "ETF", base: 28 },
+  // ── Calls & Puts revamp universe additions ──────────────────────────────
+  // Liquid directional names from the user's actual positions list.
+  { symbol: "IGV",  name: "iShares Software ETF",   sector: "ETF",        base: 92 },
+  { symbol: "HIMS", name: "Hims & Hers Health",     sector: "Healthcare", marketCap: 1.2e10, base: 28 },
+  { symbol: "SQQQ", name: "ProShares UltraPro Short QQQ", sector: "ETF", base: 12 },
 ] as any;
 
 // ── Small-Cap Friendly universe ───────────────────────────────────────────

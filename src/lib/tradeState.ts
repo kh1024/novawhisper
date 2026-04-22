@@ -73,6 +73,20 @@ export const TRADE_STATE_CONFIG = {
   TRIGGER_REQUIRE_ALL: false,
 } as const;
 
+// ── Calls & Puts mode constants (additive; consumed by UI / scoreCandidateCP) ──
+/** Legacy thresholds kept as named exports so other modules can import directly. */
+export const TRADE_READY_MIN_SCORE = TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE;   // 63
+export const WATCHLIST_MIN_SCORE   = TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE;     // 50
+export const MAX_SOFT_FAILURES     = TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS; // 3
+/** ANY_2_OF_3 = relaxed (current default). ALL_3 = strict legacy. */
+export const CP_TRIGGER_MODE: "ANY_2_OF_3" | "ALL_3" =
+  TRADE_STATE_CONFIG.TRIGGER_REQUIRE_ALL ? "ALL_3" : "ANY_2_OF_3";
+/** When true, picks above OVER_BUDGET_WATCHLIST_MIN_SCORE that exceed the
+ *  per-trade cap surface in a dedicated "Strong Setups — Over Budget" section
+ *  instead of being silently hidden. */
+export const OVER_BUDGET_SHOW_IN_WATCHLIST = true;
+export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 65;
+
 /** Per-evaluation override knobs read from the active StrategyProfile. */
 export interface ScoringOverrides {
   tradeReadyMinScore?: number;
