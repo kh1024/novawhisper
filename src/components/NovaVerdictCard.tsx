@@ -11,6 +11,7 @@ import { Sparkline } from "@/components/Sparkline";
 import { computeRSI14 } from "@/lib/streak";
 import { usePreMarketStatus } from "@/lib/preMarketPreview";
 import { getMarketState } from "@/lib/marketHours";
+import type { QuoteIntegrityReport, QuoteConfidenceLabel } from "@/lib/quotes/quoteTypes";
 
 export interface NovaCard {
   verdict: "GOOD SETUP" | "POSSIBLE BUT EARLY" | "SPECULATIVE" | "LOW-QUALITY IDEA" | "NO TRADE";
