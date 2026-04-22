@@ -244,9 +244,21 @@ export function bucketPicks(args: {
   const preMarket = isPreMarketWindow();
   const currentMarketState = getMarketState();
 
+  const debugSym = "SPY";
   for (const r of args.rows) {
+    const isDebug = r.symbol.toUpperCase() === debugSym;
+    if (isDebug) {
+      console.log(`[SPY DEBUG] row found:`, {
+        symbol: r.symbol, price: r.price, bias: r.bias,
+        setupScore: r.setupScore, ivRank: r.ivRank, atrPct: r.atrPct,
+        rsi: r.rsi, optionsLiquidity: r.optionsLiquidity,
+        earningsInDays: r.earningsInDays, riskBadge: r.crl?.riskBadge,
+        crlVerdict: r.crl?.verdict,
+      });
+    }
     if (args.overrides.conservativeCheapOnly && !isConservativeCheapTicker(r.symbol)) {
       universeFilteredCount++;
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: conservativeCheapOnly filter`);
       continue;
     }
     const optionType: "call" | "put" = r.bias === "bearish" ? "put" : "call";
@@ -257,16 +269,18 @@ export function bucketPicks(args: {
       earningsInDays: r.earningsInDays,
       ivRank: r.ivRank,
     });
-    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) continue;
-
-    if (!isStructureAllowed(args.profile, optionType, dte)) {
-      profileFilteredCount++;
+    if (isDebug) console.log(`[SPY DEBUG] bucket=${rowB}, bucketFilter=${args.bucketFilter}, optionType=${optionType}, dte=${dte}, expiry=${expiry}`);
+    if (args.bucketFilter !== "All" && rowB !== args.bucketFilter) {
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: bucket mismatch`);
       continue;
     }
 
-    // ── Strike ladder: generate Deep ITM / ITM / ATM (+OTM for lottery) ──
-    // and price each rung via Black-Scholes-lite. The picker then selects
-    // the highest-quality rung that fits the per-trade cap.
+    if (!isStructureAllowed(args.profile, optionType, dte)) {
+      profileFilteredCount++;
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: structure not allowed`);
+      continue;
+    }
+
     const ladder = buildStrikeLadder({
       spot: r.price,
       ivRank: r.ivRank,
@@ -275,14 +289,17 @@ export function bucketPicks(args: {
       dte,
       includeOTM: rowB === "Lottery",
     });
-    // Try the best-fitting rung first, but DON'T hard-drop on cap miss; the
-    // tier classifier converts budget into a soft penalty unless cost > 10×.
+    if (isDebug) console.log(`[SPY DEBUG] ladder (cap=$${args.cap}):`, ladder.map(l => ({ rung: l.rung, strike: l.strike, premium: +l.premium.toFixed(2), cost: l.contractCost, suspect: l.suspect })));
     const fitPick = pickBestRung(ladder, args.cap);
     const pick = fitPick
       ?? (ladder.length > 0
         ? { candidate: ladder[0], cheapest: ladder[ladder.length - 1], fitsCap: false } as const
         : null);
-    if (!pick) continue;
+    if (!pick) {
+      if (isDebug) console.log(`[SPY DEBUG] DROPPED: no ladder candidates`);
+      continue;
+    }
+    if (isDebug) console.log(`[SPY DEBUG] picked rung=${pick.candidate.rung}, strike=${pick.candidate.strike}, cost=$${pick.candidate.contractCost}, fitsCap=${pick.fitsCap}`);
 
     const contract: PickContract = {
       symbol: r.symbol,
@@ -293,6 +310,7 @@ export function bucketPicks(args: {
     const key = contractKey(contract);
     const v = args.verdictByRow.get(r.symbol);
     const isSafetyBlocked = v?.verdict === "Avoid" || (v?.reason ?? "").toLowerCase().includes("block");
+    if (isDebug) console.log(`[SPY DEBUG] verdict:`, { verdict: v?.verdict, reason: v?.reason, isSafetyBlocked });
 
     if (isSafetyBlocked) {
       safetyBlocked.push({
@@ -315,6 +333,7 @@ export function bucketPicks(args: {
       finalRank: rankResult?.finalRank ?? null,
     });
     const tradeStage = tradeStageFromStatus(tradeStatus, preMarket, true);
+    if (isDebug) console.log(`[SPY DEBUG] tradeStatus:`, { blockers: tradeStatus.blockers, finalRank: rankResult?.finalRank, label: rankResult?.label, tradeStage });
 
     // ── Tier classification (soft budget + score-based fail-soft) ─────────
     const nonSafetyRuleFailures = tradeStatus.blockers.filter(
@@ -328,8 +347,10 @@ export function bucketPicks(args: {
       nonSafetyRuleFailures,
       ivRank: r.ivRank,
     });
+    if (isDebug) console.log(`[SPY DEBUG] tier:`, { tier: tier.tier, hardDrop: tier.hardDrop, adjustedScore: tier.adjustedScore, caveat: tier.caveat, penalties: tier.penalties });
 
     const severeBudgetMiss = !pick.fitsCap && pick.candidate.contractCost > args.cap * 1.5;
+    if (isDebug) console.log(`[SPY DEBUG] budget check:`, { contractCost: pick.candidate.contractCost, cap: args.cap, fitsCap: pick.fitsCap, severeBudgetMiss, hardDrop: tier.hardDrop });
 
     // Hard drop: cost > 20× cap OR materially over budget (>50% above cap)
     // should be surfaced as budget-blocked, not left in the visible approved set.
@@ -388,6 +409,7 @@ export function bucketPicks(args: {
       scoringOverrides: args.profile.scoringOverrides,
     });
     const cta = resolveCta(tradeStateResult.state, tradeStateResult);
+    if (isDebug) console.log(`[SPY DEBUG] FINAL ✅ APPROVED:`, { tradeState: tradeStateResult.state, blockers: tradeStateResult.blockers, cta, strike: pick.candidate.strike, cost: pick.candidate.contractCost });
 
     approved.push({
       key,
