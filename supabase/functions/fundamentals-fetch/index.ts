@@ -97,7 +97,7 @@ async function fetchFundamentals(symbol: string) {
     const holds = rec.hold ?? 0;
     if (buys > holds && buys > sells) recommendationKey = (rec.strongBuy ?? 0) > (rec.buy ?? 0) ? "strong_buy" : "buy";
     else if (sells > holds && sells > buys) recommendationKey = "sell";
-    else if (analystCount > 0) recommendationKey = "hold";
+    else if ((analystCount ?? 0) > 0) recommendationKey = "hold";
   }
 
   // Finnhub marketCap is in millions USD; normalize.
