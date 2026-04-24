@@ -7,19 +7,19 @@ export function gate1_DataIntegrity(i: SignalInput): GateResult {
   const priceDrift = i.liveFeedPrice > 0
     ? Math.abs(i.currentPrice - i.liveFeedPrice) / i.liveFeedPrice
     : 0;
-  if (staleness_s > 60) {
+  if (staleness_s > 75) {
     return {
       gate: "DATA_INTEGRITY", passed: false, status: "BLOCKED",
       label: "🔴 STALE QUOTE",
-      reasoning: `Quote is ${staleness_s.toFixed(0)}s old (limit: 60s). This price may no longer reflect the live market. Buy signal hidden until a fresh quote arrives.`,
+      reasoning: `Quote is ${staleness_s.toFixed(0)}s old (limit: 75s). This price may no longer reflect the live market. Buy signal hidden until a fresh quote arrives.`,
     };
   }
-  if (priceDrift > 0.01) {
+  if (priceDrift > 0.0125) {
     const driftPct = (priceDrift * 100).toFixed(2);
     return {
       gate: "DATA_INTEGRITY", passed: false, status: "BLOCKED",
       label: "🔴 PRICE DRIFT DETECTED",
-      reasoning: `Internal price ($${i.currentPrice.toFixed(2)}) differs from live feed ($${i.liveFeedPrice.toFixed(2)}) by ${driftPct}% (limit: 1.00%). Trading on drifted data risks executing at a price that no longer exists.`,
+      reasoning: `Internal price ($${i.currentPrice.toFixed(2)}) differs from live feed ($${i.liveFeedPrice.toFixed(2)}) by ${driftPct}% (limit: 1.25%). Trading on drifted data risks executing at a price that no longer exists.`,
     };
   }
 
@@ -90,14 +90,14 @@ export function gate3_IntrinsicAudit(i: SignalInput): GateResult {
 }
 
 export function gate4_ExhaustionFilter(i: SignalInput): GateResult {
-  if (i.rsi14 > 75 && i.streakDays > 7) {
+  if (i.rsi14 > 81 && i.streakDays > 9) {
     return {
       gate: "EXHAUSTION_FILTER", passed: false, status: "WAIT",
       label: "🔴 PEAK RISK — Mean Reversion Probable",
-      reasoning: `${i.ticker} closed higher ${i.streakDays} sessions in a row with RSI(14) at ${i.rsi14.toFixed(1)} (threshold: RSI > 75 AND streak > 7). Stocks in this state beat the market less than 45% of the time on the next session. Blocked until RSI < 70 or the streak resets.`,
+      reasoning: `${i.ticker} closed higher ${i.streakDays} sessions in a row with RSI(14) at ${i.rsi14.toFixed(1)} (threshold: RSI > 81 AND streak > 9). Stocks in this state beat the market less than 45% of the time on the next session. Blocked until RSI < 75 or the streak resets.`,
     };
   }
-  if (i.rsi14 > 70 && i.streakDays >= 5) {
+  if (i.rsi14 > 75 && i.streakDays >= 6) {
     return {
       gate: "EXHAUSTION_FILTER", passed: true, status: "FLAGGED",
       label: "🟡 OVEREXTENDED — Caution",
@@ -141,14 +141,14 @@ export function gate5_OrbLock(i: SignalInput): GateResult {
 }
 
 export function gate6_IvpGuard(i: SignalInput): GateResult {
-  if (i.ivPercentile > 80) {
+  if (i.ivPercentile > 90) {
     return {
       gate: "IVP_GUARD", passed: false, status: "BLOCKED",
       label: "🔴 EXPENSIVE TRAP — IV Crush Risk",
-      reasoning: `IV Percentile = ${i.ivPercentile.toFixed(0)}% — options priced in the TOP ${(100 - i.ivPercentile).toFixed(0)}% of their annual cost range. At IVP > 80 you pay top-of-market for volatility that statistically mean-reverts lower. An IV crush can destroy 30–50% of option value even if the stock moves your way. BUYING blocked — only premium-selling strategies (spreads, covered calls) are appropriate here.`,
+      reasoning: `IV Percentile = ${i.ivPercentile.toFixed(0)}% — options priced in the TOP ${(100 - i.ivPercentile).toFixed(0)}% of their annual cost range. At IVP > 90 you pay top-of-market for volatility that statistically mean-reverts lower. An IV crush can destroy 30–50% of option value even if the stock moves your way. BUYING blocked — only premium-selling strategies (spreads, covered calls) are appropriate here.`,
     };
   }
-  if (i.ivPercentile > 50) {
+  if (i.ivPercentile > 62) {
     return {
       gate: "IVP_GUARD", passed: true, status: "FLAGGED",
       label: "🟡 ELEVATED IV — Proceed with Caution",
@@ -170,13 +170,13 @@ export function gate7_SafetyExit(i: SignalInput): GateResult {
       reasoning: `No entry premium recorded — safety exit monitor inactive.`,
     };
   }
-  const exitThreshold = i.entryPremium * 0.70;
+  const exitThreshold = i.entryPremium * 0.625;
   const lossPct = ((i.entryPremium - i.currentPremium) / i.entryPremium) * 100;
   if (i.currentPremium < exitThreshold) {
     return {
       gate: "SAFETY_EXIT", passed: false, status: "BLOCKED",
-      label: "🔴 SELL AT LOSS — 30% Stop Triggered",
-      reasoning: `Premium fell from $${i.entryPremium.toFixed(2)} (entry) to $${i.currentPremium.toFixed(2)} — a ${lossPct.toFixed(1)}% loss (threshold: 30%). The hard stop has triggered. Holding further risks a 70–90% total loss as theta and delta compression compound. EXIT at market. Preserving 70¢ on the dollar beats holding to zero.`,
+      label: "🔴 SELL AT LOSS — 37.5% Stop Triggered",
+      reasoning: `Premium fell from $${i.entryPremium.toFixed(2)} (entry) to $${i.currentPremium.toFixed(2)} — a ${lossPct.toFixed(1)}% loss (threshold: 37.5%). The hard stop has triggered. Holding further risks a 70–90% total loss as theta and delta compression compound. EXIT at market.`,
     };
   }
   const cushionPct = ((i.currentPremium - exitThreshold) / i.entryPremium) * 100;
