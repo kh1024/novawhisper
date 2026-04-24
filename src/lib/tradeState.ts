@@ -88,7 +88,7 @@ export const CP_TRIGGER_MODE: "ANY_2_OF_3" | "ALL_3" =
  *  per-trade cap surface in a dedicated "Strong Setups — Over Budget" section
  *  instead of being silently hidden. (was 65) */
 export const OVER_BUDGET_SHOW_IN_WATCHLIST = true;
-export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 55;
+export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 48;
 
 /** Per-evaluation override knobs read from the active StrategyProfile. */
 export interface ScoringOverrides {
