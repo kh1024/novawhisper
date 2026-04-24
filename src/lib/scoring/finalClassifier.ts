@@ -84,10 +84,10 @@ export function classifyPick(input: ClassifierInput): ClassifierResult {
     };
   }
 
-  if (contractResult.budget_fit === "OVER_BUDGET" && contractResult.realistic_fill > userBudgetCap * 2) {
+  if (contractResult.budget_fit === "OVER_BUDGET" && contractResult.realistic_fill > userBudgetCap * 2.5) {
     return {
       tier: "AVOID",
-      tier_reason: `Contract costs $${contractResult.realistic_fill.toFixed(0)} — over 2× your $${userBudgetCap} cap.`,
+      tier_reason: `Contract costs $${contractResult.realistic_fill.toFixed(0)} — over 2.5× your $${userBudgetCap} cap.`,
       failing_gates: [{ gate: "Budget", score: 0, minimum: 1, reason: `Contract cost $${contractResult.realistic_fill.toFixed(0)} vs cap $${userBudgetCap}` }],
       upgrade_path: [`Find a lower-strike or further-dated contract under $${userBudgetCap}.`],
       is_hard_blocked: true,
