@@ -35,7 +35,7 @@ interface DailyBar { c?: number; t?: number; }
  *  options-fetch starts recording it tomorrow. Real backfill (per-day
  *  historical IV chains) is a future expansion. */
 async function ensureSymbolTracked(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   symbol: string,
 ): Promise<{ symbol: string; today: number | null; status: string }> {
   if (!MASSIVE_KEY) return { symbol, today: null, status: "no_key" };
