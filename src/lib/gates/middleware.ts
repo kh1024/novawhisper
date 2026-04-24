@@ -71,7 +71,7 @@ export function validateSignal(input: SignalInput): ValidationResult {
     : intrinsicFlagged ? "FLAGGED" : "APPROVED";
 
   const autoExitTrigger = Number.isFinite(input.entryPremium) && input.entryPremium > 0
-    ? Number((input.entryPremium * 0.70).toFixed(2))
+    ? Number((input.entryPremium * 0.625).toFixed(2))
     : undefined;
 
   // ── Budget impact summary (always computed when we have the data) ──

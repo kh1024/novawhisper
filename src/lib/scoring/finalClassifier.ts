@@ -7,16 +7,17 @@ import type { ContractScoreResult } from "@/lib/scoring/contractScore";
 import type { ExecutionScoreResult } from "@/lib/scoring/executionScore";
 import type { QuoteIntegrityReport } from "@/lib/quotes/quoteTypes";
 
+// All thresholds loosened by 25% for easier qualification.
 export const CLASSIFIER_THRESHOLDS = {
-  BUY_NOW_SETUP_MIN: 65,
-  BUY_NOW_CONTRACT_MIN: 60,
-  BUY_NOW_EXECUTION_MIN: 65,
-  BUY_NOW_QUOTE_MIN: 75,
-  WATCHLIST_SETUP_MIN: 50,
-  WATCHLIST_CONTRACT_MIN: 40,
-  AVOID_FINAL_SCORE_MAX: 30,
-  HARD_BLOCK_CONTRACT_MAX: 20,
-  HARD_BLOCK_QUOTE_MAX: 20,
+  BUY_NOW_SETUP_MIN: 49,        // 65 → 49
+  BUY_NOW_CONTRACT_MIN: 45,     // 60 → 45
+  BUY_NOW_EXECUTION_MIN: 49,    // 65 → 49
+  BUY_NOW_QUOTE_MIN: 56,        // 75 → 56
+  WATCHLIST_SETUP_MIN: 38,      // 50 → 38
+  WATCHLIST_CONTRACT_MIN: 30,   // 40 → 30
+  AVOID_FINAL_SCORE_MAX: 23,    // 30 → 23
+  HARD_BLOCK_CONTRACT_MAX: 15,  // 20 → 15
+  HARD_BLOCK_QUOTE_MAX: 15,     // 20 → 15
 } as const;
 
 export interface ClassifierInput {
@@ -83,10 +84,10 @@ export function classifyPick(input: ClassifierInput): ClassifierResult {
     };
   }
 
-  if (contractResult.budget_fit === "OVER_BUDGET" && contractResult.realistic_fill > userBudgetCap * 2) {
+  if (contractResult.budget_fit === "OVER_BUDGET" && contractResult.realistic_fill > userBudgetCap * 2.5) {
     return {
       tier: "AVOID",
-      tier_reason: `Contract costs $${contractResult.realistic_fill.toFixed(0)} — over 2× your $${userBudgetCap} cap.`,
+      tier_reason: `Contract costs $${contractResult.realistic_fill.toFixed(0)} — over 2.5× your $${userBudgetCap} cap.`,
       failing_gates: [{ gate: "Budget", score: 0, minimum: 1, reason: `Contract cost $${contractResult.realistic_fill.toFixed(0)} vs cap $${userBudgetCap}` }],
       upgrade_path: [`Find a lower-strike or further-dated contract under $${userBudgetCap}.`],
       is_hard_blocked: true,

@@ -115,18 +115,12 @@ export const GATE_LABELS: Record<GateName, string> = {
  * percentage of the user's account is auto-BLOCKED and pivoted to a spread.
  * Per product rule: "must be > 5% of total budget → UNAFFORDABLE".
  */
-export const AFFORDABILITY_CAP_PCT = 5;
-/**
- * WARNING tier — between MaxRisk (2%) and the 5% hard cap, the trade is
- * approved but flagged as over-leveraged so the user can size down.
- */
-export const AFFORDABILITY_WARN_PCT = 2;
-/** Max risk per trade as % of account — the 2% Rule. Drives spread sizing. */
-export const MAX_RISK_PCT = 2;
-/** Sweet-spot dollar range Gate 8 nudges expensive picks toward via spreads. */
+// Loosened 25%: 5 → 6.25
+export const AFFORDABILITY_CAP_PCT = 6.25;
+// Loosened 25%: 2 → 2.5
+export const AFFORDABILITY_WARN_PCT = 2.5;
+// Loosened 25%: 2 → 2.5
+export const MAX_RISK_PCT = 2.5;
 export const SPREAD_SWEET_SPOT = { min: 150, max: 300 } as const;
-/**
- * Gate 1 liquidity guard. If (ask − bid) / ask exceeds this fraction the
- * trade is BLOCKED — entering a 10%+ spread means starting underwater.
- */
-export const MAX_BIDASK_SPREAD_PCT = 0.10;
+// Loosened 25%: 0.10 → 0.125
+export const MAX_BIDASK_SPREAD_PCT = 0.125;
