@@ -85,7 +85,7 @@ function ScannerBucketsSection({
   onOpen: (symbol: string) => void;
   flashKey: string | null;
 }) {
-  const { approved, isLoading } = useScannerPicks();
+  const { approved, bestPending, isLoading } = useScannerPicks();
   if (isLoading) {
     return (
       <div className="text-[12px] text-muted-foreground px-1 py-2">
@@ -93,12 +93,16 @@ function ScannerBucketsSection({
       </div>
     );
   }
+
+  const visiblePicks = approved.length > 0 ? approved : bestPending;
+
   // Highlight the deep-linked symbol (Dashboard → Top Opportunity).
   const sorted = flashKey
-    ? [...approved].sort((a, b) =>
+    ? [...visiblePicks].sort((a, b) =>
         a.row.symbol === flashKey ? -1 : b.row.symbol === flashKey ? 1 : 0,
       )
-    : approved;
+    : visiblePicks;
+
   return <ScannerBuckets picks={sorted} onOpen={onOpen} />;
 }
 
@@ -512,14 +516,23 @@ export default function Scanner() {
 
   // Summary counts MIRROR the filtered/visible dataset so the cards at the top
   // can never disagree with the rows below them. Filter active? Counts shrink.
+  const cpScan = useScannerPicks({ bucket: activeBucket });
+
   const counts = useMemo(() => {
+    const visiblePicks = cpScan.approved.length > 0 ? cpScan.approved : cpScan.bestPending;
     const tally: Record<Verdict, number> = { "Buy Now": 0, Watchlist: 0, Wait: 0, Avoid: 0 };
-    for (const r of filtered) {
-      const v = verdictByRow.get(r.symbol)?.verdict ?? "Wait";
-      tally[v]++;
+
+    for (const p of visiblePicks) {
+      const tier = (p.tier4 ?? "WATCHLIST").toUpperCase();
+      if (tier === "BUY NOW") tally["Buy Now"]++;
+      else if (tier === "WATCHLIST") tally.Watchlist++;
+      else if (tier === "NEEDS RECHECK") tally.Wait++;
+      else if (tier === "AVOID") tally.Avoid++;
+      else tally.Watchlist++;
     }
+
     return tally;
-  }, [filtered, verdictByRow]);
+  }, [cpScan.approved, cpScan.bestPending]);
 
   const marketOpen = isMarketOpen();
   const weekend = isWeekend();
@@ -530,7 +543,6 @@ export default function Scanner() {
 
   const marketState = getMarketState();
   const orbStatus = getOrbStatus();
-  const cpScan = useScannerPicks({ bucket: activeBucket });
   const overBudgetPicks = cpScan.overBudgetWatchlist ?? [];
 
   return (
