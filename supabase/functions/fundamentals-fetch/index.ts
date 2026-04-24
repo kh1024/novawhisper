@@ -79,8 +79,8 @@ async function fetchFundamentals(symbol: string) {
       .map((e: any) => e?.date as string | undefined)
       .filter((d: any): d is string => typeof d === "string" && d.length >= 10)
       .map((d: string) => ({ d, ms: new Date(d).getTime() }))
-      .filter((x) => Number.isFinite(x.ms) && x.ms >= todayMs - 86_400_000)
-      .sort((a, b) => a.ms - b.ms);
+      .filter((x: { d: string; ms: number }) => Number.isFinite(x.ms) && x.ms >= todayMs - 86_400_000)
+      .sort((a: { ms: number }, b: { ms: number }) => a.ms - b.ms);
     if (future.length > 0) {
       nextEarningsDate = future[0].d;
       earningsInDays = Math.max(0, Math.floor((future[0].ms - todayMs) / 86_400_000));
@@ -97,7 +97,7 @@ async function fetchFundamentals(symbol: string) {
     const holds = rec.hold ?? 0;
     if (buys > holds && buys > sells) recommendationKey = (rec.strongBuy ?? 0) > (rec.buy ?? 0) ? "strong_buy" : "buy";
     else if (sells > holds && sells > buys) recommendationKey = "sell";
-    else if (analystCount > 0) recommendationKey = "hold";
+    else if ((analystCount ?? 0) > 0) recommendationKey = "hold";
   }
 
   // Finnhub marketCap is in millions USD; normalize.
