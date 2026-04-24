@@ -836,47 +836,9 @@ export default function Scanner() {
                   contract grid, plain-English reason, upgrade path, live price check. */}
               <ScannerBucketsSection onOpen={setOpenSymbol} flashKey={flashKey} />
 
-              {budgetBlocked.length > 0 && (
-                <CollapsibleBlockedSection
-                  title={`Budget blocked — over $${cap.toLocaleString()}/trade cap`}
-                  count={budgetBlocked.length}
-                  subtitle="Raise cap, scan cheaper tickers, or pick a smaller strike"
-                  tone="budget"
-                  defaultOpen={approvedRows.length === 0}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {budgetBlocked.map((info) => (
-                      <BlockedPickCard
-                        key={`b:${info.row.symbol}:${info.contract.strike}:${info.contract.expiry}`}
-                        info={info}
-                        onOpen={() => setOpenSymbol(info.row.symbol)}
-                        onRaiseCap={() => setStrategyDrawerOpen(true)}
-                        onSuggestCheaper={() => setOpenSymbol(info.row.symbol)}
-                      />
-                    ))}
-                  </div>
-                </CollapsibleBlockedSection>
-              )}
-
-              {safetyBlocked.length > 0 && (
-                <CollapsibleBlockedSection
-                  title="Safety blocked — gate failure"
-                  count={safetyBlocked.length}
-                  subtitle="Stale data · wide spread · IV trap · exhaustion"
-                  tone="safety"
-                  defaultOpen={safetyDefaultOpen}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {safetyBlocked.map((info) => (
-                      <BlockedPickCard
-                        key={`s:${info.row.symbol}:${info.contract.strike}:${info.contract.expiry}`}
-                        info={info}
-                        onOpen={() => setOpenSymbol(info.row.symbol)}
-                      />
-                    ))}
-                  </div>
-                </CollapsibleBlockedSection>
-              )}
+              {/* Budget-blocked and Safety-blocked sections intentionally hidden from
+                  the UI per request — counts/diagnostics still computed above and
+                  available in DebugDataLayerDrawer + LoosenToSeePicks. */}
             </div>
           );
         })()}
