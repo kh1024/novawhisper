@@ -50,24 +50,27 @@ export type TradeState =
   | "EXCLUDED";
 
 // ── Configurable thresholds (centralized; runtime-overridable per profile) ──
+// Loosened to surface more BUY NOWs — the prior bar required a >63 score AND
+// 1.5× relVol AND >0.4% intraday move AND zero soft failures, which excluded
+// almost every quiet mid-day pick.
 export const TRADE_STATE_CONFIG = {
-  /** Minimum final score to qualify as TRADE_READY. */
-  TRADE_READY_MIN_SCORE: 63,
-  /** Minimum final score to qualify as NEAR_LIMIT_CONFIRMED. */
-  NEAR_LIMIT_MIN_SCORE: 65,
-  /** Minimum final score to be worth watching at all. Below this → EXCLUDED. */
-  WATCHLIST_MIN_SCORE: 50,
-  /** Trigger sub-score floor (out of 30, from finalRank.readinessBreakdown). */
-  TRIGGER_MIN_SUBSCORE: 25,
-  /** RelVol floor for trigger confirmation. */
-  TRIGGER_MIN_RELVOL: 1.5,
-  /** Intraday move floor (absolute %) for trigger confirmation. */
-  TRIGGER_MIN_MOVE_PCT: 0.4,
-  /** Max soft failures allowed at TRADE_READY. */
-  TRADE_READY_MAX_SOFT_FAILS: 0,
-  /** Max soft failures allowed at NEAR_LIMIT_CONFIRMED. */
-  NEAR_LIMIT_MAX_SOFT_FAILS: 1,
-  /** Max soft failures allowed at WATCHLIST_ONLY (default; overridable). */
+  /** Minimum final score to qualify as TRADE_READY. (was 63) */
+  TRADE_READY_MIN_SCORE: 55,
+  /** Minimum final score to qualify as NEAR_LIMIT_CONFIRMED. (was 65) */
+  NEAR_LIMIT_MIN_SCORE: 58,
+  /** Minimum final score to be worth watching at all. (was 50) */
+  WATCHLIST_MIN_SCORE: 42,
+  /** Trigger sub-score floor (out of 30). (was 25) */
+  TRIGGER_MIN_SUBSCORE: 18,
+  /** RelVol floor for trigger confirmation. (was 1.5) */
+  TRIGGER_MIN_RELVOL: 1.15,
+  /** Intraday move floor (absolute %) for trigger confirmation. (was 0.4) */
+  TRIGGER_MIN_MOVE_PCT: 0.25,
+  /** Max soft failures allowed at TRADE_READY. (was 0) */
+  TRADE_READY_MAX_SOFT_FAILS: 1,
+  /** Max soft failures allowed at NEAR_LIMIT_CONFIRMED. (was 1) */
+  NEAR_LIMIT_MAX_SOFT_FAILS: 2,
+  /** Max soft failures allowed at WATCHLIST_ONLY. */
   WATCHLIST_MAX_SOFT_FAILS: 3,
   /** Default trigger mode — false = relaxed (2-of-3), true = strict (all 3). */
   TRIGGER_REQUIRE_ALL: false,
@@ -75,17 +78,17 @@ export const TRADE_STATE_CONFIG = {
 
 // ── Calls & Puts mode constants (additive; consumed by UI / scoreCandidateCP) ──
 /** Legacy thresholds kept as named exports so other modules can import directly. */
-export const TRADE_READY_MIN_SCORE = TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE;   // 63
-export const WATCHLIST_MIN_SCORE   = TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE;     // 50
-export const MAX_SOFT_FAILURES     = TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS; // 3
+export const TRADE_READY_MIN_SCORE = TRADE_STATE_CONFIG.TRADE_READY_MIN_SCORE;
+export const WATCHLIST_MIN_SCORE   = TRADE_STATE_CONFIG.WATCHLIST_MIN_SCORE;
+export const MAX_SOFT_FAILURES     = TRADE_STATE_CONFIG.WATCHLIST_MAX_SOFT_FAILS;
 /** ANY_2_OF_3 = relaxed (current default). ALL_3 = strict legacy. */
 export const CP_TRIGGER_MODE: "ANY_2_OF_3" | "ALL_3" =
   TRADE_STATE_CONFIG.TRIGGER_REQUIRE_ALL ? "ALL_3" : "ANY_2_OF_3";
 /** When true, picks above OVER_BUDGET_WATCHLIST_MIN_SCORE that exceed the
  *  per-trade cap surface in a dedicated "Strong Setups — Over Budget" section
- *  instead of being silently hidden. */
+ *  instead of being silently hidden. (was 65) */
 export const OVER_BUDGET_SHOW_IN_WATCHLIST = true;
-export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 65;
+export const OVER_BUDGET_WATCHLIST_MIN_SCORE = 55;
 
 /** Per-evaluation override knobs read from the active StrategyProfile. */
 export interface ScoringOverrides {
