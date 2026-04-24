@@ -11,7 +11,7 @@ const FINNHUB_KEY = Deno.env.get("FINNHUB_API_KEY");
 const MASSIVE_KEY = Deno.env.get("MASSIVE_API_KEY");
 const STOCKDATA_KEY = Deno.env.get("STOCKDATA_API_KEY");
 
-const BATCH_CONCURRENCY = 4;
+const BATCH_CONCURRENCY = 2;
 
 type SourceName = "finnhub" | "alpha-vantage" | "massive" | "yahoo" | "stooq" | "cnbc" | "google" | "stockdata";
 
@@ -790,10 +790,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Cap to a sane upper bound — the default universe is 64 symbols and users
-    // can add a handful of custom tickers. Previous 30-symbol cap was silently
-    // dropping the tail (GLD/TLT/ARKK/SOXL → "$0.00 No data"). 80 covers both.
-    symbols = Array.from(new Set(symbols.map((x) => String(x).trim().toUpperCase()).filter(Boolean))).slice(0, 80);
+    // Cap to keep total work under the edge worker CPU budget. Each symbol
+    // fans out to 6 provider calls in parallel — 80 × 6 = 480 ops per request
+    // was tripping WORKER_RESOURCE_LIMIT. 40 keeps us under budget; the
+    // client batches the universe across multiple requests.
+    symbols = Array.from(new Set(symbols.map((x) => String(x).trim().toUpperCase()).filter(Boolean))).slice(0, 40);
 
     const useAlpha = verifyAll || symbols.length === 1;
 
