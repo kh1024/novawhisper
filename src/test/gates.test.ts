@@ -44,15 +44,15 @@ describe("validateSignal — 7-gate pipeline", () => {
     expect(r.riskLabel).toBe("AGGRESSIVE_SPECULATION");
   });
 
-  it("Gate 7 fires SELL AT LOSS at -30%", () => {
-    const r = validateSignal({ ...base, entryPremium: 10, currentPremium: 6.5 });
+  it("Gate 7 fires SELL AT LOSS at -37.5%", () => {
+    const r = validateSignal({ ...base, entryPremium: 10, currentPremium: 6 });
     expect(r.finalStatus).toBe("BLOCKED");
     const g7 = r.gateResults.find((g) => g.gate === "SAFETY_EXIT");
     expect(g7?.label).toContain("SELL AT LOSS");
   });
 
-  it("auto-exit trigger = entryPremium * 0.70", () => {
+  it("auto-exit trigger = entryPremium * 0.625", () => {
     const r = validateSignal({ ...base, entryPremium: 10 });
-    expect(r.autoExitTrigger).toBe(7);
+    expect(r.autoExitTrigger).toBe(6.25);
   });
 });
