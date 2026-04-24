@@ -42,6 +42,7 @@ interface PositionRow {
   quote_history: Array<{ mark: number; quality: string; ts: string }>;
   stop_confirm_count: number;
   stop_first_breach_at: string | null;
+  option_symbol?: string | null;
 }
 
 // ─── BS-lite fallback ─────────────────────────────────────────────────────
