@@ -85,7 +85,7 @@ function ScannerBucketsSection({
   onOpen: (symbol: string) => void;
   flashKey: string | null;
 }) {
-  const { approved, isLoading } = useScannerPicks();
+  const { approved, bestPending, isLoading } = useScannerPicks();
   if (isLoading) {
     return (
       <div className="text-[12px] text-muted-foreground px-1 py-2">
@@ -93,12 +93,16 @@ function ScannerBucketsSection({
       </div>
     );
   }
+
+  const visiblePicks = approved.length > 0 ? approved : bestPending;
+
   // Highlight the deep-linked symbol (Dashboard → Top Opportunity).
   const sorted = flashKey
-    ? [...approved].sort((a, b) =>
+    ? [...visiblePicks].sort((a, b) =>
         a.row.symbol === flashKey ? -1 : b.row.symbol === flashKey ? 1 : 0,
       )
-    : approved;
+    : visiblePicks;
+
   return <ScannerBuckets picks={sorted} onOpen={onOpen} />;
 }
 
