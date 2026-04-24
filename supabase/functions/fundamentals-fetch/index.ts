@@ -79,8 +79,8 @@ async function fetchFundamentals(symbol: string) {
       .map((e: any) => e?.date as string | undefined)
       .filter((d: any): d is string => typeof d === "string" && d.length >= 10)
       .map((d: string) => ({ d, ms: new Date(d).getTime() }))
-      .filter((x) => Number.isFinite(x.ms) && x.ms >= todayMs - 86_400_000)
-      .sort((a, b) => a.ms - b.ms);
+      .filter((x: { d: string; ms: number }) => Number.isFinite(x.ms) && x.ms >= todayMs - 86_400_000)
+      .sort((a: { ms: number }, b: { ms: number }) => a.ms - b.ms);
     if (future.length > 0) {
       nextEarningsDate = future[0].d;
       earningsInDays = Math.max(0, Math.floor((future[0].ms - todayMs) / 86_400_000));
